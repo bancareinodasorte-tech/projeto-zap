@@ -1,0 +1,41 @@
+PROJETO ZAP V2.1 — INSTALAÇÃO LIMPA
+
+IMPORTANTE
+Pelos prints enviados, o SQL do Supabase já foi executado corretamente. A mensagem “Success. No rows returned” significa sucesso. Não execute o SQL novamente agora.
+
+PASSO 1 — GITHUB
+1. Descompacte este ZIP.
+2. Abra o repositório projeto-zap.
+3. Use Add file > Upload files.
+4. Envie TODOS os arquivos deste pacote e confirme Commit changes.
+5. Aguarde 1 a 3 minutos.
+
+PASSO 2 — LIMPAR A V1
+Abra exatamente este endereço no navegador:
+https://bancareinodasorte-tech.github.io/projeto-zap/atualizar.html
+A página removerá o cache antigo e abrirá a V2.1 automaticamente.
+
+PASSO 3 — CONECTAR SUPABASE
+1. No Supabase, abra Settings > API Keys.
+2. Copie a Project URL (ela também aparece na página inicial do projeto).
+3. Copie a Publishable key.
+4. NÃO use a Secret key.
+5. No Projeto Zap V2.1, cole os dois dados e toque SALVAR E CONTINUAR.
+
+PASSO 4 — CRIAR LOGIN
+1. Digite seu e-mail.
+2. Crie uma senha com pelo menos 6 caracteres.
+3. Toque CRIAR PRIMEIRO ACESSO.
+4. Se receber e-mail de confirmação, confirme.
+5. Volte e toque ENTRAR.
+
+TESTE DESTA ETAPA
+- Confirmar no topo: “V2.1 Online”.
+- Criar 1 contato.
+- Fechar e abrir o site.
+- Confirmar que o contato continua.
+- Criar 1 campanha com imagem.
+- Registrar 1 compra.
+- Sair e entrar novamente.
+
+Se aparecer a V1 depois de abrir atualizar.html, envie um print e pare ali.

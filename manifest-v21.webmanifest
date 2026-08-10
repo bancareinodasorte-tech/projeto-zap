@@ -1,0 +1,16 @@
+{
+  "name": "Projeto Zap — Reino da Sorte",
+  "short_name": "Projeto Zap",
+  "start_url": "./index.html?v=21",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#082f63",
+  "icons": [
+    {
+      "src": "icon-v21.svg?v=21",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+PROJETO ZAP V2.1 — INSTALAÇÃO LIMPA
+Não editar códigos.
+Banco Supabase já preparado.
+Use atualizar.html uma vez após publicar para eliminar o cache da V1.
