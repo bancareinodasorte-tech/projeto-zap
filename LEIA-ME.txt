@@ -1,3 +1,4 @@
-PROJETO ZAP V3 — MOTOR DE CAMPANHAS
-Baseada na V2.1 aprovada. Adiciona variações, fila, estados, reenvios e cancelamento automático após compra.
-Execute MIGRAÇÃO-SUPABASE.sql antes de publicar a V3.
+PROJETO ZAP V3.1
+Correção definitiva do carregamento.
+O index.html contém internamente o CSS e o JavaScript principal para impedir falhas por cache, nomes ou publicação parcial.
+Os nomes internos permanecem fixos nas futuras versões.

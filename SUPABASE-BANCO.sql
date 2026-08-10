@@ -1,2 +1,1 @@
--- PROJETO ZAP V2.1
--- Se o SQL anterior já mostrou “Success. No rows returned”, não execute novamente.
+-- Banco base já criado na V2.1. Não executar novamente.
