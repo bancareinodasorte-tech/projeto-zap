@@ -9,7 +9,7 @@ ETAPA 1 — SUPABASE (FAZER PRIMEIRO)
 1. Abra o mesmo projeto “projeto-zap” no Supabase.
 2. Abra SQL Editor.
 3. Clique em New query.
-4. Abra o arquivo MIGRACAO-SUPABASE-V3.sql deste ZIP.
+4. Abra o arquivo MIGRAÇÃO-SUPABASE.sql deste ZIP.
 5. Copie TODO o conteúdo e cole no SQL Editor.
 6. Clique em Run.
 7. Deve aparecer “Success. No rows returned” ou outra mensagem de sucesso sem erro vermelho.
@@ -25,7 +25,7 @@ ETAPA 2 — GITHUB
 7. Aguarde o GitHub Pages publicar.
 
 ETAPA 3 — FORÇAR A ATUALIZAÇÃO
-1. Abra no navegador: https://bancareinodasorte-tech.github.io/projeto-zap/atualizar-v3.html
+1. Abra no navegador: https://bancareinodasorte-tech.github.io/projeto-zap/atualizar.html
 2. Aguarde a página limpar o cache e abrir o Projeto Zap V3.
 3. O topo deverá mostrar “V3 Motor de Campanhas”.
 4. A configuração e a sessão da V2.1 devem ser preservadas. Se pedir login, use a mesma conta.
