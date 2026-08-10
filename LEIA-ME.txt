@@ -1,4 +1,1 @@
-PROJETO ZAP V3.1
-Correção definitiva do carregamento.
-O index.html contém internamente o CSS e o JavaScript principal para impedir falhas por cache, nomes ou publicação parcial.
-Os nomes internos permanecem fixos nas futuras versões.
+PROJETO ZAP V4 — execução em lotes, ordem de fila, prontos agora, estados enviada/entregue/lida e ações em grupo.

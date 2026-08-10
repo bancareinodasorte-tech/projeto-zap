@@ -1,22 +1,48 @@
-PROJETO ZAP V3.1 — CORREÇÃO DE CARREGAMENTO
+PROJETO ZAP V4 — EXECUÇÃO E LOTES
 
-1. NÃO execute novamente o SQL da V3.
-2. NÃO altere o Supabase.
-3. NÃO renomeie nenhum arquivo deste pacote.
-4. No GitHub > projeto-zap > Adicionar arquivo > Carregar arquivos.
-5. Envie TODOS os arquivos desta pasta para a raiz.
-6. Confirme Commit changes.
-7. Aguarde 1 a 3 minutos.
-8. Abra:
+OBJETIVO
+Adicionar a camada operacional que controlará o envio em lotes e os estados da campanha. O WhatsApp real ainda não é disparado nesta versão.
+
+ATUALIZAÇÃO — ORDEM EXATA
+
+1. SUPABASE
+- Abra o mesmo projeto projeto-zap.
+- SQL Editor > New query.
+- Abra o arquivo MIGRAÇÃO-SUPABASE.sql deste ZIP.
+- Copie todo o conteúdo.
+- Cole e clique em Run.
+- Resultado esperado: Success. No rows returned.
+- Execute somente UMA vez.
+
+2. GITHUB
+- Abra o repositório projeto-zap.
+- Adicionar arquivo > Carregar arquivos.
+- Envie TODOS os arquivos internos deste ZIP, sem renomear.
+- Confirme Commit changes.
+- Os arquivos possuem nomes fixos e devem substituir os existentes.
+- Aguarde 1 a 3 minutos.
+
+3. LIMPAR CACHE
+Abra:
 https://bancareinodasorte-tech.github.io/projeto-zap/atualizar.html
-9. A página limpará o cache e abrirá a V3.1.
-10. Se pedir Supabase ou login, use os mesmos dados da V2.1.
 
-TESTES:
-- Painel estilizado normalmente.
-- Contatos/compras existentes.
-- Criar/editar campanha.
-- Adicionar ao menos 2 variações.
-- Gerar fila.
-- Testar Respondeu, Interesse e Sem resposta.
-- Registrar compra e confirmar saída do reenvio.
+4. TESTES DA V4
+- Confirme o título V4 • EXECUÇÃO E LOTES.
+- Crie ou edite uma campanha.
+- Escolha Contatos por lote: 10 ou 25.
+- Escolha Pausa entre lotes: 5 ou 10 minutos.
+- Salve.
+- Clique Gerar fila.
+- Abra Execução.
+- Confira coluna Lote e Próxima ação.
+- Marque "Somente prontos agora".
+- Selecione contatos prontos e use "Marcar selecionados como ENVIADA".
+- Em um contato, teste Entregue e depois Lida.
+- Em outro, teste Respondeu/Interesse/Sem resposta.
+- Registre uma compra e confira que o contato deixa os reenvios.
+
+IMPORTANTE
+- NÃO execute SUPABASE-BANCO.sql.
+- NÃO renomeie arquivos.
+- NÃO altere Project URL ou Publishable key.
+- O envio real do WhatsApp será conectado em uma fase posterior.
