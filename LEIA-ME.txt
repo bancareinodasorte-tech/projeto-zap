@@ -1,4 +1,3 @@
-PROJETO ZAP V2.1 — INSTALAÇÃO LIMPA
-Não editar códigos.
-Banco Supabase já preparado.
-Use atualizar.html uma vez após publicar para eliminar o cache da V1.
+PROJETO ZAP V3 — MOTOR DE CAMPANHAS
+Baseada na V2.1 aprovada. Adiciona variações, fila, estados, reenvios e cancelamento automático após compra.
+Execute MIGRACAO-SUPABASE-V3.sql antes de publicar a V3.

@@ -1,0 +1,50 @@
+PROJETO ZAP V3 — MOTOR DE CAMPANHAS
+
+OBJETIVO
+Adicionar a fila de destinatários, até 5 variações de texto por campanha, reenvios programados e estados do cliente. Esta versão ainda NÃO envia mensagens reais pelo WhatsApp.
+
+ORDEM EXATA DE ATUALIZAÇÃO
+
+ETAPA 1 — SUPABASE (FAZER PRIMEIRO)
+1. Abra o mesmo projeto “projeto-zap” no Supabase.
+2. Abra SQL Editor.
+3. Clique em New query.
+4. Abra o arquivo MIGRACAO-SUPABASE-V3.sql deste ZIP.
+5. Copie TODO o conteúdo e cole no SQL Editor.
+6. Clique em Run.
+7. Deve aparecer “Success. No rows returned” ou outra mensagem de sucesso sem erro vermelho.
+8. Não apague nenhuma tabela existente. Não crie outro projeto Supabase.
+
+ETAPA 2 — GITHUB
+1. Descompacte o ZIP.
+2. Abra o repositório projeto-zap no GitHub.
+3. Add file > Upload files.
+4. Envie TODOS os arquivos deste ZIP para a raiz do repositório.
+5. Confirme Commit changes.
+6. Não apague seus dados do Supabase.
+7. Aguarde o GitHub Pages publicar.
+
+ETAPA 3 — FORÇAR A ATUALIZAÇÃO
+1. Abra no navegador: https://bancareinodasorte-tech.github.io/projeto-zap/atualizar-v3.html
+2. Aguarde a página limpar o cache e abrir o Projeto Zap V3.
+3. O topo deverá mostrar “V3 Motor de Campanhas”.
+4. A configuração e a sessão da V2.1 devem ser preservadas. Se pedir login, use a mesma conta.
+
+TESTE RÁPIDO DA V3
+1. Abra Campanhas.
+2. Edite uma campanha existente ou crie uma nova.
+3. Preencha Variação 1 e, para testar, Variação 2.
+4. Salve.
+5. Clique em “Gerar fila”.
+6. O sistema adicionará somente contatos do grupo da campanha que estejam autorizados e que não estejam em COMPRA REALIZADA/NÃO RECEBER MENSAGENS.
+7. Abra a aba Fila.
+8. Confirme que os contatos foram distribuídos entre as variações.
+9. Teste “Respondeu”, “Interesse” e “Sem resposta” em contatos de teste.
+10. Em “Sem resposta”, se a campanha tiver reenvios, o estado deverá virar REENVIO_AGENDADO até acabar o limite.
+11. Em um contato da fila, clique “Compra”, registre uma compra e confirme que o estado virou COMPRA_REALIZADA e que os reenvios foram cancelados.
+
+IMPORTANTE
+- “ENVIADA”, “ENTREGUE” e “LIDA” serão alimentados automaticamente pela integração oficial do WhatsApp na próxima fase.
+- Nesta V3, não há disparo real.
+- Não exponha Secret key do Supabase.
+- Se algo sair diferente do descrito, envie apenas o print do erro/tela problemática.
