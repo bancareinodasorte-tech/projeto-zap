@@ -1,0 +1,40 @@
+PROJETO ZAP V5.5 — INSTALAÇÃO RÁPIDA
+
+1) SUPABASE
+- Abra SQL Editor.
+- Cole todo o conteúdo de MIGRACAO-V5.5.sql.
+- Clique Run.
+- Deve aparecer Success.
+
+2) GITHUB
+Substitua/adicione na raiz do repositório:
+- server.js
+- package.json
+- index.html
+- styles.css
+- app.js
+- manifest.webmanifest
+- sw.js
+- MIGRACAO-V5.5.sql
+
+3) RENDER
+- Não altere as variáveis que já funcionam.
+- O deploy deve iniciar sozinho após o commit.
+- Aguarde Live.
+
+4) PRIMEIRA ABERTURA
+- Atualize a página.
+- Vá em Ajustes.
+- A conexão já existente deve ser restaurada automaticamente.
+- NÃO desconecte o WhatsApp se ele já estiver conectado.
+
+NOVO NA V5.5
+- Imagem na campanha.
+- Até 5 textos por campanha.
+- Fila persistente no Supabase.
+- Campanhas imediatas ou agendadas.
+- Retornos organizados.
+- Imagem/PDF/documento recebido => POSSÍVEL PAGAMENTO.
+- Frase de confirmação enviada pelo atendente => COMPRA REALIZADA.
+- Compra manual continua disponível.
+- Status visual do WhatsApp corrigido.

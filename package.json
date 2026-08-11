@@ -1,13 +1,13 @@
 {
-  "name": "projeto-zap-v5-4-2",
-  "version": "5.4.2",
+  "name": "projeto-zap-v5-5",
+  "version": "5.5.0",
   "private": true,
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=20 <23"
+    "node": ">=20 <27"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.24",
