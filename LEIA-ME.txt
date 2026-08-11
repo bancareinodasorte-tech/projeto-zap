@@ -1,1 +1,1 @@
-PROJETO ZAP V4 — execução em lotes, ordem de fila, prontos agora, estados enviada/entregue/lida e ações em grupo.
+PROJETO ZAP V5 — integração oficial WhatsApp Cloud API com backend seguro no Render e webhooks para respostas/status.

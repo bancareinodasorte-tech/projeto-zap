@@ -5,3 +5,14 @@
 .ready-label{display:inline-block;margin-top:4px;color:#087443;font-weight:900;font-size:10px}
 .compact{margin:3px 0 0}
 @media(max-width:760px){.bulk-bar{align-items:stretch;flex-direction:column}.bulk-bar .btn{width:100%}}
+
+.wa-card{grid-column:1/-1}
+.wa-form{display:grid;gap:8px;margin-top:12px}
+.wa-form label{font-size:12px;font-weight:800;color:#344054}
+.wa-form input{width:100%;border:1px solid #cbd5e1;border-radius:11px;padding:11px;background:#fff}
+.inline-input{display:flex;gap:7px}
+.inline-input input{flex:1}
+.wa-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wa-two>div{display:grid;gap:6px}
+.wa-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+@media(max-width:760px){.wa-two{grid-template-columns:1fr}.wa-actions .btn{width:100%}.inline-input{align-items:stretch}.inline-input .btn{white-space:nowrap}}

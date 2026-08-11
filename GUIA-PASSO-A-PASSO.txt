@@ -1,48 +1,85 @@
-PROJETO ZAP V4 — EXECUÇÃO E LOTES
+PROJETO ZAP V5 — WHATSAPP OFICIAL
 
 OBJETIVO
-Adicionar a camada operacional que controlará o envio em lotes e os estados da campanha. O WhatsApp real ainda não é disparado nesta versão.
-
-ATUALIZAÇÃO — ORDEM EXATA
-
-1. SUPABASE
-- Abra o mesmo projeto projeto-zap.
-- SQL Editor > New query.
-- Abra o arquivo MIGRAÇÃO-SUPABASE.sql deste ZIP.
-- Copie todo o conteúdo.
-- Cole e clique em Run.
-- Resultado esperado: Success. No rows returned.
-- Execute somente UMA vez.
-
-2. GITHUB
-- Abra o repositório projeto-zap.
-- Adicionar arquivo > Carregar arquivos.
-- Envie TODOS os arquivos internos deste ZIP, sem renomear.
-- Confirme Commit changes.
-- Os arquivos possuem nomes fixos e devem substituir os existentes.
-- Aguarde 1 a 3 minutos.
-
-3. LIMPAR CACHE
-Abra:
-https://bancareinodasorte-tech.github.io/projeto-zap/atualizar.html
-
-4. TESTES DA V4
-- Confirme o título V4 • EXECUÇÃO E LOTES.
-- Crie ou edite uma campanha.
-- Escolha Contatos por lote: 10 ou 25.
-- Escolha Pausa entre lotes: 5 ou 10 minutos.
-- Salve.
-- Clique Gerar fila.
-- Abra Execução.
-- Confira coluna Lote e Próxima ação.
-- Marque "Somente prontos agora".
-- Selecione contatos prontos e use "Marcar selecionados como ENVIADA".
-- Em um contato, teste Entregue e depois Lida.
-- Em outro, teste Respondeu/Interesse/Sem resposta.
-- Registre uma compra e confira que o contato deixa os reenvios.
+Conectar o Projeto Zap à WhatsApp Business Platform Cloud API usando backend seguro no Render.
+A V5 valida: backend, token, número da Meta, mensagem template de teste, webhook, respostas e status.
 
 IMPORTANTE
-- NÃO execute SUPABASE-BANCO.sql.
-- NÃO renomeie arquivos.
-- NÃO altere Project URL ou Publishable key.
-- O envio real do WhatsApp será conectado em uma fase posterior.
+- NÃO coloque token da Meta no GitHub Pages.
+- NÃO edite códigos.
+- O token e a service_role ficam somente nas variáveis do Render.
+- Campanhas promocionais iniciadas pela empresa usam templates aprovados pela Meta.
+- Nesta V5, primeiro valide a conexão com o template hello_world (ou outro template já aprovado).
+
+PARTE 1 — SUPABASE
+1. Abra o mesmo projeto projeto-zap.
+2. SQL Editor > New query.
+3. Abra MIGRAÇÃO-SUPABASE.sql deste ZIP.
+4. Copie tudo, cole e clique em Run.
+5. Esperado: Success. No rows returned.
+6. Execute apenas uma vez.
+
+PARTE 2 — GITHUB
+1. Abra o repositório projeto-zap.
+2. Adicionar arquivo > Carregar arquivos.
+3. Envie TODOS os arquivos e também a pasta backend.
+4. Não renomeie nada.
+5. Commit changes.
+6. Aguarde 1 a 3 minutos.
+7. Abra:
+https://bancareinodasorte-tech.github.io/projeto-zap/atualizar.html
+
+PARTE 3 — CRIAR BACKEND NO RENDER
+1. Entre em render.com.
+2. New > Web Service.
+3. Conecte o GitHub e escolha o repositório projeto-zap.
+4. Root Directory: backend
+5. Runtime: Node
+6. Build Command: npm install
+7. Start Command: npm start
+8. Crie o serviço.
+
+PARTE 4 — VARIÁVEIS DO RENDER
+No serviço > Environment, crie exatamente estas variáveis:
+GRAPH_API_VERSION = v26.0
+META_WA_TOKEN = token da Cloud API da Meta
+META_PHONE_NUMBER_ID = Phone Number ID da Meta
+META_VERIFY_TOKEN = crie uma palavra/senha de verificação só sua
+SUPABASE_URL = a mesma Project URL usada no Projeto Zap
+SUPABASE_ANON_KEY = a mesma Publishable/anon key usada no Projeto Zap
+SUPABASE_SERVICE_ROLE_KEY = chave service_role do Supabase (somente no Render)
+FRONTEND_ORIGIN = https://bancareinodasorte-tech.github.io
+
+Salve e aguarde novo deploy.
+NUNCA coloque META_WA_TOKEN ou SUPABASE_SERVICE_ROLE_KEY no GitHub ou na tela pública.
+
+PARTE 5 — PROJETO ZAP
+1. Abra Ajustes.
+2. Em WhatsApp Oficial — Cloud API, cole a URL do Render.
+   Exemplo: https://projeto-zap-whatsapp.onrender.com
+3. Clique Salvar / testar conexão.
+4. Deve aparecer CONECTADO quando todas as variáveis estiverem corretas.
+5. O sistema mostrará a URL do webhook. Copie.
+
+PARTE 6 — WEBHOOK NA META
+1. No painel Meta for Developers do app com WhatsApp, abra WhatsApp > Configuration.
+2. Em Webhook, informe a URL copiada do Projeto Zap.
+3. Verify token: use exatamente o mesmo valor de META_VERIFY_TOKEN configurado no Render.
+4. Confirme/Verify and save.
+5. Assine o campo messages para receber mensagens e status.
+
+PARTE 7 — TESTE
+1. Em Ajustes do Projeto Zap, informe o telefone de teste com DDI.
+   Exemplo Brasil: 55 + DDD + número.
+2. Template: hello_world
+3. Idioma: en_US
+4. Clique Enviar mensagem teste.
+5. O painel deve mostrar “Aceita pela Meta” e um Message ID.
+6. Responda à mensagem pelo WhatsApp.
+7. O webhook deverá registrar a resposta no banco e, quando houver contato/fila correspondente, marcar RESPONDEU.
+8. Status enviados pela Meta podem atualizar ENVIADA / ENTREGUE / LIDA / FALHA automaticamente.
+
+SE DER ERRO
+- Não altere código.
+- Tire print apenas da mensagem de erro e da tela envolvida.
+- Não envie prints contendo Secret key/service_role/token completo.

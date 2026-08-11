@@ -1,11 +1,11 @@
 {
   "name": "Projeto Zap — Reino da Sorte",
   "short_name": "Projeto Zap",
-  "start_url": "./?build=400",
+  "start_url": "./?build=500",
   "display": "standalone",
   "background_color": "#f5f7fb",
   "theme_color": "#082f63",
-  "description": "V4 — execução em lotes, fila operacional e acompanhamento.",
+  "description": "V5 — integração oficial WhatsApp Cloud API via backend seguro.",
   "icons": [
     {
       "src": "icon.svg",
