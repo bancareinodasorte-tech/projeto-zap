@@ -6,8 +6,12 @@ app.use(express.json({limit:"2mb"}));
 
 const PORT=process.env.PORT||3000;
 const GRAPH_VERSION=process.env.GRAPH_API_VERSION||"v26.0";
-const WA_TOKEN=process.env.META_WA_TOKEN||"";
-const PHONE_ID=process.env.META_PHONE_NUMBER_ID||"";
+let WA_TOKEN=process.env.META_WA_TOKEN||"";
+let PHONE_ID=process.env.META_PHONE_NUMBER_ID||"";
+let WABA_ID=process.env.META_WABA_ID||"";
+const META_APP_ID=process.env.META_APP_ID||"";
+const META_APP_SECRET=process.env.META_APP_SECRET||"";
+const META_CONFIG_ID=process.env.META_CONFIG_ID||"";
 const VERIFY_TOKEN=process.env.META_VERIFY_TOKEN||"";
 const SUPABASE_URL=(process.env.SUPABASE_URL||"").replace(/\/+$/,"");
 const SUPABASE_ANON_KEY=process.env.SUPABASE_ANON_KEY||"";
@@ -25,6 +29,7 @@ app.use((req,res,next)=>{
 function ready(){
   return Boolean(WA_TOKEN&&PHONE_ID&&VERIFY_TOKEN&&SUPABASE_URL&&SUPABASE_ANON_KEY&&SUPABASE_SERVICE_ROLE_KEY);
 }
+function embeddedReady(){return Boolean(META_APP_ID&&META_APP_SECRET&&META_CONFIG_ID)}
 function digits(v){return String(v||"").replace(/\D/g,"")}
 function tailPhone(v){const n=digits(v);return n.slice(-11)}
 
@@ -73,10 +78,31 @@ async function metaSendTemplate({to,templateName,language}){
   return d;
 }
 
-app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5",graphVersion:GRAPH_VERSION}));
+app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5.1",graphVersion:GRAPH_VERSION}));
 
 app.get("/api/whatsapp/status",verifyUser,(req,res)=>{
-  res.json({ok:true,ready:ready(),graphVersion:GRAPH_VERSION,phoneNumberIdConfigured:Boolean(PHONE_ID),tokenConfigured:Boolean(WA_TOKEN),webhookVerifyConfigured:Boolean(VERIFY_TOKEN)});
+  res.json({ok:true,ready:ready(),graphVersion:GRAPH_VERSION,phoneNumberIdConfigured:Boolean(PHONE_ID),tokenConfigured:Boolean(WA_TOKEN),webhookVerifyConfigured:Boolean(VERIFY_TOKEN),embeddedSignupConfigured:embeddedReady(),configId:META_CONFIG_ID||null,wabaIdConfigured:Boolean(WABA_ID)});
+});
+
+app.get("/api/whatsapp/embedded-config",verifyUser,(req,res)=>{
+  if(!META_APP_ID||!META_CONFIG_ID) return res.status(503).json({error:"Configure META_APP_ID e META_CONFIG_ID no backend."});
+  res.json({ok:true,appId:META_APP_ID,configId:META_CONFIG_ID,graphVersion:GRAPH_VERSION});
+});
+
+app.post("/api/whatsapp/exchange-code",verifyUser,async(req,res)=>{
+  try{
+    if(!embeddedReady()) return res.status(503).json({error:"Cadastro Incorporado ainda não configurado no backend."});
+    const code=String(req.body?.code||"").trim();
+    if(!code) return res.status(400).json({error:"Código de autorização ausente."});
+    const u=new URL(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`);
+    u.searchParams.set("client_id",META_APP_ID);u.searchParams.set("client_secret",META_APP_SECRET);u.searchParams.set("code",code);
+    const tr=await fetch(u,{method:"GET"});const td=await tr.json();
+    if(!tr.ok||!td?.access_token) throw new Error(td?.error?.message||"A Meta não retornou o token de acesso.");
+    WA_TOKEN=td.access_token;
+    const waba=String(req.body?.wabaId||"").trim(), phone=String(req.body?.phoneNumberId||"").trim();
+    if(waba)WABA_ID=waba;if(phone)PHONE_ID=phone;
+    res.json({ok:true,tokenReceived:true,wabaId:WABA_ID||null,phoneNumberId:PHONE_ID||null,note:"Token mantido somente na memória do backend. Salve-o como META_WA_TOKEN no ambiente para persistir após reinicialização."});
+  }catch(e){res.status(500).json({error:e.message})}
 });
 
 app.post("/api/whatsapp/send-test",verifyUser,async(req,res)=>{

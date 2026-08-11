@@ -1,0 +1,12 @@
+PROJETO ZAP V5.1
+
+1. Suba os arquivos do frontend no mesmo GitHub Pages usado na V5.
+2. Atualize a pasta backend no Web Service/Render.
+3. No ambiente do backend, mantenha as variáveis existentes e acrescente META_APP_ID, META_APP_SECRET e META_CONFIG_ID.
+4. META_CONFIG_ID já está indicado no .env.example conforme a configuração criada no painel da Meta.
+5. Nunca publique META_APP_SECRET, META_WA_TOKEN ou SUPABASE_SERVICE_ROLE_KEY no GitHub.
+6. Reinicie o Web Service após salvar as variáveis.
+7. A rota /health deverá identificar projeto-zap-v5.1.
+8. A V5.1 mantém as funções anteriores e adiciona endpoints seguros para configuração e troca do código do Cadastro Incorporado.
+
+Observação: a troca do código exige que o App ID e App Secret corretos estejam configurados no servidor. O token retornado pela Meta deve ser persistido como variável secreta do ambiente antes de reiniciar o serviço.

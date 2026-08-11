@@ -1,1 +1,8 @@
-PROJETO ZAP V5 — integração oficial WhatsApp Cloud API com backend seguro no Render e webhooks para respostas/status.
+PROJETO ZAP V5.1 — REINO DA SORTE
+
+Atualização V5.1 preparada sobre a V5 original.
+Inclui suporte backend ao Cadastro Incorporado oficial da Meta para WhatsApp Business.
+
+IMPORTANTE: App Secret, token da Meta e Service Role do Supabase devem permanecer somente no backend/Render e nunca no GitHub Pages.
+
+Consulte GUIA-V5.1.txt para a implantação.
