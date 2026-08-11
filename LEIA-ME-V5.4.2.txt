@@ -1,0 +1,20 @@
+PROJETO ZAP V5.4.2 — CORREÇÃO DE HANDSHAKE/515
+
+CORREÇÕES
+- Reconexão automática correta após Stream Errored / status 515.
+- Preserva as credenciais novas depois da leitura do QR/código.
+- Não apaga a sessão durante o restart obrigatório do WhatsApp.
+- Browser identificado como WEB_BROWSER (Ubuntu/Chrome), evitando fingerprint Desktop incompatível.
+- Pareamento por número aguarda o início do handshake antes de solicitar o código.
+- Proteção contra eventos atrasados de sockets antigos.
+- Mantém Contatos, Campanhas, Execução, Compras e layout existentes.
+
+INSTALAÇÃO
+1. Substitua no GitHub: server.js, index.html e package.json.
+2. Commit changes.
+3. Aguarde o Render ficar Live.
+4. Abra Ajustes e gere UM novo QR Code.
+5. Leia o QR e aguarde 5–15 segundos; o 515, se ocorrer, será tratado automaticamente.
+6. Quando aparecer WhatsApp conectado, envie 1 teste.
+
+Não altere Render/Supabase.
