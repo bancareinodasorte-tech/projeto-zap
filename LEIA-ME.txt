@@ -1,8 +1,26 @@
-PROJETO ZAP V5.1 — REINO DA SORTE
+PROJETO ZAP V5.1 — CONEXÃO WHATSAPP
 
-Atualização V5.1 preparada sobre a V5 original.
-Inclui suporte backend ao Cadastro Incorporado oficial da Meta para WhatsApp Business.
+Esta atualização transplanta somente o mecanismo de conexão do projeto antigo.
 
-IMPORTANTE: App Secret, token da Meta e Service Role do Supabase devem permanecer somente no backend/Render e nunca no GitHub Pages.
+ARQUIVOS
+- server.js
+- package.json
+- supabase-zap-auth.sql
 
-Consulte GUIA-V5.1.txt para a implantação.
+RENDER — VARIÁVEIS NECESSÁRIAS
+- SUPABASE_URL
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- FRONTEND_ORIGIN
+
+PODEM SER REMOVIDAS DESTA ETAPA
+- META_PHONE_NUMBER_ID
+- META_WA_TOKEN
+- META_VERIFY_TOKEN
+- GRAPH_API_VERSION
+
+PASSO RESUMIDO
+1. Substitua server.js e package.json no repositório do backend.
+2. Se a tabela zap_auth não existir, execute supabase-zap-auth.sql no Supabase.
+3. No Render: Save, rebuild, and deploy.
+4. O backend restaura sessão automaticamente ou gera QR para nova conexão.

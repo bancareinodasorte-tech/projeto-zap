@@ -1,50 +1,44 @@
-const express=require("express");
-const crypto=require("crypto");
+const express = require("express");
+const crypto = require("crypto");
+const pino = require("pino");
+const QRCode = require("qrcode");
+const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion, initAuthCreds, BufferJSON, proto } = require("@whiskeysockets/baileys");
 
-const app=express();
-app.use(express.json({limit:"2mb"}));
+const app = express();
+app.use(express.json({limit:"4mb"}));
 
-const PORT=process.env.PORT||3000;
-const GRAPH_VERSION=process.env.GRAPH_API_VERSION||"v26.0";
-let WA_TOKEN=process.env.META_WA_TOKEN||"";
-let PHONE_ID=process.env.META_PHONE_NUMBER_ID||"";
-let WABA_ID=process.env.META_WABA_ID||"";
-const META_APP_ID=process.env.META_APP_ID||"";
-const META_APP_SECRET=process.env.META_APP_SECRET||"";
-const META_CONFIG_ID=process.env.META_CONFIG_ID||"";
-const VERIFY_TOKEN=process.env.META_VERIFY_TOKEN||"";
-const SUPABASE_URL=(process.env.SUPABASE_URL||"").replace(/\/+$/,"");
-const SUPABASE_ANON_KEY=process.env.SUPABASE_ANON_KEY||"";
-const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||"";
-const FRONTEND_ORIGIN=process.env.FRONTEND_ORIGIN||"*";
+const PORT = process.env.PORT || 3000;
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/+$/,"");
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
 app.use((req,res,next)=>{
-  res.setHeader("Access-Control-Allow-Origin",FRONTEND_ORIGIN);
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
   res.setHeader("Access-Control-Allow-Headers","Authorization, Content-Type");
-  res.setHeader("Access-Control-Allow-Methods","GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods","GET,POST,DELETE,OPTIONS");
   if(req.method==="OPTIONS") return res.sendStatus(204);
   next();
 });
 
-function ready(){
-  return Boolean(WA_TOKEN&&PHONE_ID&&VERIFY_TOKEN&&SUPABASE_URL&&SUPABASE_ANON_KEY&&SUPABASE_SERVICE_ROLE_KEY);
+function digits(v){ return String(v||"").replace(/\D/g,""); }
+function normalizeBR(v){
+  let n=digits(v);
+  if(n.startsWith("00")) n=n.slice(2);
+  if(!n.startsWith("55") && (n.length===10 || n.length===11)) n="55"+n;
+  return n;
 }
-function embeddedReady(){return Boolean(META_APP_ID&&META_APP_SECRET&&META_CONFIG_ID)}
-function digits(v){return String(v||"").replace(/\D/g,"")}
-function tailPhone(v){const n=digits(v);return n.slice(-11)}
+function tailPhone(v){ return digits(v).slice(-11); }
 
 async function sb(path,opt={},service=true){
   const key=service?SUPABASE_SERVICE_ROLE_KEY:SUPABASE_ANON_KEY;
+  if(!SUPABASE_URL || !key) throw new Error("Supabase não configurado.");
   const r=await fetch(SUPABASE_URL+path,{
     ...opt,
-    headers:{
-      apikey:key,
-      Authorization:`Bearer ${key}`,
-      "Content-Type":"application/json",
-      ...(opt.headers||{})
-    }
+    headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",...(opt.headers||{})}
   });
-  const txt=await r.text();let data=null;try{data=txt?JSON.parse(txt):null}catch{data=txt}
+  const txt=await r.text(); let data=null;
+  try{ data=txt?JSON.parse(txt):null; }catch{ data=txt; }
   if(!r.ok) throw new Error(data?.message||data?.details||`Supabase ${r.status}`);
   return data;
 }
@@ -53,92 +47,105 @@ async function verifyUser(req,res,next){
   try{
     const token=(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
     if(!token) return res.status(401).json({error:"Sessão ausente."});
-    const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
-      headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}
-    });
+    const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}});
     const u=await r.json();
     if(!r.ok||!u?.id) return res.status(401).json({error:"Sessão inválida."});
-    req.user=u;next();
-  }catch(e){res.status(401).json({error:"Não foi possível validar a sessão."})}
+    req.user=u; next();
+  }catch(e){ res.status(401).json({error:"Não foi possível validar a sessão."}); }
 }
 
-async function metaSendTemplate({to,templateName,language}){
-  const r=await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_ID}/messages`,{
-    method:"POST",
-    headers:{Authorization:`Bearer ${WA_TOKEN}`,"Content-Type":"application/json"},
-    body:JSON.stringify({
-      messaging_product:"whatsapp",
-      to:digits(to),
-      type:"template",
-      template:{name:templateName,language:{code:language}}
-    })
-  });
-  const d=await r.json();
-  if(!r.ok) throw new Error(d?.error?.message||`Meta ${r.status}`);
-  return d;
+let sock=null, starting=false, connected=false, qrDataUrl="", connectedNumber="", lastError="", lastConnectionAt=null;
+
+async function authRead(id){
+  const rows=await sb(`/rest/v1/zap_auth?select=value&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const row=Array.isArray(rows)?rows[0]:null;
+  return row ? JSON.parse(JSON.stringify(row.value), BufferJSON.reviver) : null;
+}
+async function authWrite(id,value){
+  const safe=JSON.parse(JSON.stringify(value,BufferJSON.replacer));
+  await sb("/rest/v1/zap_auth?on_conflict=id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id,value:safe,updated_at:new Date().toISOString()})});
+}
+async function authDelete(id){ await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:"DELETE"}); }
+async function authClearAll(){ await sb("/rest/v1/zap_auth?id=not.is.null",{method:"DELETE"}); }
+
+async function useSupabaseAuthState(){
+  const creds=(await authRead("creds"))||initAuthCreds();
+  return {
+    state:{
+      creds,
+      keys:{
+        get:async(type,ids)=>{
+          const data={};
+          await Promise.all(ids.map(async id=>{
+            let value=await authRead(`${type}-${id}`);
+            if(type==="app-state-sync-key" && value) value=proto.Message.AppStateSyncKeyData.fromObject(value);
+            data[id]=value;
+          }));
+          return data;
+        },
+        set:async(data)=>{
+          const tasks=[];
+          for(const category of Object.keys(data))
+            for(const id of Object.keys(data[category])){
+              const value=data[category][id];
+              tasks.push(value?authWrite(`${category}-${id}`,value):authDelete(`${category}-${id}`));
+            }
+          await Promise.all(tasks);
+        }
+      }
+    },
+    saveCreds:()=>authWrite("creds",creds)
+  };
 }
 
-app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5.1",graphVersion:GRAPH_VERSION}));
+async function closeSocket(){ try{ sock?.ws?.close?.(); }catch{} sock=null; connected=false; connectedNumber=""; }
 
-app.get("/api/whatsapp/status",verifyUser,(req,res)=>{
-  res.json({ok:true,ready:ready(),graphVersion:GRAPH_VERSION,phoneNumberIdConfigured:Boolean(PHONE_ID),tokenConfigured:Boolean(WA_TOKEN),webhookVerifyConfigured:Boolean(VERIFY_TOKEN),embeddedSignupConfigured:embeddedReady(),configId:META_CONFIG_ID||null,wabaIdConfigured:Boolean(WABA_ID)});
-});
-
-app.get("/api/whatsapp/embedded-config",verifyUser,(req,res)=>{
-  if(!META_APP_ID||!META_CONFIG_ID) return res.status(503).json({error:"Configure META_APP_ID e META_CONFIG_ID no backend."});
-  res.json({ok:true,appId:META_APP_ID,configId:META_CONFIG_ID,graphVersion:GRAPH_VERSION});
-});
-
-app.post("/api/whatsapp/exchange-code",verifyUser,async(req,res)=>{
+async function startWhatsApp(force=false){
+  if(starting) return;
+  if(sock && !force) return;
+  starting=true;
+  if(force) await closeSocket();
   try{
-    if(!embeddedReady()) return res.status(503).json({error:"Cadastro Incorporado ainda não configurado no backend."});
-    const code=String(req.body?.code||"").trim();
-    if(!code) return res.status(400).json({error:"Código de autorização ausente."});
-    const u=new URL(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`);
-    u.searchParams.set("client_id",META_APP_ID);u.searchParams.set("client_secret",META_APP_SECRET);u.searchParams.set("code",code);
-    const tr=await fetch(u,{method:"GET"});const td=await tr.json();
-    if(!tr.ok||!td?.access_token) throw new Error(td?.error?.message||"A Meta não retornou o token de acesso.");
-    WA_TOKEN=td.access_token;
-    const waba=String(req.body?.wabaId||"").trim(), phone=String(req.body?.phoneNumberId||"").trim();
-    if(waba)WABA_ID=waba;if(phone)PHONE_ID=phone;
-    res.json({ok:true,tokenReceived:true,wabaId:WABA_ID||null,phoneNumberId:PHONE_ID||null,note:"Token mantido somente na memória do backend. Salve-o como META_WA_TOKEN no ambiente para persistir após reinicialização."});
-  }catch(e){res.status(500).json({error:e.message})}
-});
-
-app.post("/api/whatsapp/send-test",verifyUser,async(req,res)=>{
-  try{
-    if(!ready()) return res.status(503).json({error:"Backend ainda não possui todas as variáveis obrigatórias."});
-    const to=digits(req.body?.to);
-    const templateName=String(req.body?.templateName||"hello_world").trim();
-    const language=String(req.body?.language||"en_US").trim();
-    if(to.length<10) return res.status(400).json({error:"Telefone de teste inválido."});
-    const d=await metaSendTemplate({to,templateName,language});
-    const messageId=d?.messages?.[0]?.id||null;
-    if(messageId){
-      await sb("/rest/v1/whatsapp_messages",{
-        method:"POST",
-        headers:{Prefer:"return=minimal"},
-        body:JSON.stringify({
-          owner_id:req.user.id,
-          meta_message_id:messageId,
-          direction:"OUT",
-          message_type:"template",
-          body:templateName,
-          status:"accepted",
-          phone:to,
-          raw_payload:d
-        })
-      });
-    }
-    res.json({ok:true,messageId});
-  }catch(e){res.status(500).json({error:e.message})}
-});
-
-app.get("/webhook",(req,res)=>{
-  const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];
-  if(mode==="subscribe"&&token===VERIFY_TOKEN) return res.status(200).send(challenge);
-  res.sendStatus(403);
-});
+    const {state,saveCreds}=await useSupabaseAuthState();
+    const {version}=await fetchLatestBaileysVersion();
+    sock=makeWASocket({
+      version,auth:state,printQRInTerminal:false,logger:pino({level:"silent"}),
+      browser:["Projeto Zap V5.1","Chrome","1.0.0"],
+      markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,
+      generateHighQualityLinkPreview:false
+    });
+    sock.ev.on("creds.update",saveCreds);
+    sock.ev.on("connection.update",async update=>{
+      const {connection,lastDisconnect,qr}=update;
+      if(qr){ qrDataUrl=await QRCode.toDataURL(qr,{margin:2,width:420}); connected=false; lastError=""; }
+      if(connection==="open"){
+        connected=true; qrDataUrl="";
+        connectedNumber=digits(sock.user?.id?.split(":")?.[0]||sock.user?.id||"");
+        lastConnectionAt=new Date().toISOString(); lastError="";
+      }
+      if(connection==="close"){
+        connected=false;
+        const code=lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode || 0;
+        const loggedOut=code===DisconnectReason.loggedOut;
+        lastError=loggedOut?"WhatsApp desconectado pelo usuário.":String(lastDisconnect?.error?.message||"Conexão encerrada.");
+        await closeSocket();
+        if(!loggedOut) setTimeout(()=>startWhatsApp(false).catch(()=>{}),2500);
+      }
+    });
+    sock.ev.on("messages.upsert",async({messages,type})=>{
+      if(type!=="notify") return;
+      for(const m of messages||[]){
+        if(!m?.message || m.key?.fromMe) continue;
+        const remote=String(m.key?.remoteJid||"");
+        if(remote.endsWith("@g.us") || remote==="status@broadcast") continue;
+        const from=digits(remote.split("@")[0]);
+        const text=m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || m.message?.videoMessage?.caption || "";
+        await handleInboundBaileys(from,text,m).catch(()=>{});
+      }
+    });
+  }catch(e){ lastError=e.message; await closeSocket(); throw e; }
+  finally{ starting=false; }
+}
 
 async function findContactByPhone(from){
   const rows=await sb("/rest/v1/contacts?select=id,owner_id,phone,name&limit=2000");
@@ -146,35 +153,31 @@ async function findContactByPhone(from){
   return (rows||[]).find(c=>tailPhone(c.phone)===tail)||null;
 }
 async function latestActiveRecipient(contactId){
-  if(!contactId)return null;
+  if(!contactId) return null;
   const rows=await sb(`/rest/v1/campaign_recipients?contact_id=eq.${encodeURIComponent(contactId)}&status=in.(PENDENTE,REENVIO_AGENDADO,ENVIADA,ENTREGUE,LIDA)&select=*&order=created_at.desc&limit=1`);
   return rows?.[0]||null;
 }
-async function logEvent(recipient,type,source="webhook"){
-  if(!recipient)return;
+async function logEvent(recipient,type,source="baileys"){
+  if(!recipient) return;
   try{
     await sb("/rest/v1/campaign_events",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({
-      owner_id:recipient.owner_id,
-      recipient_id:recipient.id,
-      campaign_id:recipient.campaign_id,
-      contact_id:recipient.contact_id,
-      event_type:type,
-      event_source:source
+      owner_id:recipient.owner_id,recipient_id:recipient.id,campaign_id:recipient.campaign_id,
+      contact_id:recipient.contact_id,event_type:type,event_source:source
     })});
   }catch{}
 }
-
-async function handleInbound(value,msg){
-  const from=msg.from||value?.contacts?.[0]?.wa_id||"";
+async function handleInboundBaileys(from,body,raw){
   const contact=await findContactByPhone(from);
   const recipient=await latestActiveRecipient(contact?.id);
   const ownerId=contact?.owner_id||recipient?.owner_id||null;
-  const body=msg?.text?.body||msg?.button?.text||msg?.interactive?.button_reply?.title||msg?.interactive?.list_reply?.title||null;
   if(ownerId){
-    await sb("/rest/v1/whatsapp_messages",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({
-      owner_id:ownerId,contact_id:contact?.id||null,campaign_id:recipient?.campaign_id||null,recipient_id:recipient?.id||null,
-      meta_message_id:msg.id,direction:"IN",message_type:msg.type||"unknown",body,status:"received",phone:from,raw_payload:msg
-    })});
+    try{
+      await sb("/rest/v1/whatsapp_messages",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({
+        owner_id:ownerId,contact_id:contact?.id||null,campaign_id:recipient?.campaign_id||null,
+        recipient_id:recipient?.id||null,meta_message_id:String(raw?.key?.id||crypto.randomUUID()),
+        direction:"IN",message_type:"text",body:body||null,status:"received",phone:from,raw_payload:{key:raw?.key||null}
+      })});
+    }catch{}
   }
   if(recipient){
     const now=new Date().toISOString();
@@ -182,50 +185,62 @@ async function handleInbound(value,msg){
     await logEvent(recipient,"RESPONDEU");
   }
 }
-async function handleStatus(st){
-  const metaId=st.id;if(!metaId)return;
-  const rows=await sb(`/rest/v1/whatsapp_messages?meta_message_id=eq.${encodeURIComponent(metaId)}&select=*&limit=1`);
-  const wm=rows?.[0];
-  let recipient=null;
-  if(wm?.recipient_id){
-    const rs=await sb(`/rest/v1/campaign_recipients?id=eq.${wm.recipient_id}&select=*&limit=1`);
-    recipient=rs?.[0];
-  }else{
-    const rs=await sb(`/rest/v1/campaign_recipients?meta_message_id=eq.${encodeURIComponent(metaId)}&select=*&limit=1`);
-    recipient=rs?.[0];
-  }
-  const status=String(st.status||"").toLowerCase();
-  const map={sent:"ENVIADA",delivered:"ENTREGUE",read:"LIDA",failed:"FALHA"};
-  const appStatus=map[status];
-  const now=new Date().toISOString();
-  const err=st?.errors?.[0]?.title||st?.errors?.[0]?.message||null;
-  if(wm){
-    await sb(`/rest/v1/whatsapp_messages?id=eq.${wm.id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status,error_text:err,raw_payload:st,updated_at:now})});
-  }
-  if(recipient&&appStatus){
-    const patch={status:appStatus,whatsapp_status:status,updated_at:now};
-    if(status==="sent")patch.sent_at=now;
-    if(status==="delivered")patch.delivered_at=now;
-    if(status==="read")patch.read_at=now;
-    if(status==="failed"){patch.failed_at=now;patch.whatsapp_error=err;patch.next_action_at=null}
-    await sb(`/rest/v1/campaign_recipients?id=eq.${recipient.id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(patch)});
-    await logEvent(recipient,appStatus);
-  }
+
+async function sendText(to,text){
+  if(!sock || !connected) throw new Error("WhatsApp ainda não está conectado.");
+  const n=normalizeBR(to);
+  if(!/^55\d{10,11}$/.test(n)) throw new Error("Telefone inválido. Use DDD + número.");
+  const jid=`${n}@s.whatsapp.net`;
+  const exists=await sock.onWhatsApp(jid);
+  const target=exists?.[0]?.jid||jid;
+  const r=await sock.sendMessage(target,{text:String(text||"").trim()});
+  return {id:r?.key?.id||null,to:n};
 }
 
-app.post("/webhook",(req,res)=>{
-  res.sendStatus(200);
-  (async()=>{
-    try{
-      for(const entry of req.body?.entry||[]){
-        for(const change of entry?.changes||[]){
-          const value=change?.value||{};
-          for(const msg of value.messages||[]) await handleInbound(value,msg);
-          for(const st of value.statuses||[]) await handleStatus(st);
-        }
-      }
-    }catch(e){console.error("webhook error",e.message)}
-  })();
+app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5.1",connector:"baileys",connected}));
+
+app.get("/api/whatsapp/status",verifyUser,(req,res)=>res.json({
+  ok:true,connector:"baileys",connected,starting,number:connectedNumber||null,
+  qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt
+}));
+
+app.post("/api/whatsapp/connect",verifyUser,async(req,res)=>{
+  try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true,message:"Conexão iniciada."}); }
+  catch(e){ res.status(500).json({error:e.message}); }
 });
 
-app.listen(PORT,()=>console.log(`Projeto Zap V5 backend online na porta ${PORT}`));
+app.post("/api/whatsapp/pairing-code",verifyUser,async(req,res)=>{
+  try{
+    const phone=normalizeBR(req.body?.phone);
+    if(!/^55\d{10,11}$/.test(phone)) return res.status(400).json({error:"Telefone inválido."});
+    if(!sock) await startWhatsApp(false);
+    if(connected) return res.json({ok:true,connected:true,message:"WhatsApp já conectado."});
+    if(typeof sock?.requestPairingCode!=="function") return res.status(503).json({error:"Pareamento por código indisponível. Use QR Code."});
+    const code=await sock.requestPairingCode(phone);
+    res.json({ok:true,code});
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.post("/api/whatsapp/send-test",verifyUser,async(req,res)=>{
+  try{
+    const text=String(req.body?.text||"Teste Projeto Zap V5.1 ✅").trim();
+    const d=await sendText(req.body?.to,text);
+    res.json({ok:true,messageId:d.id,to:d.to});
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.post("/api/whatsapp/logout",verifyUser,async(req,res)=>{
+  try{
+    if(sock){ try{ await sock.logout(); }catch{} }
+    await closeSocket(); await authClearAll();
+    qrDataUrl=""; lastError="";
+    res.json({ok:true,message:"Sessão removida."});
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.get("/api/whatsapp/qr",verifyUser,(req,res)=>res.json({ok:true,connected,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null}));
+
+app.listen(PORT,async()=>{
+  console.log(`Projeto Zap V5.1 online na porta ${PORT}`);
+  try{ await startWhatsApp(false); }catch(e){ console.log("WhatsApp aguardando configuração:",e.message); }
+});
