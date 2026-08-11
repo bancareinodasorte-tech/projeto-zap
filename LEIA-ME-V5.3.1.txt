@@ -1,0 +1,14 @@
+PROJETO ZAP V5.3.1
+CORREÇÃO: removido o token Supabase digitado no painel. PHONE ID não é usado.
+
+INSTALAÇÃO
+1. Substitua server.js e package.json no GitHub.
+2. Commit changes.
+3. Aguarde o Render concluir o deploy e ficar Live.
+4. Abra a URL principal do Render.
+5. Toque Gerar / atualizar QR Code.
+6. WhatsApp > Configurações > Aparelhos conectados > Conectar um aparelho.
+7. Leia o QR exibido.
+8. Após aparecer WhatsApp conectado, faça o teste com 1 número.
+
+Não altere as variáveis Supabase já existentes no Render.
