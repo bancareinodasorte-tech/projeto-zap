@@ -1,0 +1,19 @@
+PROJETO ZAP V5.4.1 — CORREÇÃO DA CONEXÃO
+
+CORRIGIDO
+- Erro "Connection Closed" ao gerar QR.
+- Corrida entre socket antigo e novo durante reconexão.
+- Pareamento por número agora inicia sessão limpa e aguarda o socket ficar pronto.
+- QR manual força uma sessão nova somente quando o WhatsApp está desconectado.
+- Sessão conectada continua preservada no Supabase.
+
+INSTALAÇÃO
+1. Substitua no GitHub: server.js, index.html e package.json.
+2. Faça Commit changes.
+3. Aguarde o Render ficar Live.
+4. Abra o Projeto Zap novamente.
+5. Em Ajustes, toque Gerar / atualizar QR Code.
+6. Leia o QR pelo WhatsApp.
+7. Depois confirme WhatsApp conectado e envie 1 teste.
+
+NÃO altere as variáveis do Render/Supabase.

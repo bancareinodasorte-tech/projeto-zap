@@ -22,18 +22,143 @@ async function authWrite(id,value){const safe=JSON.parse(JSON.stringify(value,Bu
 async function authDelete(id){await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:'DELETE'})}
 async function authClearAll(){await sb('/rest/v1/zap_auth?id=not.is.null',{method:'DELETE'})}
 async function authState(){const creds=(await authRead('creds'))||initAuthCreds();return{state:{creds,keys:{get:async(type,ids)=>{const data={};await Promise.all(ids.map(async id=>{let v=await authRead(`${type}-${id}`);if(type==='app-state-sync-key'&&v)v=proto.Message.AppStateSyncKeyData.fromObject(v);data[id]=v}));return data},set:async data=>{const jobs=[];for(const cat of Object.keys(data))for(const id of Object.keys(data[cat]))jobs.push(data[cat][id]?authWrite(`${cat}-${id}`,data[cat][id]):authDelete(`${cat}-${id}`));await Promise.all(jobs)}}},saveCreds:()=>authWrite('creds',creds)}}
-async function closeSocket(){try{sock?.ws?.close?.()}catch{}sock=null;connected=false;connectedNumber=''}
+async function closeSocket(target=sock){
+  if(!target)return;
+  try{target?.ws?.close?.()}catch{}
+  if(sock===target){
+    sock=null;
+    connected=false;
+    connectedNumber='';
+  }
+}
+async function waitForSocket(ms=1800){
+  const started=Date.now();
+  while(Date.now()-started<ms){
+    if(sock)return sock;
+    await delay(100);
+  }
+  throw Error('Não foi possível iniciar a conexão do WhatsApp.');
+}
 
 const campaignJobs=new Map();
 function markResponded(phone){const n=normalizeBR(phone);for(const job of campaignJobs.values()){const item=job.items.find(x=>x.phone===n&&['pending','sent'].includes(x.status));if(item){item.status='responded';item.respondedAt=new Date().toISOString();job.responded=(job.responded||0)+1}}}
 
-async function startWhatsApp(force=false){if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSocket();try{const {state,saveCreds}=await authState();const {version}=await fetchLatestBaileysVersion();sock=makeWASocket({version,auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:['Projeto Zap V5.4','Chrome','1.0.0'],markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});sock.ev.on('creds.update',saveCreds);sock.ev.on('connection.update',async u=>{const {connection,lastDisconnect,qr}=u;if(qr){qrDataUrl=await QRCode.toDataURL(qr,{margin:2,width:520});connected=false;lastError=''}if(connection==='open'){connected=true;qrDataUrl='';connectedNumber=digits(sock.user?.id?.split(':')?.[0]||sock.user?.id||'');lastConnectionAt=new Date().toISOString();lastError=''}if(connection==='close'){connected=false;const code=lastDisconnect?.error?.output?.statusCode||lastDisconnect?.error?.statusCode||0;const loggedOut=code===DisconnectReason.loggedOut;lastError=loggedOut?'WhatsApp desconectado.':String(lastDisconnect?.error?.message||'Conexão encerrada.');await closeSocket();if(!loggedOut)setTimeout(()=>startWhatsApp(false).catch(()=>{}),3000)}});sock.ev.on('messages.upsert',async({messages,type})=>{if(type!=='notify')return;for(const m of messages||[]){if(!m?.message||m.key?.fromMe)continue;const remote=String(m.key?.remoteJid||'');if(remote.endsWith('@g.us')||remote==='status@broadcast')continue;markResponded(remote.split('@')[0])}})}catch(e){lastError=e.message;await closeSocket();throw e}finally{starting=false}}
+async function startWhatsApp(force=false,resetAuth=false){
+  if(starting)return;
+  if(sock&&!force)return;
+  starting=true;
+  lastError='';
+  try{
+    const oldSock=sock;
+    if(oldSock)await closeSocket(oldSock);
+    if(resetAuth){
+      await authClearAll();
+      qrDataUrl='';
+    }
+
+    const {state,saveCreds}=await authState();
+    const {version}=await fetchLatestBaileysVersion();
+    const current=makeWASocket({
+      version,
+      auth:state,
+      printQRInTerminal:false,
+      logger:pino({level:'silent'}),
+      browser:['Projeto Zap V5.4.1','Chrome','1.0.0'],
+      markOnlineOnConnect:false,
+      syncFullHistory:false,
+      shouldSyncHistoryMessage:()=>false,
+      generateHighQualityLinkPreview:false
+    });
+    sock=current;
+
+    current.ev.on('creds.update',saveCreds);
+    current.ev.on('connection.update',async u=>{
+      if(sock!==current)return; // ignora eventos de sockets antigos
+      const {connection,lastDisconnect,qr}=u;
+
+      if(qr){
+        qrDataUrl=await QRCode.toDataURL(qr,{margin:2,width:520});
+        connected=false;
+        lastError='';
+      }
+
+      if(connection==='open'){
+        connected=true;
+        qrDataUrl='';
+        connectedNumber=digits(current.user?.id?.split(':')?.[0]||current.user?.id||'');
+        lastConnectionAt=new Date().toISOString();
+        lastError='';
+      }
+
+      if(connection==='close'){
+        connected=false;
+        const code=lastDisconnect?.error?.output?.statusCode||lastDisconnect?.error?.statusCode||0;
+        const loggedOut=code===DisconnectReason.loggedOut;
+        const message=String(lastDisconnect?.error?.message||'Conexão encerrada.');
+        lastError=loggedOut?'WhatsApp desconectado.':message;
+
+        await closeSocket(current);
+
+        // Só tenta reconectar automaticamente quando a sessão ainda é válida.
+        if(!loggedOut && !resetAuth){
+          setTimeout(()=>startWhatsApp(false,false).catch(()=>{}),3000);
+        }
+      }
+    });
+
+    current.ev.on('messages.upsert',async({messages,type})=>{
+      if(type!=='notify')return;
+      for(const m of messages||[]){
+        if(!m?.message||m.key?.fromMe)continue;
+        const remote=String(m.key?.remoteJid||'');
+        if(remote.endsWith('@g.us')||remote==='status@broadcast')continue;
+        markResponded(remote.split('@')[0]);
+      }
+    });
+  }catch(e){
+    lastError=e.message;
+    const current=sock;
+    if(current)await closeSocket(current);
+    throw e;
+  }finally{
+    starting=false;
+  }
+}
 async function sendText(to,text){if(!sock||!connected)throw Error('WhatsApp ainda não está conectado.');const n=normalizeBR(to);if(!validBR(n))throw Error('Telefone inválido. Use DDD + número.');const jid=`${n}@s.whatsapp.net`;const ex=await sock.onWhatsApp(jid);if(!ex?.length)throw Error('Número não encontrado no WhatsApp.');const target=ex[0].jid;const r=await sock.sendMessage(target,{text:String(text||'').trim()});return{id:r?.key?.id||null,to:n}}
 
-app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap-v5.4',connector:'baileys',connected,phoneIdRequired:false}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap-v5.4.1',connector:'baileys',connected,phoneIdRequired:false}));
 app.get('/api/whatsapp/status',(req,res)=>res.json({ok:true,connector:'baileys',connected,starting,number:connectedNumber||null,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt}));
-app.post('/api/whatsapp/connect',async(req,res)=>{try{await startWhatsApp(Boolean(req.body?.force));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/pairing-code',async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!validBR(phone))return res.status(400).json({error:'Telefone inválido.'});if(!sock)await startWhatsApp(false);if(connected)return res.json({ok:true,connected:true,message:'WhatsApp já conectado.'});const code=await sock.requestPairingCode(phone);res.json({ok:true,code})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/connect',async(req,res)=>{
+  try{
+    if(connected)return res.json({ok:true,connected:true});
+    // Solicitação manual de QR = inicia uma sessão limpa para garantir QR novo.
+    await startWhatsApp(true,true);
+    const current=await waitForSocket();
+    // Aguarda o primeiro QR por alguns segundos sem travar indefinidamente.
+    const until=Date.now()+7000;
+    while(!qrDataUrl && !connected && Date.now()<until)await delay(250);
+    if(connected)return res.json({ok:true,connected:true});
+    if(!qrDataUrl)return res.status(503).json({error:lastError||'QR Code ainda não foi gerado. Tente novamente em alguns segundos.'});
+    res.json({ok:true,qrAvailable:true});
+  }catch(e){res.status(500).json({error:e.message})}
+});
+
+app.post('/api/whatsapp/pairing-code',async(req,res)=>{
+  try{
+    const phone=normalizeBR(req.body?.phone);
+    if(!validBR(phone))return res.status(400).json({error:'Telefone inválido. Use DDD + número.'});
+    if(connected)return res.json({ok:true,connected:true,message:'WhatsApp já conectado.'});
+
+    // Pareamento por número também começa com sessão limpa.
+    await startWhatsApp(true,true);
+    const current=await waitForSocket();
+    await delay(1800);
+    if(sock!==current)throw Error('A conexão reiniciou. Toque em Gerar código novamente.');
+    const code=await current.requestPairingCode(phone);
+    res.json({ok:true,code});
+  }catch(e){res.status(500).json({error:e.message})}
+});
+
 app.post('/api/whatsapp/send-test',async(req,res)=>{try{const d=await sendText(req.body?.to,String(req.body?.text||'Teste Projeto Zap V5.4 ✅'));res.json({ok:true,...d})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/logout',async(req,res)=>{try{if(sock)try{await sock.logout()}catch{}await closeSocket();await authClearAll();qrDataUrl='';lastError='';res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 
@@ -47,4 +172,4 @@ app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
 app.get('/manifest.webmanifest',(req,res)=>res.sendFile(path.join(__dirname,'manifest.webmanifest')));
 app.get('/sw.js',(req,res)=>res.sendFile(path.join(__dirname,'sw.js')));
 
-app.listen(PORT,async()=>{console.log(`Projeto Zap V5.4 online na porta ${PORT}`);try{await startWhatsApp(false)}catch(e){console.log('WhatsApp aguardando:',e.message)}});
+app.listen(PORT,async()=>{console.log(`Projeto Zap V5.4.1 online na porta ${PORT}`);try{await startWhatsApp(false,false)}catch(e){console.log('WhatsApp aguardando:',e.message)}});
