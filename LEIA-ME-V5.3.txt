@@ -1,0 +1,11 @@
+PROJETO ZAP V5.3
+1. No GitHub, substitua server.js e package.json pelos arquivos desta versão.
+2. Faça Commit changes.
+3. No Render, aguarde o deploy terminar e aparecer Live.
+4. Abra a URL principal do Render.
+5. Cole o mesmo token Supabase usado no painel anterior e toque Salvar e verificar.
+6. Toque Gerar / atualizar QR Code.
+7. No WhatsApp: Configurações > Aparelhos conectados > Conectar um aparelho > leia o QR.
+8. Quando aparecer WhatsApp conectado, envie uma mensagem de teste.
+
+PHONE ID não é usado nesta versão.
