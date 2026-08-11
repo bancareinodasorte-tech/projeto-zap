@@ -110,7 +110,7 @@ async function startWhatsApp(force=false){
     const {version}=await fetchLatestBaileysVersion();
     sock=makeWASocket({
       version,auth:state,printQRInTerminal:false,logger:pino({level:"silent"}),
-      browser:["Projeto Zap V5.1","Chrome","1.0.0"],
+      browser:["Projeto Zap V5.2","Chrome","1.0.0"],
       markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,
       generateHighQualityLinkPreview:false
     });
@@ -197,7 +197,79 @@ async function sendText(to,text){
   return {id:r?.key?.id||null,to:n};
 }
 
-app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5.1",connector:"baileys",connected}));
+
+app.get("/",(req,res)=>res.type("html").send(`<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Projeto Zap V5.2</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#071426;color:#eef4ff}
+main{max-width:760px;margin:auto;padding:18px}.brand{padding:18px 0}.brand h1{margin:0;font-size:28px}.brand p{margin:6px 0;color:#9db0c9}
+.card{background:#101f35;border:1px solid #28415f;border-radius:20px;padding:18px;margin-bottom:14px}
+.status{display:flex;align-items:center;gap:10px;font-weight:700}.dot{width:12px;height:12px;border-radius:50%;background:#7d8796}
+.dot.on{background:#21c56d}.dot.wait{background:#f1b83b}.dot.err{background:#ef5b67}
+#qr{display:none;width:min(360px,100%);margin:18px auto;background:white;padding:12px;border-radius:16px}
+button,input,textarea{width:100%;padding:14px;border-radius:12px;border:1px solid #38516f;background:#0a1728;color:white;font-size:16px;margin-top:10px}
+button{background:#176bff;border:0;font-weight:700}button.secondary{background:#263b57}button.danger{background:#a62d3b}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:13px;color:#9db0c9;line-height:1.45}
+#pairCode{font-size:28px;font-weight:800;letter-spacing:4px;text-align:center;padding:14px}
+.msg{margin-top:10px;padding:10px;border-radius:10px;background:#0a1728;display:none}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+</style></head><body><main>
+<div class="brand"><h1>Projeto Zap V5.2</h1><p>Central de conexão do WhatsApp</p></div>
+<div class="card">
+ <div class="status"><span id="dot" class="dot"></span><span id="statusText">Verificando conexão...</span></div>
+ <div id="number" class="small" style="margin-top:8px"></div>
+ <img id="qr" alt="QR Code do WhatsApp">
+ <div id="msg" class="msg"></div>
+</div>
+<div class="card">
+ <strong>Acesso ao painel</strong>
+ <div class="small">Cole o token de acesso do Supabase. Ele fica salvo somente neste navegador.</div>
+ <input id="token" type="password" placeholder="Token de acesso">
+ <button onclick="saveToken()">Salvar e verificar</button>
+</div>
+<div class="card">
+ <strong>Conectar WhatsApp</strong>
+ <button onclick="connect(false)">Gerar / atualizar QR Code</button>
+ <div class="small" style="margin-top:10px">No WhatsApp: Aparelhos conectados → Conectar um aparelho → leia o QR.</div>
+ <hr style="border:0;border-top:1px solid #28415f;margin:18px 0">
+ <strong>Ou conectar pelo número</strong>
+ <input id="pairPhone" inputmode="numeric" placeholder="DDD + número, ex.: 88999999999">
+ <button class="secondary" onclick="pair()">Gerar código de pareamento</button>
+ <div id="pairCode"></div>
+</div>
+<div class="card">
+ <strong>Teste após conectar</strong>
+ <input id="testPhone" inputmode="numeric" placeholder="DDD + número de teste">
+ <textarea id="testText" rows="3">Teste Projeto Zap V5.2 ✅</textarea>
+ <button onclick="sendTest()">Enviar mensagem de teste</button>
+</div>
+<div class="card"><button class="danger" onclick="logout()">Desconectar WhatsApp</button></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+$("token").value=localStorage.getItem("pz_token")||"";
+function auth(){const t=$("token").value.trim()||localStorage.getItem("pz_token")||"";return t?{"Authorization":"Bearer "+t}:{}}
+function show(m){$("msg").style.display="block";$("msg").textContent=m}
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...auth(),"Content-Type":"application/json",...(opt.headers||{})}});const d=await r.json().catch(()=>({error:"Resposta inválida"}));if(!r.ok)throw new Error(d.error||("Erro "+r.status));return d}
+function saveToken(){localStorage.setItem("pz_token",$("token").value.trim());refresh()}
+async function refresh(){
+ try{
+  const d=await api("/api/whatsapp/status");
+  $("dot").className="dot "+(d.connected?"on":d.qrAvailable?"wait":"");
+  $("statusText").textContent=d.connected?"WhatsApp conectado":d.starting?"Iniciando conexão...":d.qrAvailable?"Aguardando leitura do QR Code":"WhatsApp desconectado";
+  $("number").textContent=d.number?"Número conectado: +"+d.number:(d.lastError?"Último aviso: "+d.lastError:"");
+  if(d.qrAvailable&&d.qrDataUrl){$("qr").src=d.qrDataUrl;$("qr").style.display="block"}else{$("qr").style.display="none"}
+ }catch(e){$("dot").className="dot err";$("statusText").textContent="Informe um token válido";$("number").textContent=e.message}
+}
+async function connect(force){try{show("Gerando conexão...");await api("/api/whatsapp/connect",{method:"POST",body:JSON.stringify({force})});setTimeout(refresh,1000)}catch(e){show(e.message)}}
+async function pair(){try{const d=await api("/api/whatsapp/pairing-code",{method:"POST",body:JSON.stringify({phone:$("pairPhone").value})});$("pairCode").textContent=d.code||d.message||"";refresh()}catch(e){show(e.message)}}
+async function sendTest(){try{const d=await api("/api/whatsapp/send-test",{method:"POST",body:JSON.stringify({to:$("testPhone").value,text:$("testText").value})});show("Mensagem enviada com sucesso. ID: "+(d.messageId||"-"))}catch(e){show(e.message)}}
+async function logout(){if(!confirm("Desconectar e remover a sessão do WhatsApp?"))return;try{await api("/api/whatsapp/logout",{method:"POST",body:"{}"});$("pairCode").textContent="";show("WhatsApp desconectado.");refresh()}catch(e){show(e.message)}}
+refresh();setInterval(refresh,3000);
+</script></body></html>`));
+
+app.get("/health",(req,res)=>res.json({ok:true,service:"projeto-zap-v5.2",connector:"baileys",connected}));
 
 app.get("/api/whatsapp/status",verifyUser,(req,res)=>res.json({
   ok:true,connector:"baileys",connected,starting,number:connectedNumber||null,
@@ -241,7 +313,7 @@ app.post("/api/whatsapp/pairing-code",verifyUser,async(req,res)=>{
 
 app.post("/api/whatsapp/send-test",verifyUser,async(req,res)=>{
   try{
-    const text=String(req.body?.text||"Teste Projeto Zap V5.1 ✅").trim();
+    const text=String(req.body?.text||"Teste Projeto Zap V5.2 ✅").trim();
     const d=await sendText(req.body?.to,text);
     res.json({ok:true,messageId:d.id,to:d.to});
   }catch(e){ res.status(500).json({error:e.message}); }
@@ -259,6 +331,6 @@ app.post("/api/whatsapp/logout",verifyUser,async(req,res)=>{
 app.get("/api/whatsapp/qr",verifyUser,(req,res)=>res.json({ok:true,connected,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null}));
 
 app.listen(PORT,async()=>{
-  console.log(`Projeto Zap V5.1 online na porta ${PORT}`);
+  console.log(`Projeto Zap V5.2 online na porta ${PORT}`);
   try{ await startWhatsApp(false); }catch(e){ console.log("WhatsApp aguardando configuração:",e.message); }
 });

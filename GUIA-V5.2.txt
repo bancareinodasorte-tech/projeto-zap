@@ -1,0 +1,17 @@
+PROJETO ZAP V5.2
+
+SUBSTITUA NA RAIZ DO GITHUB:
+1. server.js
+2. package.json
+
+DEPOIS:
+1. Commit changes.
+2. No Render, aguarde o deploy automático ou use Manual Deploy > Deploy latest commit.
+3. Quando ficar Live, abra a URL principal do Render:
+   https://projeto-zap-4tyg.onrender.com/
+4. A tela V5.2 abrirá.
+5. Informe o token de acesso do Supabase e toque Salvar e verificar.
+6. Toque Gerar / atualizar QR Code e conecte o WhatsApp.
+7. Depois faça o teste de mensagem pela própria tela.
+
+NÃO execute SQL novo nesta etapa.
