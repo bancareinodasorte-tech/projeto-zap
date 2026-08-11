@@ -1,18 +1,9 @@
 {
-  "name": "projeto-zap-v5-3-1",
-  "version": "5.3.1",
-  "private": true,
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=20 <23"
-  },
-  "dependencies": {
-    "@whiskeysockets/baileys": "6.7.24",
-    "express": "^4.21.2",
-    "pino": "^9.9.0",
-    "qrcode": "^1.5.4"
-  }
+  "name":"projeto-zap-v5-4",
+  "version":"5.4.0",
+  "private":true,
+  "main":"server.js",
+  "scripts":{"start":"node server.js"},
+  "engines":{"node":">=20 <23"},
+  "dependencies":{"@whiskeysockets/baileys":"6.7.24","express":"^4.21.2","pino":"^9.9.0","qrcode":"^1.5.4"}
 }

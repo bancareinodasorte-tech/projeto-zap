@@ -1,17 +1,1 @@
-{
-  "name": "Projeto Zap — Reino da Sorte",
-  "short_name": "Projeto Zap",
-  "start_url": "./?v=30",
-  "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#082f63",
-  "description": "Motor de campanhas, variações, fila e acompanhamento.",
-  "icons": [
-    {
-      "src": "icon-v3.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
-}
+{"name":"Projeto Zap","short_name":"Projeto Zap","start_url":"/","display":"standalone","background_color":"#f4f7fb","theme_color":"#063a78","icons":[]}

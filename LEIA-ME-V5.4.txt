@@ -1,0 +1,24 @@
+PROJETO ZAP V5.4 — INTEGRAÇÃO GERAL
+
+O QUE ENTRA NESTA ETAPA
+- Mantém a conexão WhatsApp/Baileys que funcionou na V5.3.1.
+- Retorna ao painel novo: Início, Contatos, Campanhas, Execução, Compras e Ajustes.
+- Contatos com grupo, status e autorização para campanhas.
+- Campanhas com até 5 variações de mensagem.
+- Execução com progresso, pausa, retomada e cancelamento.
+- Máximo de 20 contatos por execução e intervalo mínimo de 15 segundos.
+- Contatos sem autorização não entram no envio.
+- Compra registrada move o cliente para COMPRA REALIZADA.
+- Respostas recebidas durante uma execução são identificadas no progresso.
+
+INSTALAÇÃO
+1. Descompacte este ZIP.
+2. No GitHub do projeto-zap substitua: server.js, package.json, index.html, manifest.webmanifest e sw.js.
+3. Faça Commit changes.
+4. Aguarde o Render concluir o deploy e mostrar Live.
+5. Abra a URL principal do Render.
+6. Em Ajustes confirme que aparece WhatsApp CONECTADO.
+7. Faça um teste simples: crie 1 contato autorizado, crie 1 campanha e execute somente para esse grupo.
+
+NÃO ALTERE as variáveis do Render/Supabase que já estão funcionando.
+PHONE ID não é usado.
