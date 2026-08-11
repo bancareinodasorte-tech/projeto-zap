@@ -204,6 +204,24 @@ app.get("/api/whatsapp/status",verifyUser,(req,res)=>res.json({
   qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt
 }));
 
+app.get("/api/whatsapp/connect",async(req,res)=>{
+  try{
+    await startWhatsApp(false);
+    res.json({
+      ok:true,
+      message: connected ? "WhatsApp já conectado." : "Conexão iniciada.",
+      connector:"baileys",
+      connected,
+      starting,
+      qrAvailable:Boolean(qrDataUrl),
+      qrDataUrl:qrDataUrl||null,
+      lastError:lastError||null
+    });
+  }catch(e){
+    res.status(500).json({ok:false,error:e.message});
+  }
+});
+
 app.post("/api/whatsapp/connect",verifyUser,async(req,res)=>{
   try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true,message:"Conexão iniciada."}); }
   catch(e){ res.status(500).json({error:e.message}); }

@@ -1,0 +1,9 @@
+PROJETO ZAP V5.1.1 FINAL
+Arquivos para substituir na raiz do GitHub:
+- server.js
+- package.json
+
+Correções:
+- adicionada rota GET /api/whatsapp/connect
+- mantida rota POST autenticada existente
+- Node fixado em 22.x para Render
