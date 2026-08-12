@@ -1,505 +1,83 @@
-const express = require("express");
-const crypto = require("crypto");
-const pino = require("pino");
-const QRCode = require("qrcode");
-const {
-  default: makeWASocket,
-  DisconnectReason,
-  Browsers,
-  initAuthCreds,
-  BufferJSON,
-  proto
-} = require("@whiskeysockets/baileys");
+const express=require('express');
+const crypto=require('crypto');
+const pino=require('pino');
+const QRCode=require('qrcode');
+const {default:makeWASocket,DisconnectReason,Browsers,initAuthCreds,BufferJSON,proto}=require('@whiskeysockets/baileys');
 
-const app = express();
-app.use(express.json({ limit: "12mb" }));
-app.use(express.urlencoded({ extended: true, limit: "12mb" }));
+const app=express();
+app.use(express.json({limit:'15mb'}));
+app.use(express.urlencoded({extended:true,limit:'15mb'}));
 app.use(express.static(__dirname));
 
-const PORT = process.env.PORT || 3000;
-const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || "";
-const STORAGE_BUCKET = "campaign-media";
+const PORT=process.env.PORT||10000;
+const SUPABASE_URL=String(process.env.SUPABASE_URL||'').replace(/\/+$/,'');
+const SUPABASE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_KEY||process.env.SUPABASE_ANON_KEY||'';
+const CRON_SECRET=String(process.env.CRON_SECRET||'');
+const STORAGE_BUCKET='projeto-zap-campanhas';
+const TERMINAL=new Set(['COMPRA_REALIZADA','NAO_INTERESSADO','SEM_RESPOSTA','DESCADASTRADO']);
+const PURCHASE_PHRASES=['pagamento confirmado','compra confirmada','obrigado pela compra','obrigada pela compra','agradecemos sua compra','compra realizada','pagamento recebido'];
+let sock=null,connected=false,starting=false,qrDataUrl='',connectedNumber='',connectedName='',lastError='',lastConnectionAt=null,restartTimer=null,generation=0,runnerBusy=false;
 
-let sock = null;
-let connected = false;
-let starting = false;
-let qrDataUrl = "";
-let connectedNumber = "";
-let connectedName = "";
-let lastError = "";
-let lastConnectionAt = null;
-let restartTimer = null;
-let generation = 0;
-let campaignRunnerBusy = false;
+const digits=v=>String(v||'').replace(/\D/g,'');
+function normalizeBR(v){let n=digits(v);if(n.startsWith('00'))n=n.slice(2);if(!n.startsWith('55')&&(n.length===10||n.length===11))n='55'+n;return n}
+const tail=v=>digits(v).slice(-11);
+const nowIso=()=>new Date().toISOString();
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const randomMs=(a,b)=>{a=Math.max(3,Number(a)||6);b=Math.max(a,Number(b)||12);return Math.floor((a+Math.random()*(b-a))*1000)};
+const safeJson=v=>JSON.parse(JSON.stringify(v,BufferJSON.replacer));
+const restoreJson=v=>JSON.parse(JSON.stringify(v),BufferJSON.reviver);
+async function sb(path,opt={}){if(!SUPABASE_URL||!SUPABASE_KEY)throw new Error('Supabase não configurado no Render.');const r=await fetch(SUPABASE_URL+path,{...opt,headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json',...(opt.headers||{})}});const txt=await r.text();let data=null;try{data=txt?JSON.parse(txt):null}catch{data=txt}if(!r.ok)throw new Error(data?.message||data?.error||data?.details||`Supabase ${r.status}`);return data}
+async function authRead(id){const x=await sb(`/rest/v1/zap_auth?select=value&id=eq.${encodeURIComponent(id)}&limit=1`);return x?.[0]?.value?restoreJson(x[0].value):null}
+async function authWrite(id,value){await sb('/rest/v1/zap_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,value:safeJson(value),updated_at:nowIso()})})}
+async function authDelete(id){await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:'DELETE'})}
+async function authClear(){await sb('/rest/v1/zap_auth?id=not.is.null',{method:'DELETE'})}
+async function useSupabaseAuthState(){const creds=(await authRead('creds'))||initAuthCreds();return{state:{creds,keys:{get:async(type,ids)=>{const out={};await Promise.all(ids.map(async id=>{let v=await authRead(`${type}-${id}`);if(type==='app-state-sync-key'&&v)v=proto.Message.AppStateSyncKeyData.fromObject(v);out[id]=v}));return out},set:async data=>{const jobs=[];for(const cat of Object.keys(data||{}))for(const id of Object.keys(data[cat]||{})){const v=data[cat][id];jobs.push(v?authWrite(`${cat}-${id}`,v):authDelete(`${cat}-${id}`))}await Promise.all(jobs)}}},saveCreds:()=>authWrite('creds',creds)}}
+async function closeSocket(clear=false){generation++;try{sock?.ws?.close?.()}catch{}sock=null;connected=false;starting=false;if(clear){connectedNumber='';connectedName='';qrDataUrl=''}}
+function scheduleRestart(ms=1800){clearTimeout(restartTimer);restartTimer=setTimeout(()=>startWhatsApp(false).catch(e=>lastError=e.message),ms)}
+async function startWhatsApp(force=false){if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSocket(false);const myGen=++generation;try{const {state,saveCreds}=await useSupabaseAuthState();sock=makeWASocket({auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:Browsers.ubuntu('Google Chrome'),markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});const s=sock;s.ev.on('creds.update',saveCreds);s.ev.on('connection.update',async u=>{if(myGen!==generation)return;const {connection,lastDisconnect,qr}=u;if(qr){qrDataUrl=await QRCode.toDataURL(qr,{margin:2,width:440});connected=false;lastError=''}if(connection==='open'){connected=true;starting=false;qrDataUrl='';connectedNumber=digits(s.user?.id?.split(':')?.[0]||s.user?.id||'');connectedName=String(s.user?.name||s.user?.verifiedName||'Projeto Zap');lastConnectionAt=nowIso();lastError='';setTimeout(()=>runDueCampaigns().catch(()=>{}),1200)}if(connection==='close'){connected=false;starting=false;const code=Number(lastDisconnect?.error?.output?.statusCode||lastDisconnect?.error?.statusCode||0);const loggedOut=code===DisconnectReason.loggedOut||code===401;lastError=loggedOut?'Sessão encerrada no WhatsApp.':String(lastDisconnect?.error?.message||`Conexão encerrada (${code||'sem código'}).`);try{s?.ws?.close?.()}catch{}if(sock===s)sock=null;if(loggedOut){await authClear().catch(()=>{});connectedNumber='';connectedName='';qrDataUrl=''}else scheduleRestart(code===515?900:2200)}});s.ev.on('messages.upsert',async({messages})=>{for(const m of messages||[])if(m?.message)await processMessage(m).catch(e=>console.log('Mensagem:',e.message))})}catch(e){lastError=e.message;sock=null;connected=false;starting=false;scheduleRestart(3500);throw e}}
+async function ensureConnected(timeout=25000){if(connected&&sock)return true;if(!starting&&!sock)await startWhatsApp(false).catch(()=>{});const end=Date.now()+timeout;while(Date.now()<end){if(connected&&sock)return true;await sleep(500)}return false}
+function msgText(m){const x=m?.message||{};return String(x.conversation||x.extendedTextMessage?.text||x.imageMessage?.caption||x.videoMessage?.caption||x.documentMessage?.caption||'').trim()}
+function msgType(m){const x=m?.message||{};if(x.imageMessage)return'image';if(x.documentMessage)return String(x.documentMessage?.mimetype||'').includes('pdf')?'pdf':'document';if(x.videoMessage)return'video';if(x.audioMessage)return'audio';return'text'}
+const isPurchasePhrase=t=>PURCHASE_PHRASES.some(p=>String(t||'').toLowerCase().includes(p));
+async function findContact(phone){const rows=await sb(`/rest/v1/pz_contacts?select=*&phone=eq.${encodeURIComponent(normalizeBR(phone))}&limit=1`);return rows?.[0]||null}
+async function upsertContact(phone,name=''){const n=normalizeBR(phone);let c=await findContact(n);if(c)return c;const rows=await sb('/rest/v1/pz_contacts',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({phone:n,name:name||`Cliente ${n.slice(-4)}`,group_name:'NOVOS',status:'ATIVO',opt_in:true,opt_out:false})});return rows?.[0]||null}
+async function latestRecipient(phone){const rows=await sb(`/rest/v1/pz_recipients?select=*&phone=eq.${encodeURIComponent(normalizeBR(phone))}&order=created_at.desc&limit=20`);return (rows||[]).find(r=>!TERMINAL.has(r.status))||null}
+async function recordPurchase(recipient,source='MANUAL',notes=''){if(!recipient)return;await sb('/rest/v1/pz_purchases',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({contact_id:recipient.contact_id||null,campaign_id:recipient.campaign_id||null,recipient_id:recipient.id,phone:recipient.phone,name:recipient.name||'',source,notes})}).catch(()=>{});await sb(`/rest/v1/pz_recipients?id=eq.${recipient.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'COMPRA_REALIZADA',purchase_at:nowIso(),next_action_at:null,updated_at:nowIso()})})}
+async function processMessage(m){const jid=String(m.key?.remoteJid||'');if(!jid||jid.endsWith('@g.us')||jid==='status@broadcast'||jid.endsWith('@broadcast'))return;const phone=normalizeBR(jid.split('@')[0]);if(!phone)return;const fromMe=Boolean(m.key?.fromMe),text=msgText(m),type=msgType(m),contact=await upsertContact(phone,m.pushName||''),recipient=await latestRecipient(phone);await sb('/rest/v1/pz_messages',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({phone,contact_id:contact?.id||null,campaign_id:recipient?.campaign_id||null,recipient_id:recipient?.id||null,meta_message_id:String(m.key?.id||crypto.randomUUID()),direction:fromMe?'OUT':'IN',message_type:type,body:text||null,status:fromMe?'sent':'received',raw_payload:{key:m.key||null,pushName:m.pushName||null}})}).catch(()=>{});if(!recipient)return;if(fromMe&&isPurchasePhrase(text)){await recordPurchase(recipient,'AUTO_FRASE',text);return}if(!fromMe){const payment=['image','pdf','document'].includes(type);await sb(`/rest/v1/pz_recipients?id=eq.${recipient.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:payment?'POSSIVEL_PAGAMENTO':'RESPONDEU',responded_at:nowIso(),possible_payment_at:payment?nowIso():recipient.possible_payment_at||null,last_inbound_preview:text||`[${type}]`,last_inbound_type:type,next_action_at:null,updated_at:nowIso()})})}}
+async function targetJid(phone){const n=normalizeBR(phone);if(!/^55\d{10,11}$/.test(n))throw new Error('Telefone inválido.');const jid=`${n}@s.whatsapp.net`;const ex=await sock.onWhatsApp(jid);return{n,jid:ex?.[0]?.jid||jid}}
+async function sendText(phone,text){if(!sock||!connected)throw new Error('WhatsApp não conectado.');const {n,jid}=await targetJid(phone);const r=await sock.sendMessage(jid,{text:String(text||'').trim()});return{to:n,id:r?.key?.id||null}}
+async function sendImageText(phone,url,text){if(!sock||!connected)throw new Error('WhatsApp não conectado.');const {n,jid}=await targetJid(phone);const r=await fetch(url);if(!r.ok)throw new Error('Não foi possível carregar a imagem.');const image=Buffer.from(await r.arrayBuffer());const out=await sock.sendMessage(jid,{image,caption:String(text||'').trim()});return{to:n,id:out?.key?.id||null}}
+async function ensureBucket(){const r=await fetch(`${SUPABASE_URL}/storage/v1/bucket/${STORAGE_BUCKET}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});if(r.ok)return;const c=await fetch(`${SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({id:STORAGE_BUCKET,name:STORAGE_BUCKET,public:true,file_size_limit:6291456,allowed_mime_types:['image/jpeg','image/png','image/webp']})});if(!c.ok&&!String(await c.text()).toLowerCase().includes('already'))throw new Error('Não foi possível preparar o armazenamento de imagens.')}
+async function uploadImage(dataUrl){if(!dataUrl)return null;const m=String(dataUrl).match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);if(!m)throw new Error('Imagem inválida.');const mime=m[1].toLowerCase()==='image/jpg'?'image/jpeg':m[1].toLowerCase(),ext=mime.includes('png')?'png':mime.includes('webp')?'webp':'jpg',buf=Buffer.from(m[2],'base64');if(buf.length>6*1024*1024)throw new Error('Imagem maior que 6 MB.');await ensureBucket();const object=`${Date.now()}-${crypto.randomUUID()}.${ext}`;const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${object}`,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,'Content-Type':mime,'x-upsert':'false'},body:buf});if(!r.ok)throw new Error(`Falha ao salvar imagem (${r.status}).`);return`${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${object}`}
+async function campaignSummary(id){const rows=await sb(`/rest/v1/pz_recipients?campaign_id=eq.${id}&select=status`);const c={total:0,pendentes:0,enviados:0,responderam:0,compras:0,falhas:0};for(const r of rows||[]){c.total++;if(['PENDENTE','REENVIO_AGENDADO'].includes(r.status))c.pendentes++;if(['ENVIADA','ENTREGUE','LIDA'].includes(r.status))c.enviados++;if(['RESPONDEU','POSSIVEL_PAGAMENTO','EM_NEGOCIACAO'].includes(r.status))c.responderam++;if(r.status==='COMPRA_REALIZADA')c.compras++;if(r.status==='FALHA')c.falhas++}return c}
+async function maybeFinalizeCampaign(c){const rows=await sb(`/rest/v1/pz_recipients?campaign_id=eq.${c.id}&select=status,next_action_at`);const active=(rows||[]).some(r=>['PENDENTE','REENVIO_AGENDADO'].includes(r.status)||(['ENVIADA','ENTREGUE','LIDA'].includes(r.status)&&c.retry_enabled&&r.next_action_at));if(!active&&c.status==='EM_EXECUCAO')await sb(`/rest/v1/pz_campaigns?id=eq.${c.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'FINALIZADA',finished_at:nowIso(),updated_at:nowIso()})})}
+async function runDueCampaigns(){if(runnerBusy)return{busy:true};runnerBusy=true;let sent=0,failed=0;try{if(!await ensureConnected(20000))return{connected:false,sent:0};const camps=await sb('/rest/v1/pz_campaigns?status=in.(AGENDADA,EM_EXECUCAO)&select=*&order=created_at.asc&limit=50');for(const c of camps||[]){if(c.status==='AGENDADA'&&c.schedule_at&&new Date(c.schedule_at)>new Date())continue;if(c.status==='AGENDADA')await sb(`/rest/v1/pz_campaigns?id=eq.${c.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'EM_EXECUCAO',started_at:nowIso(),updated_at:nowIso()})});const due=await sb(`/rest/v1/pz_recipients?campaign_id=eq.${c.id}&status=in.(PENDENTE,REENVIO_AGENDADO,ENVIADA,ENTREGUE,LIDA)&next_action_at=lte.${encodeURIComponent(nowIso())}&select=*&order=next_action_at.asc&limit=1000`);for(const r of due||[]){const fresh=await sb(`/rest/v1/pz_campaigns?id=eq.${c.id}&select=status&limit=1`);if(fresh?.[0]?.status!=='EM_EXECUCAO')break;if(['ENVIADA','ENTREGUE','LIDA'].includes(r.status)&&!c.retry_enabled)continue;if((r.attempt_count||0)>=(r.max_attempts||1)){await sb(`/rest/v1/pz_recipients?id=eq.${r.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'SEM_RESPOSTA',next_action_at:null,updated_at:nowIso()})});continue}try{const msgs=Array.isArray(c.messages)?c.messages:[],text=String(msgs[Math.min(Number(r.selected_message)||0,Math.max(0,msgs.length-1))]||msgs[0]||'').trim();const out=c.image_url?await sendImageText(r.phone,c.image_url,text):await sendText(r.phone,text);const attempts=(r.attempt_count||0)+1;let status='ENVIADA',next=null;if(c.retry_enabled&&attempts<(r.max_attempts||1))next=new Date(Date.now()+(Number(c.retry_hours)||24)*3600000).toISOString();await sb(`/rest/v1/pz_recipients?id=eq.${r.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status,attempt_count:attempts,meta_message_id:out.id,sent_at:nowIso(),next_action_at:next,error_text:null,updated_at:nowIso()})});sent++}catch(e){failed++;const attempts=(r.attempt_count||0)+1;const retry=attempts<(r.max_attempts||1);await sb(`/rest/v1/pz_recipients?id=eq.${r.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:retry?'REENVIO_AGENDADO':'FALHA',attempt_count:attempts,next_action_at:retry?new Date(Date.now()+15*60000).toISOString():null,error_text:e.message,updated_at:nowIso()})}).catch(()=>{})}await sleep(randomMs(c.interval_min,c.interval_max))}await maybeFinalizeCampaign({...c,status:'EM_EXECUCAO'})}return{connected:true,sent,failed}}finally{runnerBusy=false}}
 
-const PURCHASE_PHRASES = [
-  "pagamento confirmado",
-  "compra confirmada",
-  "obrigado pela compra",
-  "obrigada pela compra",
-  "agradecemos sua compra",
-  "compra realizada",
-  "pagamento recebido"
-];
+app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap',version:'5.6.0',connected,runnerBusy}));
+app.get('/api/dashboard',async(req,res)=>{try{const [contacts,camps,returns,purchases]=await Promise.all([sb('/rest/v1/pz_contacts?select=id'),sb('/rest/v1/pz_campaigns?select=*&order=created_at.desc&limit=100'),sb('/rest/v1/pz_recipients?status=in.(RESPONDEU,POSSIVEL_PAGAMENTO,EM_NEGOCIACAO)&select=id'),sb('/rest/v1/pz_purchases?select=id')]);const scheduled=(camps||[]).filter(c=>c.status==='AGENDADA').length,active=(camps||[]).filter(c=>c.status==='EM_EXECUCAO').length;res.json({ok:true,stats:{contacts:contacts?.length||0,campaigns:camps?.length||0,scheduled,active,returns:returns?.length||0,purchases:purchases?.length||0},next:(camps||[]).filter(c=>c.status==='AGENDADA').sort((a,b)=>String(a.schedule_at).localeCompare(String(b.schedule_at))).slice(0,5)})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/whatsapp/status',(req,res)=>res.json({ok:true,connected,starting,number:connectedNumber||null,name:connectedName||null,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt}));
+app.post('/api/whatsapp/connect',async(req,res)=>{try{await startWhatsApp(Boolean(req.body?.force));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/pairing-code',async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!/^55\d{10,11}$/.test(phone))return res.status(400).json({error:'Telefone inválido.'});if(!sock)await startWhatsApp(false);if(connected)return res.json({ok:true,connected:true});await sleep(700);res.json({ok:true,code:await sock.requestPairingCode(phone)})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/send-test',async(req,res)=>{try{res.json({ok:true,...await sendText(req.body?.to,req.body?.text||'Teste Projeto Zap V5.6 ✅')})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/logout',async(req,res)=>{try{if(sock)try{await sock.logout()}catch{}await closeSocket(true);await authClear();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 
-function digits(v){ return String(v || "").replace(/\D/g, ""); }
-function normalizeBR(v){
-  let n = digits(v);
-  if(n.startsWith("00")) n = n.slice(2);
-  if(!n.startsWith("55") && (n.length === 10 || n.length === 11)) n = "55" + n;
-  return n;
-}
-function tailPhone(v){ return digits(v).slice(-11); }
-function nowIso(){ return new Date().toISOString(); }
-function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-function randomBetween(min,max){
-  const a = Math.max(1, Number(min)||4), b = Math.max(a, Number(max)||8);
-  return Math.floor((a + Math.random()*(b-a))*1000);
-}
-function safeJson(v){
-  return JSON.parse(JSON.stringify(v, BufferJSON.replacer));
-}
-function restoreJson(v){
-  return JSON.parse(JSON.stringify(v), BufferJSON.reviver);
-}
+app.get('/api/contacts',async(req,res)=>{try{const rows=await sb('/rest/v1/pz_contacts?select=*&order=name.asc&limit=5000');res.json({ok:true,contacts:rows||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/contacts',async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!/^55\d{10,11}$/.test(phone))return res.status(400).json({error:'Telefone inválido.'});let c=await findContact(phone);const body={name:String(req.body?.name||'').trim()||`Cliente ${phone.slice(-4)}`,phone,city:String(req.body?.city||'').trim(),group_name:String(req.body?.group_name||'GERAL').trim()||'GERAL',status:String(req.body?.status||'ATIVO'),opt_in:req.body?.opt_in!==false,opt_out:Boolean(req.body?.opt_out),notes:String(req.body?.notes||'').trim(),updated_at:nowIso()};if(c){await sb(`/rest/v1/pz_contacts?id=eq.${c.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)});res.json({ok:true,contact:{...c,...body}})}else{const rows=await sb('/rest/v1/pz_contacts',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});res.json({ok:true,contact:rows?.[0]})}}catch(e){res.status(500).json({error:e.message})}});
+app.patch('/api/contacts/:id',async(req,res)=>{try{const body={...req.body,updated_at:nowIso()};if(body.phone)body.phone=normalizeBR(body.phone);await sb(`/rest/v1/pz_contacts?id=eq.${encodeURIComponent(req.params.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.delete('/api/contacts/:id',async(req,res)=>{try{await sb(`/rest/v1/pz_contacts?id=eq.${encodeURIComponent(req.params.id)}`,{method:'DELETE'});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 
-async function sb(path,opt={}){
-  if(!SUPABASE_URL || !SUPABASE_KEY) throw new Error("Supabase não configurado no Render.");
-  const r = await fetch(SUPABASE_URL + path, {
-    ...opt,
-    headers:{
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type":"application/json",
-      ...(opt.headers||{})
-    }
-  });
-  const txt = await r.text();
-  let data = null;
-  try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
-  if(!r.ok) throw new Error(data?.message || data?.error || data?.details || `Supabase ${r.status}`);
-  return data;
-}
-
-async function authRead(id){
-  const rows = await sb(`/rest/v1/zap_auth?select=value&id=eq.${encodeURIComponent(id)}&limit=1`);
-  return rows?.[0]?.value ? restoreJson(rows[0].value) : null;
-}
-async function authWrite(id,value){
-  await sb("/rest/v1/zap_auth?on_conflict=id",{
-    method:"POST",
-    headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
-    body:JSON.stringify({id,value:safeJson(value),updated_at:nowIso()})
-  });
-}
-async function authDelete(id){
-  await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:"DELETE"});
-}
-async function authClearAll(){
-  await sb("/rest/v1/zap_auth?id=not.is.null",{method:"DELETE"});
-}
-async function useSupabaseAuthState(){
-  const creds = (await authRead("creds")) || initAuthCreds();
-  return {
-    state:{
-      creds,
-      keys:{
-        get:async(type,ids)=>{
-          const out={};
-          await Promise.all(ids.map(async id=>{
-            let v = await authRead(`${type}-${id}`);
-            if(type==="app-state-sync-key" && v) v = proto.Message.AppStateSyncKeyData.fromObject(v);
-            out[id]=v;
-          }));
-          return out;
-        },
-        set:async(data)=>{
-          const jobs=[];
-          for(const category of Object.keys(data||{})){
-            for(const id of Object.keys(data[category]||{})){
-              const v=data[category][id];
-              jobs.push(v ? authWrite(`${category}-${id}`,v) : authDelete(`${category}-${id}`));
-            }
-          }
-          await Promise.all(jobs);
-        }
-      }
-    },
-    saveCreds:()=>authWrite("creds",creds)
-  };
-}
-
-async function closeSocket(clearView=false){
-  generation++;
-  try { sock?.ws?.close?.(); } catch {}
-  sock=null; connected=false; starting=false;
-  if(clearView){ connectedNumber=""; connectedName=""; qrDataUrl=""; }
-}
-function scheduleRestart(delay=1800){
-  clearTimeout(restartTimer);
-  restartTimer=setTimeout(()=>startWhatsApp(false).catch(e=>{lastError=e.message;}),delay);
-}
-
-async function startWhatsApp(force=false){
-  if(starting) return;
-  if(sock && !force) return;
-  starting=true;
-  if(force) await closeSocket(false);
-  const myGeneration=++generation;
-  try{
-    const {state,saveCreds}=await useSupabaseAuthState();
-    sock=makeWASocket({
-      auth:state,
-      printQRInTerminal:false,
-      logger:pino({level:"silent"}),
-      browser:Browsers.ubuntu("Google Chrome"),
-      markOnlineOnConnect:false,
-      syncFullHistory:false,
-      shouldSyncHistoryMessage:()=>false,
-      generateHighQualityLinkPreview:false
-    });
-    const localSock=sock;
-    localSock.ev.on("creds.update",saveCreds);
-    localSock.ev.on("connection.update",async update=>{
-      if(myGeneration!==generation) return;
-      const {connection,lastDisconnect,qr}=update;
-      if(qr){
-        qrDataUrl=await QRCode.toDataURL(qr,{margin:2,width:420});
-        connected=false; lastError="";
-      }
-      if(connection==="open"){
-        connected=true; starting=false; qrDataUrl="";
-        connectedNumber=digits(localSock.user?.id?.split(":")?.[0] || localSock.user?.id || "");
-        connectedName=String(localSock.user?.name || localSock.user?.verifiedName || "Projeto Zap");
-        lastConnectionAt=nowIso(); lastError="";
-      }
-      if(connection==="close"){
-        connected=false; starting=false;
-        const code = Number(lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode || 0);
-        const loggedOut = code===DisconnectReason.loggedOut || code===401;
-        const restartRequired = code===515;
-        lastError = loggedOut ? "Sessão encerrada no WhatsApp." :
-                    restartRequired ? "Finalizando pareamento..." :
-                    String(lastDisconnect?.error?.message || `Conexão encerrada (${code||"sem código"}).`);
-        try { localSock?.ws?.close?.(); } catch {}
-        if(sock===localSock) sock=null;
-        if(loggedOut){
-          await authClearAll().catch(()=>{});
-          connectedNumber=""; connectedName=""; qrDataUrl="";
-        }else{
-          scheduleRestart(restartRequired ? 900 : 2200);
-        }
-      }
-    });
-    localSock.ev.on("messages.upsert",async({messages})=>{
-      for(const m of messages||[]){
-        if(!m?.message) continue;
-        await processMessage(m).catch(e=>console.log("Mensagem:",e.message));
-      }
-    });
-  }catch(e){
-    lastError=e.message; sock=null; connected=false; starting=false; scheduleRestart(3500); throw e;
-  }
-}
-
-function getMessageText(m){
-  const x=m?.message||{};
-  return String(
-    x.conversation ||
-    x.extendedTextMessage?.text ||
-    x.imageMessage?.caption ||
-    x.videoMessage?.caption ||
-    x.documentMessage?.caption ||
-    ""
-  ).trim();
-}
-function getMessageType(m){
-  const x=m?.message||{};
-  if(x.imageMessage) return "image";
-  if(x.documentMessage) return String(x.documentMessage?.mimetype||"").includes("pdf") ? "pdf" : "document";
-  if(x.videoMessage) return "video";
-  if(x.audioMessage) return "audio";
-  if(x.stickerMessage) return "sticker";
-  return "text";
-}
-function isPurchaseConfirmation(text){
-  const t=String(text||"").toLowerCase();
-  return PURCHASE_PHRASES.some(p=>t.includes(p));
-}
-
-async function findContactByPhone(phone){
-  const t=tailPhone(phone);
-  const rows=await sb("/rest/v1/contacts?select=*&limit=3000");
-  return (rows||[]).find(x=>tailPhone(x.phone)===t)||null;
-}
-async function findLatestRecipient(phone){
-  const t=tailPhone(phone);
-  const rows=await sb("/rest/v1/campaign_recipients?select=*&order=created_at.desc&limit=3000");
-  return (rows||[]).find(x=>tailPhone(x.phone)===t && !["COMPRA_REALIZADA","NAO_INTERESSADO"].includes(x.status))||null;
-}
-async function upsertContactFromInbound(phone,pushName=""){
-  let c=await findContactByPhone(phone);
-  if(c) return c;
-  const n=normalizeBR(phone);
-  const rows=await sb("/rest/v1/contacts",{
-    method:"POST",headers:{Prefer:"return=representation"},
-    body:JSON.stringify({phone:n,name:pushName||`Cliente ${n.slice(-4)}`,status:"NOVO",consent:true,opt_out:false})
-  });
-  return rows?.[0]||null;
-}
-async function processMessage(m){
-  const remote=String(m.key?.remoteJid||"");
-  if(!remote || remote.endsWith("@g.us") || remote==="status@broadcast" || remote.endsWith("@broadcast")) return;
-  const phone=normalizeBR(remote.split("@")[0]);
-  if(!phone) return;
-  const fromMe=Boolean(m.key?.fromMe);
-  const text=getMessageText(m);
-  const type=getMessageType(m);
-  const contact=await upsertContactFromInbound(phone,m.pushName||"");
-  const recipient=await findLatestRecipient(phone);
-  const row={
-    phone,contact_id:contact?.id||null,campaign_id:recipient?.campaign_id||null,recipient_id:recipient?.id||null,
-    meta_message_id:String(m.key?.id||crypto.randomUUID()),direction:fromMe?"OUT":"IN",
-    message_type:type,body:text||null,status:fromMe?"sent":"received",
-    raw_payload:{key:m.key||null,pushName:m.pushName||null}
-  };
-  await sb("/rest/v1/whatsapp_messages",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify(row)}).catch(()=>{});
-  if(!recipient) return;
-  const patch={updated_at:nowIso()};
-  if(!fromMe){
-    patch.status=(type==="image"||type==="pdf"||type==="document")?"POSSIVEL_PAGAMENTO":"RESPONDEU";
-    patch.responded_at=nowIso();
-    patch.last_inbound_preview=text || `[${type}]`;
-    patch.last_inbound_type=type;
-    if(patch.status==="POSSIVEL_PAGAMENTO") patch.possible_payment_at=nowIso();
-  }else if(isPurchaseConfirmation(text)){
-    patch.status="COMPRA_REALIZADA"; patch.purchase_at=nowIso();
-  }else return;
-  await sb(`/rest/v1/campaign_recipients?id=eq.${recipient.id}`,{
-    method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(patch)
-  });
-}
-
-async function targetJid(phone){
-  const n=normalizeBR(phone);
-  if(!/^55\d{10,11}$/.test(n)) throw new Error("Telefone inválido.");
-  const jid=`${n}@s.whatsapp.net`;
-  const exists=await sock.onWhatsApp(jid);
-  return {n,jid:exists?.[0]?.jid||jid};
-}
-async function sendText(phone,text){
-  if(!sock||!connected) throw new Error("WhatsApp não conectado.");
-  const {n,jid}=await targetJid(phone);
-  const r=await sock.sendMessage(jid,{text:String(text||"").trim()});
-  return {to:n,id:r?.key?.id||null};
-}
-async function fetchMediaBuffer(url){
-  const r=await fetch(url);
-  if(!r.ok) throw new Error("Não foi possível carregar a imagem da campanha.");
-  return Buffer.from(await r.arrayBuffer());
-}
-async function sendImageText(phone,imageUrl,text){
-  if(!sock||!connected) throw new Error("WhatsApp não conectado.");
-  const {n,jid}=await targetJid(phone);
-  const image=await fetchMediaBuffer(imageUrl);
-  const r=await sock.sendMessage(jid,{image,caption:String(text||"").trim()});
-  return {to:n,id:r?.key?.id||null};
-}
-
-async function uploadCampaignImage(dataUrl,filename="campanha.jpg"){
-  if(!dataUrl) return null;
-  const m=String(dataUrl).match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
-  if(!m) throw new Error("Imagem inválida. Use JPG, PNG ou WEBP.");
-  const mime=m[1].toLowerCase()==="image/jpg"?"image/jpeg":m[1].toLowerCase();
-  const ext=mime.includes("png")?"png":mime.includes("webp")?"webp":"jpg";
-  const buf=Buffer.from(m[2],"base64");
-  if(buf.length>5*1024*1024) throw new Error("Imagem maior que 5 MB.");
-  const object=`${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${object}`,{
-    method:"POST",
-    headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":mime,"x-upsert":"false"},
-    body:buf
-  });
-  if(!r.ok) throw new Error(`Falha ao salvar imagem (${r.status}). Execute MIGRACAO-V5.5.sql.`);
-  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${object}`;
-}
-
-app.get("/health",(req,res)=>res.json({
-  ok:true,service:"projeto-zap",version:"5.5.0",connector:"baileys",connected
-}));
-
-app.get("/api/whatsapp/status",(req,res)=>res.json({
-  ok:true,connected,starting,number:connectedNumber||null,name:connectedName||null,
-  qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt
-}));
-app.post("/api/whatsapp/connect",async(req,res)=>{
-  try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }
-  catch(e){ res.status(500).json({error:e.message}); }
-});
-app.get("/api/whatsapp/qr",(req,res)=>res.json({ok:true,connected,qrAvailable:Boolean(qrDataUrl),qrDataUrl}));
-app.post("/api/whatsapp/pairing-code",async(req,res)=>{
-  try{
-    const phone=normalizeBR(req.body?.phone);
-    if(!/^55\d{10,11}$/.test(phone)) return res.status(400).json({error:"Telefone inválido."});
-    if(!sock) await startWhatsApp(false);
-    if(connected) return res.json({ok:true,connected:true});
-    await sleep(800);
-    const code=await sock.requestPairingCode(phone);
-    res.json({ok:true,code});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/whatsapp/send-test",async(req,res)=>{
-  try{ const d=await sendText(req.body?.to,req.body?.text||"Teste Projeto Zap V5.5 ✅"); res.json({ok:true,...d}); }
-  catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/whatsapp/logout",async(req,res)=>{
-  try{ if(sock){try{await sock.logout();}catch{}} await closeSocket(true); await authClearAll(); res.json({ok:true}); }
-  catch(e){res.status(500).json({error:e.message});}
-});
-
-app.get("/api/contacts",async(req,res)=>{
-  try{
-    const rows=await sb("/rest/v1/contacts?select=*&order=created_at.desc&limit=3000");
-    res.json({ok:true,contacts:rows||[]});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/contacts",async(req,res)=>{
-  try{
-    const phone=normalizeBR(req.body?.phone);
-    if(!/^55\d{10,11}$/.test(phone)) return res.status(400).json({error:"Telefone inválido."});
-    const body={name:String(req.body?.name||"").trim()||`Cliente ${phone.slice(-4)}`,phone,
-      status:String(req.body?.status||"NOVO"),consent:req.body?.consent!==false,opt_out:Boolean(req.body?.opt_out)};
-    const rows=await sb("/rest/v1/contacts?on_conflict=phone",{
-      method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(body)
-    });
-    res.json({ok:true,contact:rows?.[0]||body});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-
-app.get("/api/campaigns",async(req,res)=>{
-  try{
-    const rows=await sb("/rest/v1/campaigns?select=*&order=created_at.desc&limit=200");
-    res.json({ok:true,campaigns:rows||[]});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/campaigns",async(req,res)=>{
-  try{
-    const name=String(req.body?.name||"").trim();
-    const messages=(Array.isArray(req.body?.messages)?req.body.messages:[]).map(x=>String(x||"").trim()).filter(Boolean).slice(0,5);
-    const phones=(Array.isArray(req.body?.phones)?req.body.phones:[]).map(normalizeBR).filter(x=>/^55\d{10,11}$/.test(x));
-    if(!name) return res.status(400).json({error:"Informe o nome da campanha."});
-    if(!messages.length) return res.status(400).json({error:"Informe ao menos uma mensagem."});
-    if(!phones.length) return res.status(400).json({error:"Selecione ao menos um contato."});
-    const image_url=await uploadCampaignImage(req.body?.imageDataUrl,req.body?.imageName);
-    const schedule_at=req.body?.scheduleAt?new Date(req.body.scheduleAt).toISOString():null;
-    const campRows=await sb("/rest/v1/campaigns",{
-      method:"POST",headers:{Prefer:"return=representation"},
-      body:JSON.stringify({name,messages,image_url,image_name:req.body?.imageName||null,
-        interval_min:Number(req.body?.intervalMin)||6,interval_max:Number(req.body?.intervalMax)||12,
-        schedule_at,status:schedule_at&&new Date(schedule_at)>new Date()?"AGENDADA":"PRONTA"})
-    });
-    const campaign=campRows?.[0];
-    const contacts=await sb("/rest/v1/contacts?select=*&limit=3000");
-    const selected=(contacts||[]).filter(c=>phones.some(p=>tailPhone(p)===tailPhone(c.phone)) && c.consent!==false && !c.opt_out);
-    if(!selected.length) return res.status(400).json({error:"Nenhum contato selecionado está autorizado para campanhas."});
-    const recs=selected.map((c,i)=>({campaign_id:campaign.id,contact_id:c.id,phone:normalizeBR(c.phone),name:c.name,
-      status:"PENDENTE",selected_message:i%messages.length}));
-    await sb("/rest/v1/campaign_recipients",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify(recs)});
-    res.json({ok:true,campaign,recipients:recs.length});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-
-app.get("/api/execution",async(req,res)=>{
-  try{
-    const rows=await sb("/rest/v1/campaign_recipients?select=*,campaigns(name,status)&order=created_at.desc&limit=1000");
-    res.json({ok:true,items:rows||[]});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/campaigns/:id/start",async(req,res)=>{
-  try{
-    await sb(`/rest/v1/campaigns?id=eq.${encodeURIComponent(req.params.id)}`,{
-      method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"EM_EXECUCAO",started_at:nowIso()})
-    });
-    runCampaigns().catch(()=>{});
-    res.json({ok:true});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/campaigns/:id/pause",async(req,res)=>{
-  try{
-    await sb(`/rest/v1/campaigns?id=eq.${encodeURIComponent(req.params.id)}`,{
-      method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"PAUSADA"})
-    });
-    res.json({ok:true});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-
-app.get("/api/returns",async(req,res)=>{
-  try{
-    const rows=await sb("/rest/v1/campaign_recipients?status=in.(RESPONDEU,POSSIVEL_PAGAMENTO,EM_NEGOCIACAO)&select=*,campaigns(name)&order=responded_at.desc.nullslast&limit=500");
-    res.json({ok:true,items:rows||[]});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.post("/api/recipients/:id/status",async(req,res)=>{
-  try{
-    const allowed=["RESPONDEU","POSSIVEL_PAGAMENTO","EM_NEGOCIACAO","COMPRA_REALIZADA","NAO_INTERESSADO"];
-    const status=String(req.body?.status||"");
-    if(!allowed.includes(status)) return res.status(400).json({error:"Status inválido."});
-    const patch={status,updated_at:nowIso()};
-    if(status==="COMPRA_REALIZADA") patch.purchase_at=nowIso();
-    await sb(`/rest/v1/campaign_recipients?id=eq.${encodeURIComponent(req.params.id)}`,{
-      method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(patch)
-    });
-    res.json({ok:true});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.get("/api/purchases",async(req,res)=>{
-  try{
-    const rows=await sb("/rest/v1/campaign_recipients?status=eq.COMPRA_REALIZADA&select=*,campaigns(name)&order=purchase_at.desc.nullslast&limit=500");
-    res.json({ok:true,items:rows||[]});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-
-async function runCampaigns(){
-  if(campaignRunnerBusy||!connected) return;
-  campaignRunnerBusy=true;
-  try{
-    const camps=await sb("/rest/v1/campaigns?status=in.(EM_EXECUCAO,AGENDADA)&select=*&order=created_at.asc&limit=50");
-    for(const c of camps||[]){
-      if(c.status==="AGENDADA" && c.schedule_at && new Date(c.schedule_at)>new Date()) continue;
-      if(c.status==="AGENDADA"){
-        await sb(`/rest/v1/campaigns?id=eq.${c.id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"EM_EXECUCAO",started_at:nowIso()})});
-      }
-      const recs=await sb(`/rest/v1/campaign_recipients?campaign_id=eq.${c.id}&status=eq.PENDENTE&select=*&order=created_at.asc&limit=500`);
-      if(!recs?.length){
-        await sb(`/rest/v1/campaigns?id=eq.${c.id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({status:"FINALIZADA",finished_at:nowIso()})});
-        continue;
-      }
-      for(const r of recs){
-        const fresh=await sb(`/rest/v1/campaigns?id=eq.${c.id}&select=status&limit=1`);
-        if(fresh?.[0]?.status!=="EM_EXECUCAO") break;
-        try{
-          const text=String(c.messages?.[Math.min(Number(r.selected_message)||0,(c.messages?.length||1)-1)] || c.messages?.[0] || "").trim();
-          const out=c.image_url?await sendImageText(r.phone,c.image_url,text):await sendText(r.phone,text);
-          await sb(`/rest/v1/campaign_recipients?id=eq.${r.id}`,{
-            method:"PATCH",headers:{Prefer:"return=minimal"},
-            body:JSON.stringify({status:"ENVIADA",meta_message_id:out.id,sent_at:nowIso(),updated_at:nowIso()})
-          });
-        }catch(e){
-          await sb(`/rest/v1/campaign_recipients?id=eq.${r.id}`,{
-            method:"PATCH",headers:{Prefer:"return=minimal"},
-            body:JSON.stringify({status:"FALHA",error_text:e.message,updated_at:nowIso()})
-          }).catch(()=>{});
-        }
-        await sleep(randomBetween(c.interval_min,c.interval_max));
-      }
-    }
-  }finally{campaignRunnerBusy=false;}
-}
-setInterval(()=>runCampaigns().catch(()=>{}),10000);
-
-app.get("/",(req,res)=>res.sendFile(__dirname+"/index.html"));
-app.listen(PORT,async()=>{
-  console.log(`Projeto Zap V5.5 online na porta ${PORT}`);
-  try{await startWhatsApp(false);}catch(e){console.log("WhatsApp aguardando:",e.message);}
-});
+app.get('/api/campaigns',async(req,res)=>{try{const rows=await sb('/rest/v1/pz_campaigns?select=*&order=created_at.desc&limit=300');for(const c of rows||[])c.summary=await campaignSummary(c.id);res.json({ok:true,campaigns:rows||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/campaigns',async(req,res)=>{try{const name=String(req.body?.name||'').trim(),messages=(Array.isArray(req.body?.messages)?req.body.messages:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,5),phones=[...new Set((Array.isArray(req.body?.phones)?req.body.phones:[]).map(normalizeBR).filter(x=>/^55\d{10,11}$/.test(x)))];if(!name)return res.status(400).json({error:'Informe o nome da campanha.'});if(!messages.length)return res.status(400).json({error:'Informe ao menos uma mensagem.'});if(!phones.length)return res.status(400).json({error:'Selecione ao menos um contato.'});const image_url=await uploadImage(req.body?.imageDataUrl),schedule_at=req.body?.scheduleAt?new Date(req.body.scheduleAt).toISOString():null,retry_enabled=Boolean(req.body?.retryEnabled),max_attempts=retry_enabled?Math.max(1,Math.min(5,Number(req.body?.maxAttempts)||2)):1,status=schedule_at&&new Date(schedule_at)>new Date()?'AGENDADA':'PRONTA';const rows=await sb('/rest/v1/pz_campaigns',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name,messages,image_url,image_name:req.body?.imageName||null,interval_min:Math.max(3,Number(req.body?.intervalMin)||6),interval_max:Math.max(3,Number(req.body?.intervalMax)||12),schedule_at,retry_enabled,retry_hours:Math.max(1,Number(req.body?.retryHours)||24),max_attempts,status})});const camp=rows?.[0],contacts=await sb('/rest/v1/pz_contacts?select=*&limit=5000'),selected=(contacts||[]).filter(c=>phones.includes(normalizeBR(c.phone))&&c.opt_in!==false&&!c.opt_out);if(!selected.length)throw new Error('Nenhum contato selecionado está autorizado.');const firstAction=status==='AGENDADA'?schedule_at:null,recs=selected.map((c,i)=>({campaign_id:camp.id,contact_id:c.id,phone:normalizeBR(c.phone),name:c.name,status:'PENDENTE',selected_message:i%messages.length,attempt_count:0,max_attempts,next_action_at:firstAction}));await sb('/rest/v1/pz_recipients',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(recs)});res.json({ok:true,campaign:camp,recipients:recs.length})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/campaigns/:id/start',async(req,res)=>{try{const id=encodeURIComponent(req.params.id),now=nowIso();await sb(`/rest/v1/pz_campaigns?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'EM_EXECUCAO',started_at:now,updated_at:now})});await sb(`/rest/v1/pz_recipients?campaign_id=eq.${id}&status=eq.PENDENTE`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({next_action_at:now,updated_at:now})});runDueCampaigns().catch(()=>{});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/campaigns/:id/pause',async(req,res)=>{try{await sb(`/rest/v1/pz_campaigns?id=eq.${encodeURIComponent(req.params.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'PAUSADA',updated_at:nowIso()})});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/campaigns/:id/resume',async(req,res)=>{try{await sb(`/rest/v1/pz_campaigns?id=eq.${encodeURIComponent(req.params.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'EM_EXECUCAO',updated_at:nowIso()})});runDueCampaigns().catch(()=>{});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.delete('/api/campaigns/:id',async(req,res)=>{try{await sb(`/rest/v1/pz_campaigns?id=eq.${encodeURIComponent(req.params.id)}`,{method:'DELETE'});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/execution',async(req,res)=>{try{const camps=await sb('/rest/v1/pz_campaigns?select=*&order=created_at.desc&limit=200');for(const c of camps||[])c.summary=await campaignSummary(c.id);res.json({ok:true,campaigns:camps||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/campaigns/:id/recipients',async(req,res)=>{try{const rows=await sb(`/rest/v1/pz_recipients?campaign_id=eq.${encodeURIComponent(req.params.id)}&select=*&order=created_at.asc&limit=5000`);res.json({ok:true,items:rows||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/returns',async(req,res)=>{try{const rows=await sb('/rest/v1/pz_recipients?status=in.(RESPONDEU,POSSIVEL_PAGAMENTO,EM_NEGOCIACAO)&select=*,pz_campaigns(name)&order=responded_at.desc.nullslast&limit=1000');res.json({ok:true,items:rows||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/recipients/:id/status',async(req,res)=>{try{const id=encodeURIComponent(req.params.id),rows=await sb(`/rest/v1/pz_recipients?id=eq.${id}&select=*&limit=1`),r=rows?.[0];if(!r)return res.status(404).json({error:'Registro não encontrado.'});const status=String(req.body?.status||'');if(status==='COMPRA_REALIZADA')await recordPurchase(r,'MANUAL',String(req.body?.notes||''));else await sb(`/rest/v1/pz_recipients?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status,next_action_at:['RESPONDEU','POSSIVEL_PAGAMENTO','EM_NEGOCIACAO','NAO_INTERESSADO'].includes(status)?null:r.next_action_at,updated_at:nowIso()})});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/purchases',async(req,res)=>{try{const rows=await sb('/rest/v1/pz_purchases?select=*,pz_campaigns(name)&order=created_at.desc&limit=1000');res.json({ok:true,items:rows||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/cron/process',async(req,res)=>{if(CRON_SECRET&&req.headers['x-cron-secret']!==CRON_SECRET)return res.status(401).json({error:'Não autorizado.'});res.status(202).json({ok:true,accepted:true});setTimeout(()=>runDueCampaigns().catch(e=>console.log('Cron:',e.message)),50)});
+app.post('/api/run-now',async(req,res)=>{try{res.json({ok:true,...await runDueCampaigns()})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/',(req,res)=>res.sendFile(__dirname+'/index.html'));
+app.listen(PORT,async()=>{console.log(`Projeto Zap V5.6 online na porta ${PORT}`);try{await startWhatsApp(false)}catch(e){console.log('WhatsApp aguardando:',e.message)}setInterval(()=>runDueCampaigns().catch(()=>{}),30000)});

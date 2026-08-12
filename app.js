@@ -1,120 +1,34 @@
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-let contacts=[],selectedPhones=new Set(),imageDataUrl=null;
-
-function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
-async function api(url,opt={}){
-  const r=await fetch(url,{...opt,headers:{"Content-Type":"application/json",...(opt.headers||{})}});
-  let d={};try{d=await r.json()}catch{}
-  if(!r.ok) throw new Error(d.error||`Erro ${r.status}`);
-  return d;
-}
-function fmtDate(v){if(!v)return"—";try{return new Date(v).toLocaleString("pt-BR")}catch{return v}}
-function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function badge(s){
-  const x=String(s||"").toUpperCase();let c="gray";
-  if(x.includes("COMPRA")||x==="ENVIADA")c="ok"; else if(x.includes("PAGAMENTO"))c="hot"; else if(x==="RESPONDEU"||x.includes("EXEC"))c="warn";
-  return `<span class="badge ${c}">${esc(x||"—")}</span>`;
-}
-function showPage(id){
-  $$(".page").forEach(x=>x.classList.toggle("active",x.id===id));
-  $$(".bottom button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
-  if(id==="contacts")loadContacts(); if(id==="campaigns"){loadContacts().then(renderCampaignContacts);loadCampaigns()}
-  if(id==="execution")loadExecution(); if(id==="returns")loadReturns(); if(id==="purchases")loadPurchases(); if(id==="settings")waStatus();
-  scrollTo(0,0);
-}
-$$(".bottom button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-
-async function waStatus(){
-  try{
-    const d=await api("/api/whatsapp/status");
-    $("#stWhats").textContent=d.connected?"✅":"—";
-    const badgeEl=$("#waBadge"), detail=$("#waDetail");
-    if(d.connected){
-      badgeEl.textContent="Conectado ✅";badgeEl.className="badge ok";
-      detail.textContent=`${d.name||"WhatsApp"}${d.number?" • "+d.number:""}`;
-    }else if(d.starting){
-      badgeEl.textContent="Conectando";badgeEl.className="badge warn";detail.textContent="Inicializando conexão...";
-    }else{
-      badgeEl.textContent="Desconectado";badgeEl.className="badge gray";detail.textContent=d.lastError||"WhatsApp desconectado.";
-    }
-    if(d.qrAvailable&&d.qrDataUrl){$("#qr").src=d.qrDataUrl;$("#qr").classList.remove("hidden")}
-    else $("#qr").classList.add("hidden");
-  }catch(e){$("#waDetail").textContent=e.message}
-}
-$("#generateQr").onclick=async()=>{try{await api("/api/whatsapp/connect",{method:"POST",body:JSON.stringify({force:true})});toast("Gerando QR...");setTimeout(waStatus,1200)}catch(e){toast(e.message)}}
-$("#pairCode").onclick=async()=>{try{const d=await api("/api/whatsapp/pairing-code",{method:"POST",body:JSON.stringify({phone:$("#pairPhone").value})});$("#pairResult").textContent=d.code||"";toast(d.connected?"WhatsApp já conectado":"Código gerado")}catch(e){toast(e.message)}}
-$("#logoutWa").onclick=async()=>{if(!confirm("Desconectar e remover a sessão do WhatsApp?"))return;try{await api("/api/whatsapp/logout",{method:"POST",body:"{}"});toast("WhatsApp desconectado");waStatus()}catch(e){toast(e.message)}}
-$("#sendTest").onclick=async()=>{try{await api("/api/whatsapp/send-test",{method:"POST",body:JSON.stringify({to:$("#testPhone").value,text:$("#testText").value})});toast("Mensagem enviada ✅")}catch(e){toast(e.message)}}
-
-async function loadContacts(){
-  try{const d=await api("/api/contacts");contacts=d.contacts||[];$("#stContacts").textContent=contacts.length;renderContacts();return contacts}catch(e){toast(e.message);return[]}
-}
-function renderContacts(){
-  $("#contactsList").innerHTML=contacts.length?contacts.map(c=>`<div class="item"><div class="itemline"><div><b>${esc(c.name)}</b><span class="muted">${esc(c.phone)}</span></div>${c.opt_out?badge("BLOQUEADO"):c.consent!==false?badge("AUTORIZADO"):badge("SEM AUTORIZAÇÃO")}</div></div>`).join(""):`<p class="muted">Nenhum contato.</p>`;
-}
-$("#addContact").onclick=async()=>{try{await api("/api/contacts",{method:"POST",body:JSON.stringify({name:$("#contactName").value,phone:$("#contactPhone").value,consent:$("#contactConsent").checked})});$("#contactName").value="";$("#contactPhone").value="";toast("Contato salvo");loadContacts()}catch(e){toast(e.message)}}
-$("#refreshContacts").onclick=loadContacts;
-
-function renderCampaignContacts(){
-  const valid=contacts.filter(c=>c.consent!==false&&!c.opt_out);
-  $("#campaignContacts").innerHTML=valid.length?valid.map(c=>`<label class="item"><input type="checkbox" data-phone="${esc(c.phone)}" ${selectedPhones.has(c.phone)?"checked":""}><span><b>${esc(c.name)}</b><small class="muted">${esc(c.phone)}</small></span></label>`).join(""):`<p class="muted">Cadastre contatos autorizados primeiro.</p>`;
-  $$("#campaignContacts input").forEach(x=>x.onchange=()=>x.checked?selectedPhones.add(x.dataset.phone):selectedPhones.delete(x.dataset.phone));
-}
-$("#selectAllContacts").onclick=()=>{contacts.filter(c=>c.consent!==false&&!c.opt_out).forEach(c=>selectedPhones.add(c.phone));renderCampaignContacts()}
-$("#clearSelectedContacts").onclick=()=>{selectedPhones.clear();renderCampaignContacts()}
-$("#campImage").onchange=()=>{
-  const f=$("#campImage").files?.[0];imageDataUrl=null;
-  if(!f){$("#campPreview").classList.add("hidden");return}
-  if(f.size>5*1024*1024){toast("Imagem maior que 5 MB");$("#campImage").value="";return}
-  const r=new FileReader();r.onload=()=>{imageDataUrl=r.result;$("#campPreview").src=r.result;$("#campPreview").classList.remove("hidden")};r.readAsDataURL(f)
-}
-$("#saveCampaign").onclick=async()=>{
-  try{
-    const messages=$$(".msg").map(x=>x.value.trim()).filter(Boolean);
-    const body={name:$("#campName").value,messages,phones:[...selectedPhones],imageDataUrl,imageName:$("#campImage").files?.[0]?.name||null,
-      intervalMin:$("#intervalMin").value,intervalMax:$("#intervalMax").value,scheduleAt:$("#scheduleAt").value||null};
-    const d=await api("/api/campaigns",{method:"POST",body:JSON.stringify(body)});
-    toast(`Campanha salva • ${d.recipients} contatos`);selectedPhones.clear();imageDataUrl=null;$("#campImage").value="";$("#campPreview").classList.add("hidden");loadCampaigns();
-  }catch(e){toast(e.message)}
-}
-async function loadCampaigns(){
-  try{
-    const d=await api("/api/campaigns"), rows=d.campaigns||[];
-    $("#campaignList").innerHTML=rows.length?rows.map(c=>`<div class="item"><div class="itemline"><div><b>${esc(c.name)}</b><span class="muted">${fmtDate(c.created_at)}${c.image_url?" • 🖼️ imagem":""}</span></div>${badge(c.status)}</div><div class="actions">${["PRONTA","PAUSADA","AGENDADA"].includes(c.status)?`<button class="small startCamp" data-id="${c.id}">Iniciar</button>`:""}${c.status==="EM_EXECUCAO"?`<button class="small secondary pauseCamp" data-id="${c.id}">Pausar</button>`:""}</div></div>`).join(""):`<p class="muted">Nenhuma campanha.</p>`;
-    $$(".startCamp").forEach(b=>b.onclick=async()=>{try{await api(`/api/campaigns/${b.dataset.id}/start`,{method:"POST",body:"{}"});toast("Campanha iniciada");loadCampaigns()}catch(e){toast(e.message)}});
-    $$(".pauseCamp").forEach(b=>b.onclick=async()=>{try{await api(`/api/campaigns/${b.dataset.id}/pause`,{method:"POST",body:"{}"});toast("Campanha pausada");loadCampaigns()}catch(e){toast(e.message)}});
-  }catch(e){toast(e.message)}
-}
-$("#refreshCampaigns").onclick=loadCampaigns;
-
-async function loadExecution(){
-  try{
-    const d=await api("/api/execution"),rows=d.items||[];
-    $("#executionList").innerHTML=rows.length?rows.map(r=>`<div class="item"><div class="itemline"><div><b>${esc(r.name||r.phone)}</b><span class="muted">${esc(r.phone)} • ${esc(r.campaigns?.name||"Campanha")}</span></div>${badge(r.status)}</div><span class="muted">${r.sent_at?"Enviado "+fmtDate(r.sent_at):r.error_text?esc(r.error_text):"Aguardando fila"}</span></div>`).join(""):`<article class="card"><p class="muted">Fila vazia.</p></article>`;
-  }catch(e){toast(e.message)}
-}
-$("#refreshExecution").onclick=loadExecution;
-
-async function setRecipientStatus(id,status){try{await api(`/api/recipients/${id}/status`,{method:"POST",body:JSON.stringify({status})});toast("Status atualizado");loadReturns();loadPurchases()}catch(e){toast(e.message)}}
-async function loadReturns(){
-  try{
-    const d=await api("/api/returns"),rows=d.items||[];$("#stReturns").textContent=rows.length;
-    $("#returnsList").innerHTML=rows.length?rows.map(r=>`<div class="item"><div class="itemline"><div><b>${esc(r.name||r.phone)}</b><span class="muted">${esc(r.phone)} • ${esc(r.campaigns?.name||"Campanha")}</span></div>${badge(r.status)}</div><p>${esc(r.last_inbound_preview||"Cliente respondeu")}</p><span class="muted">${fmtDate(r.responded_at)}</span><div class="actions"><button class="small success" data-buy="${r.id}">Compra realizada ✅</button><button class="small secondary" data-neg="${r.id}">Em negociação</button><button class="small danger" data-no="${r.id}">Não interessado</button></div></div>`).join(""):`<article class="card"><p class="muted">Nenhum retorno pendente.</p></article>`;
-    $$("[data-buy]").forEach(b=>b.onclick=()=>setRecipientStatus(b.dataset.buy,"COMPRA_REALIZADA"));
-    $$("[data-neg]").forEach(b=>b.onclick=()=>setRecipientStatus(b.dataset.neg,"EM_NEGOCIACAO"));
-    $$("[data-no]").forEach(b=>b.onclick=()=>setRecipientStatus(b.dataset.no,"NAO_INTERESSADO"));
-  }catch(e){toast(e.message)}
-}
-$("#refreshReturns").onclick=loadReturns;
-
-async function loadPurchases(){
-  try{
-    const d=await api("/api/purchases"),rows=d.items||[];$("#stPurchases").textContent=rows.length;
-    $("#purchasesList").innerHTML=rows.length?rows.map(r=>`<div class="item"><div class="itemline"><div><b>${esc(r.name||r.phone)}</b><span class="muted">${esc(r.phone)} • ${esc(r.campaigns?.name||"Campanha")}</span></div>${badge("COMPRA_REALIZADA")}</div><span class="muted">${fmtDate(r.purchase_at)}</span></div>`).join(""):`<article class="card"><p class="muted">Nenhuma compra registrada.</p></article>`;
-  }catch(e){toast(e.message)}
-}
-
-async function dashboard(){await Promise.allSettled([waStatus(),loadContacts(),loadReturns(),loadPurchases()])}
-setInterval(waStatus,12000);
-if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
-showPage("home");dashboard();
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];let contacts=[],campaigns=[],selected=new Set(),imageDataUrl=null,editingContact=null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+async function api(url,opt={}){const r=await fetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||`Erro ${r.status}`);return d}
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=v=>v?new Date(v).toLocaleString('pt-BR'):'—';const pct=(s)=>s?.total?Math.round(((s.enviados+s.responderam+s.compras)/s.total)*100):0;
+function openModal(id){$('#'+id).classList.add('open')}function closeModal(id){$('#'+id).classList.remove('open')}$$('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
+function showPage(id){$$('.page').forEach(x=>x.classList.toggle('active',x.id===id));$$('.bottomNav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));if(id==='home')loadHome();if(id==='contacts')loadContacts();if(id==='campaigns')loadCampaigns();if(id==='execution')loadExecution();if(id==='returns')loadReturns();if(id==='purchases')loadPurchases();if(id==='settings')waStatus()}
+$$('.bottomNav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));$$('[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.go));
+function statusBadge(s){const x=String(s||'').toUpperCase();let c='';if(['FINALIZADA','COMPRA_REALIZADA','ENVIADA'].includes(x))c='ok';else if(['FALHA','NAO_INTERESSADO'].includes(x))c='red';else if(['AGENDADA','POSSIVEL_PAGAMENTO','EM_NEGOCIACAO'].includes(x))c='warn';return `<span class="badge ${c}">${esc(x)}</span>`}
+async function waStatus(){try{const d=await api('/api/whatsapp/status');$('#topWa').textContent=d.connected?`WhatsApp conectado • ${d.name||d.number||''}`:'WhatsApp desconectado';$('#waBadge').className='badge '+(d.connected?'ok':'warn');$('#waBadge').textContent=d.connected?'Conectado ✅':'Verificando';$('#waDetail').textContent=d.connected?`${d.name||'Projeto Zap'} • ${d.number||''}`:(d.lastError||'WhatsApp desconectado.');if(d.qrDataUrl){$('#qr').src=d.qrDataUrl;$('#qr').classList.remove('hidden')}}catch(e){$('#topWa').textContent='WhatsApp indisponível'}}
+async function loadHome(){try{const d=await api('/api/dashboard'),s=d.stats;$('#kContacts').textContent=s.contacts;$('#kCampaigns').textContent=s.campaigns;$('#kScheduled').textContent=s.scheduled;$('#kReturns').textContent=s.returns;$('#kPurchases').textContent=s.purchases;$('#kActive').textContent=s.active;$('#nextCampaigns').innerHTML=d.next.length?d.next.map(c=>`<div class="compactItem"><div><b>${esc(c.name)}</b><small>${fmt(c.schedule_at)}</small></div>${statusBadge(c.status)}</div>`).join(''):'<div class="empty">Nenhuma campanha agendada.</div>';waStatus()}catch(e){toast(e.message)}}$('#refreshHome').onclick=loadHome;
+function groups(){return [...new Set(contacts.map(c=>c.group_name||'GERAL'))].sort()}function fillGroups(){const opts='<option value="">Todos os grupos</option>'+groups().map(g=>`<option>${esc(g)}</option>`).join('');$('#contactGroup').innerHTML=opts;$('#selectGroup').innerHTML=opts}
+async function loadContacts(){try{const d=await api('/api/contacts');contacts=d.contacts||[];fillGroups();renderContacts();renderPicker()}catch(e){toast(e.message)}}
+function renderContacts(){const q=($('#contactSearch').value||'').toLowerCase(),g=$('#contactGroup').value;const rows=contacts.filter(c=>(!q||String(c.name).toLowerCase().includes(q)||String(c.phone).includes(q.replace(/\D/g,'')))&&(!g||c.group_name===g));$('#contactsBody').innerHTML=rows.map(c=>`<tr><td><b>${esc(c.name)}</b><br><small>${esc(c.city||'')}</small></td><td>${esc(c.phone)}</td><td>${esc(c.group_name||'GERAL')}</td><td>${c.opt_in&&!c.opt_out?'<span class="badge ok">AUTORIZADO</span>':'<span class="badge red">BLOQUEADO</span>'}</td><td><button class="btn secondary small" data-edit="${c.id}">Editar</button> <button class="btn danger small" data-del="${c.id}">Excluir</button></td></tr>`).join('');$('#contactsEmpty').style.display=rows.length?'none':'block';$$('[data-edit]').forEach(b=>b.onclick=()=>editContact(b.dataset.edit));$$('[data-del]').forEach(b=>b.onclick=()=>deleteContact(b.dataset.del))}
+$('#contactSearch').oninput=renderContacts;$('#contactGroup').onchange=renderContacts;$('#refreshContacts').onclick=loadContacts;$('#newContact').onclick=()=>{editingContact=null;$('#contactModalTitle').textContent='Novo contato';['cName','cPhone','cCity','cNotes'].forEach(id=>$('#'+id).value='');$('#cGroup').value='GERAL';$('#cOpt').checked=true;openModal('contactModal')};
+function editContact(id){const c=contacts.find(x=>x.id===id);if(!c)return;editingContact=id;$('#contactModalTitle').textContent='Editar contato';$('#cName').value=c.name||'';$('#cPhone').value=c.phone||'';$('#cCity').value=c.city||'';$('#cGroup').value=c.group_name||'GERAL';$('#cOpt').checked=c.opt_in!==false&&!c.opt_out;$('#cNotes').value=c.notes||'';openModal('contactModal')}
+$('#saveContact').onclick=async()=>{try{const body={name:$('#cName').value,phone:$('#cPhone').value,city:$('#cCity').value,group_name:$('#cGroup').value||'GERAL',opt_in:$('#cOpt').checked,opt_out:!$('#cOpt').checked,notes:$('#cNotes').value};await api(editingContact?`/api/contacts/${editingContact}`:'/api/contacts',{method:editingContact?'PATCH':'POST',body:JSON.stringify(body)});closeModal('contactModal');toast('Contato salvo ✅');loadContacts()}catch(e){toast(e.message)}};
+async function deleteContact(id){if(!confirm('Excluir este contato?'))return;try{await api(`/api/contacts/${id}`,{method:'DELETE'});loadContacts()}catch(e){toast(e.message)}}
+function renderPicker(){if(!$('#campaignContacts'))return;const q=($('#campaignContactSearch').value||'').toLowerCase(),g=$('#selectGroup').value;const rows=contacts.filter(c=>c.opt_in!==false&&!c.opt_out&&(!g||c.group_name===g)&&(!q||c.name.toLowerCase().includes(q)||c.phone.includes(q.replace(/\D/g,''))));$('#campaignContacts').innerHTML=rows.map(c=>`<label class="pickRow"><input type="checkbox" value="${c.phone}" ${selected.has(c.phone)?'checked':''}><span><b>${esc(c.name)}</b><small>${esc(c.phone)} • ${esc(c.group_name||'GERAL')}</small></span></label>`).join('')||'<div class="empty">Nenhum contato.</div>';$$('#campaignContacts input').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.value):selected.delete(x.value);updateSelected()});updateSelected()}
+function updateSelected(){$('#selectedCount').textContent=`${selected.size} selecionados`}
+$('#campaignContactSearch').oninput=renderPicker;$('#selectGroup').onchange=renderPicker;$('#selectVisible').onclick=()=>{const g=$('#selectGroup').value;contacts.filter(c=>c.opt_in!==false&&!c.opt_out&&(!g||c.group_name===g)).forEach(c=>selected.add(c.phone));renderPicker()};$('#clearSelected').onclick=()=>{selected.clear();renderPicker()};
+$('#newCampaign').onclick=async()=>{if(!contacts.length)await loadContacts();selected.clear();imageDataUrl=null;$('#campName').value='';$('#campImage').value='';$('#campPreview').classList.add('hidden');$$('.campMsg').forEach(x=>x.value='');$('#scheduleAt').value='';$('#retryEnabled').checked=false;toggleRetry();renderPicker();openModal('campaignModal')};
+$('#retryEnabled').onchange=toggleRetry;function toggleRetry(){const on=$('#retryEnabled').checked;$('#retryHoursWrap').classList.toggle('hidden',!on);$('#maxAttemptsWrap').classList.toggle('hidden',!on)}$('#moreMsgs').onclick=()=>{$$('.extraMsg').forEach(x=>x.classList.remove('hidden'));$('#moreMsgs').classList.add('hidden')};
+$('#campImage').onchange=()=>{const f=$('#campImage').files[0];if(!f)return;const r=new FileReader();r.onload=()=>{imageDataUrl=r.result;$('#campPreview').src=r.result;$('#campPreview').classList.remove('hidden')};r.readAsDataURL(f)};
+$('#saveCampaign').onclick=async()=>{try{const messages=$$('.campMsg').map(x=>x.value.trim()).filter(Boolean);const body={name:$('#campName').value,messages,phones:[...selected],imageDataUrl,imageName:$('#campImage').files[0]?.name||null,intervalMin:+$('#intervalMin').value,intervalMax:+$('#intervalMax').value,scheduleAt:$('#scheduleAt').value?new Date($('#scheduleAt').value).toISOString():null,retryEnabled:$('#retryEnabled').checked,retryHours:+$('#retryHours').value,maxAttempts:+$('#maxAttempts').value};await api('/api/campaigns',{method:'POST',body:JSON.stringify(body)});closeModal('campaignModal');toast('Campanha salva ✅');loadCampaigns();loadHome()}catch(e){toast(e.message)}};
+function campCard(c,execution=false){const s=c.summary||{},p=pct(s),action=c.status==='PRONTA'?`<button class="btn primary small" data-start="${c.id}">Iniciar agora</button>`:c.status==='PAUSADA'?`<button class="btn primary small" data-resume="${c.id}">Retomar</button>`:c.status==='EM_EXECUCAO'?`<button class="btn secondary small" data-pause="${c.id}">Pausar</button>`:'';return `<article class="campaignCard"><div class="campaignTop"><div><h3>${esc(c.name)}</h3><div class="campaignMeta">${c.schedule_at?`Agendada: ${fmt(c.schedule_at)}`:'Envio manual'} ${c.image_url?'• 🖼️ imagem':''}</div></div>${statusBadge(c.status)}</div><div class="progress"><i style="width:${p}%"></i></div><div class="summaryRow"><div><b>${s.total||0}</b><span>Total</span></div><div><b>${s.pendentes||0}</b><span>Pendentes</span></div><div><b>${s.enviados||0}</b><span>Enviados</span></div><div><b>${s.responderam||0}</b><span>Retornos</span></div><div><b>${s.compras||0}</b><span>Compras</span></div></div><div class="actions">${action}<button class="btn secondary small" data-openq="${c.id}" data-name="${esc(c.name)}">Detalhes</button>${!execution?`<button class="btn danger small" data-delcamp="${c.id}">Excluir</button>`:''}</div></article>`}
+async function loadCampaigns(){try{const d=await api('/api/campaigns');campaigns=d.campaigns||[];$('#campaignCards').innerHTML=campaigns.length?campaigns.map(c=>campCard(c)).join(''):'<div class="empty">Nenhuma campanha.</div>';bindCampActions()}catch(e){toast(e.message)}}
+async function loadExecution(){try{const d=await api('/api/execution');$('#executionCards').innerHTML=d.campaigns.length?d.campaigns.map(c=>campCard(c,true)).join(''):'<div class="empty">Nenhuma execução.</div>';bindCampActions()}catch(e){toast(e.message)}}$('#refreshExecution').onclick=loadExecution;
+function bindCampActions(){$$('[data-start]').forEach(b=>b.onclick=()=>campAction(b.dataset.start,'start'));$$('[data-pause]').forEach(b=>b.onclick=()=>campAction(b.dataset.pause,'pause'));$$('[data-resume]').forEach(b=>b.onclick=()=>campAction(b.dataset.resume,'resume'));$$('[data-openq]').forEach(b=>b.onclick=()=>openRecipients(b.dataset.openq,b.dataset.name));$$('[data-delcamp]').forEach(b=>b.onclick=async()=>{if(confirm('Excluir campanha?')){await api(`/api/campaigns/${b.dataset.delcamp}`,{method:'DELETE'});loadCampaigns()}})}async function campAction(id,a){try{await api(`/api/campaigns/${id}/${a}`,{method:'POST',body:'{}'});toast(a==='start'?'Campanha iniciada ✅':'Atualizado');loadCampaigns();loadExecution()}catch(e){toast(e.message)}}
+async function openRecipients(id,name){try{const d=await api(`/api/campaigns/${id}/recipients`);$('#recipientsTitle').textContent=name||'Destinatários';$('#recipientsList').innerHTML=d.items.map(r=>`<div class="recipientRow"><div><b>${esc(r.name||r.phone)}</b><small>${esc(r.phone)}</small></div><div>${statusBadge(r.status)}</div><div><small>${r.sent_at?fmt(r.sent_at):r.next_action_at?`Próxima: ${fmt(r.next_action_at)}`:'Aguardando'}</small></div></div>`).join('')||'<div class="empty">Fila vazia.</div>';openModal('recipientsModal')}catch(e){toast(e.message)}}
+async function loadReturns(){try{const d=await api('/api/returns');$('#returnsList').innerHTML=d.items.length?d.items.map(r=>`<article class="returnCard"><div class="returnTop"><div><b>${esc(r.name||r.phone)}</b><small class="muted">${esc(r.phone)} • ${esc(r.pz_campaigns?.name||'Campanha')}</small></div>${statusBadge(r.status)}</div><p>${esc(r.last_inbound_preview||'Cliente respondeu')}</p><small class="muted">${fmt(r.responded_at)}</small><div class="actions"><button class="btn success small" data-rbuy="${r.id}">Compra realizada ✅</button><button class="btn secondary small" data-rneg="${r.id}">Em atendimento</button><button class="btn danger small" data-rno="${r.id}">Não interessado</button></div></article>`).join(''):'<div class="empty">Nenhum retorno pendente.</div>';$$('[data-rbuy]').forEach(b=>b.onclick=()=>setR(b.dataset.rbuy,'COMPRA_REALIZADA'));$$('[data-rneg]').forEach(b=>b.onclick=()=>setR(b.dataset.rneg,'EM_NEGOCIACAO'));$$('[data-rno]').forEach(b=>b.onclick=()=>setR(b.dataset.rno,'NAO_INTERESSADO'))}catch(e){toast(e.message)}}$('#refreshReturns').onclick=loadReturns;async function setR(id,status){try{await api(`/api/recipients/${id}/status`,{method:'POST',body:JSON.stringify({status})});toast('Atualizado ✅');loadReturns();loadPurchases();loadHome()}catch(e){toast(e.message)}}
+async function loadPurchases(){try{const d=await api('/api/purchases');$('#purchasesList').innerHTML=d.items.length?d.items.map(x=>`<div class="compactItem"><div><b>${esc(x.name||x.phone)}</b><small>${esc(x.phone)} • ${esc(x.pz_campaigns?.name||'Campanha')} • ${fmt(x.created_at)}</small></div><span class="badge ok">${esc(x.source)}</span></div>`).join(''):'<div class="empty">Nenhuma compra registrada.</div>'}catch(e){toast(e.message)}}$('#refreshPurchases').onclick=loadPurchases;
+$('#generateQr').onclick=async()=>{try{await api('/api/whatsapp/connect',{method:'POST',body:JSON.stringify({force:!0})});toast('Gerando QR...');setTimeout(waStatus,1500)}catch(e){toast(e.message)}};$('#pairCode').onclick=async()=>{try{const d=await api('/api/whatsapp/pairing-code',{method:'POST',body:JSON.stringify({phone:$('#pairPhone').value})});$('#pairResult').textContent=d.connected?'Já conectado ✅':d.code||''}catch(e){toast(e.message)}};$('#sendTest').onclick=async()=>{try{await api('/api/whatsapp/send-test',{method:'POST',body:JSON.stringify({to:$('#testPhone').value,text:$('#testText').value})});toast('Mensagem enviada ✅')}catch(e){toast(e.message)}};$('#logoutWa').onclick=async()=>{if(!confirm('Desconectar o WhatsApp?'))return;try{await api('/api/whatsapp/logout',{method:'POST',body:'{}'});waStatus()}catch(e){toast(e.message)}};$('#runNow').onclick=async()=>{try{const d=await api('/api/run-now',{method:'POST',body:'{}'});toast(`Processado: ${d.sent||0} envio(s)`) }catch(e){toast(e.message)}};
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});showPage('home');setInterval(waStatus,15000);

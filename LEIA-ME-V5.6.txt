@@ -1,0 +1,37 @@
+PROJETO ZAP V5.6 — INSTALAÇÃO CURTA
+
+1) SUPABASE
+Abra SQL Editor > New query.
+Abra o arquivo MIGRACAO-V5.6.sql deste pacote, copie tudo, cole e clique em Run.
+O final deve mostrar: V5.6 pronta.
+
+2) GITHUB
+Substitua os arquivos da raiz do projeto pelos arquivos deste ZIP.
+Faça Commit changes.
+
+3) RENDER
+Não apague SUPABASE_URL nem SUPABASE_SERVICE_ROLE_KEY.
+Não é necessário PHONE ID nem token da Meta.
+Aguarde o deploy concluir.
+
+4) ABRIR O APP
+Abra https://projeto-zap-4tyg.onrender.com
+A sessão Baileys já existente em zap_auth será reaproveitada.
+Se estiver conectado, NÃO gere novo QR.
+
+O QUE A V5.6 CORRIGE
+- mantém a conexão Baileys isolada e estável;
+- usa tabelas pz_* novas para não conflitar com estruturas antigas;
+- corrige agendamento com Supabase pg_cron + pg_net a cada minuto;
+- corrige fuso horário: o navegador envia a data/hora em ISO;
+- cria/garante bucket de imagens automaticamente no backend;
+- contatos em lista compacta com busca e grupos;
+- campanhas em cards profissionais com progresso;
+- destinatários ficam em detalhes, não ocupando a tela principal;
+- retornos e possíveis comprovantes organizados em fila;
+- compra manual ou automática por frase de confirmação;
+- reenvio opcional para quem não respondeu;
+- compra/retorno cancela reenvios automaticamente.
+
+IMPORTANTE
+A migração NÃO apaga as tabelas antigas. Ela cria uma base isolada V5.6 e tenta importar os contatos antigos.
