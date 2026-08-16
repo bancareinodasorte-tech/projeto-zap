@@ -1,19 +1,18 @@
-PROJETO ZAP V5.7.1 - CORRIGIDA
+PROJETO ZAP V5.7.2 CORRIGIDA
+
+Correções principais:
+- Corrigido o problema “Aguardando mensagem. Essa ação pode levar alguns instantes” com getMessage + cache de retry do Baileys.
+- Mensagens enviadas ficam disponíveis para recriptografia/reenvio quando o WhatsApp solicitar retry.
+- Envio 1:1 agora prefere LID quando houver mapeamento PN→LID e mantém PN como referência.
+- Bot mostra estado ATIVO/DESATIVADO após salvar.
+- Nomes internos continuam fixos para substituir arquivos anteriores no GitHub.
 
 INSTALAÇÃO
-1. GitHub: apague os arquivos antigos versionados (LEIA-ME-V5.x e MIGRACAO-V5.x) apenas uma vez.
-2. Envie TODOS os arquivos desta pasta para a RAIZ do repositório. Os nomes são fixos e, nas próximas versões, serão substituídos em vez de acumulados.
-3. Supabase > SQL Editor: abra MIGRACAO.sql, cole tudo e execute uma única vez.
-4. Render: mantenha SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY. Não precisa PHONE ID nem token Meta.
-5. Aguarde o deploy e abra o sistema.
+1. Envie todos os arquivos desta pasta para a raiz do repositório, substituindo os existentes.
+2. Não há nova migração obrigatória de banco em relação à V5.7.1.
+3. Aguarde o Render concluir o deploy.
+4. Feche e reabra o app/site para atualizar o cache.
+5. Faça primeiro o Teste rápido.
 
-TESTE CURTO
-- Ajustes > confira WhatsApp conectado.
-- Envie um Teste rápido para outro número.
-- Confirme que a mensagem chega normal (não como “Aguardando mensagem”).
-- Salve o Bot de pedidos.
-- Crie campanha com valor unitário, mensagem e contatos.
-- Responda “Quero comprar 1 bilhete”. O retorno deve aparecer no sistema e o bot deve pedir Nome / Quantidade / Contato.
-
-IMPORTANTE
-O backend V5.7.1 envia diretamente ao JID do número do WhatsApp (PN) e NÃO força LID no envio. Isso corrige o comportamento observado de mensagens que apareciam no destinatário como “Aguardando mensagem”.
+IMPORTANTE SOBRE O BOT
+Salvar o bot apenas ativa/configura o atendimento. Ele responde quando um cliente que pertence a uma campanha responde à mensagem recebida.

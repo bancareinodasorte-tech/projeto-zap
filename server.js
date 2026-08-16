@@ -2,6 +2,7 @@ const express=require('express');
 const crypto=require('crypto');
 const pino=require('pino');
 const QRCode=require('qrcode');
+const NodeCache=require('node-cache');
 const {default:makeWASocket,DisconnectReason,Browsers,initAuthCreds,BufferJSON,proto}=require('@whiskeysockets/baileys');
 
 const app=express();
@@ -26,6 +27,8 @@ const TERMINAL=new Set(['COMPRA_REALIZADA','NAO_INTERESSADO','SEM_RESPOSTA','DES
 const PURCHASE_PHRASES=['pagamento confirmado','compra confirmada','obrigado pela compra','obrigada pela compra','agradecemos sua compra','compra realizada','pagamento recebido'];
 const NEGATIVE=['não quero','nao quero','sem interesse','não tenho interesse','nao tenho interesse','pare','sair'];
 let sock=null,connected=false,starting=false,qrDataUrl='',connectedNumber='',connectedName='',lastError='',lastConnectionAt=null,restartTimer=null,generation=0,runnerBusy=false;
+const msgRetryCounterCache=new NodeCache({stdTTL:3600,checkperiod:600,useClones:false});
+const recentMessageCache=new NodeCache({stdTTL:86400,checkperiod:1800,useClones:false,maxKeys:5000});
 
 const digits=v=>String(v||'').replace(/\D/g,'');
 const nowIso=()=>new Date().toISOString();
@@ -47,6 +50,19 @@ async function authRead(id){const x=await sb(`/rest/v1/zap_auth?select=value&id=
 async function authWrite(id,value){return sb('/rest/v1/zap_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,value:safeJson(value),updated_at:nowIso()})})}
 async function authDelete(id){return sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:'DELETE'})}
 async function authClear(){return sb('/rest/v1/zap_auth?id=not.is.null',{method:'DELETE'})}
+async function rememberRetryMessage(msg){
+  const id=String(msg?.key?.id||'');
+  if(!id||!msg?.message)return;
+  recentMessageCache.set(id,msg.message);
+  await authWrite(`retry-${id}`,{message:msg.message,remoteJid:String(msg?.key?.remoteJid||''),saved_at:nowIso()}).catch(()=>{});
+}
+async function getStoredMessage(key){
+  const id=String(key?.id||'');if(!id)return undefined;
+  const mem=recentMessageCache.get(id);if(mem)return mem;
+  const db=await authRead(`retry-${id}`).catch(()=>null);
+  if(db?.message){recentMessageCache.set(id,db.message);return db.message}
+  return undefined;
+}
 async function useSupabaseAuthState(){
   const creds=(await authRead('creds'))||initAuthCreds();
   return {state:{creds,keys:{get:async(type,ids)=>{const out={};await Promise.all(ids.map(async id=>{let v=await authRead(`${type}-${id}`);if(type==='app-state-sync-key'&&v)v=proto.Message.AppStateSyncKeyData.fromObject(v);out[id]=v}));return out},set:async data=>{for(const cat of Object.keys(data||{}))for(const id of Object.keys(data[cat]||{})){const v=data[cat][id];if(v)await authWrite(`${cat}-${id}`,v);else await authDelete(`${cat}-${id}`)}}}},saveCreds:()=>authWrite('creds',creds)};
@@ -57,7 +73,7 @@ async function startWhatsApp(force=false){
   if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSocket(false);const myGen=++generation;
   try{
     const {state,saveCreds}=await useSupabaseAuthState();
-    sock=makeWASocket({auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:Browsers.ubuntu('Google Chrome'),markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});
+    sock=makeWASocket({auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:Browsers.ubuntu('Google Chrome'),markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false,msgRetryCounterCache,getMessage:getStoredMessage});
     const s=sock;
     s.ev.on('creds.update',saveCreds);
     s.ev.on('connection.update',async u=>{
@@ -74,7 +90,7 @@ async function startWhatsApp(force=false){
         if(loggedOut){await authClear().catch(()=>{});connectedNumber='';connectedName='';qrDataUrl=''}else scheduleRestart(code===515?900:2200);
       }
     });
-    s.ev.on('messages.upsert',async ({messages,type})=>{if(type!=='notify'&&type!=='append')return;for(const m of messages||[])if(m?.message)await processMessage(m).catch(e=>console.log('Mensagem:',e.message))});
+    s.ev.on('messages.upsert',async ({messages,type})=>{if(type!=='notify'&&type!=='append')return;for(const m of messages||[])if(m?.message){await rememberRetryMessage(m).catch(()=>{});await processMessage(m).catch(e=>console.log('Mensagem:',e.message))}});
   }catch(e){lastError=e.message;sock=null;connected=false;starting=false;scheduleRestart(3500);throw e}
 }
 async function ensureConnected(timeout=25000){if(connected&&sock)return true;if(!starting&&!sock)await startWhatsApp(false).catch(()=>{});const end=Date.now()+timeout;while(Date.now()<end){if(connected&&sock)return true;await sleep(500)}return false}
@@ -126,9 +142,25 @@ async function upsertOrder(recipient,campaign,data={}){
 
 // IMPORTANTE: envio direto para PN. Não converte o destinatário para LID.
 // Esse é o mesmo padrão estável usado antes e evita mensagens "Aguardando mensagem" no destinatário.
-async function directJid(phone){const n=normalizeBR(phone);if(!validBRPhone(n))throw new Error('Telefone inválido.');const pn=`${n}@s.whatsapp.net`;try{const ex=await sock.onWhatsApp(pn);if(ex?.[0]?.exists===false)throw new Error('Número não encontrado no WhatsApp.');return {n,jid:ex?.[0]?.jid||pn}}catch(e){if(String(e.message||'').includes('Número não encontrado'))throw e;return {n,jid:pn}}}
-async function sendText(phone,text){if(!sock||!connected)throw new Error('WhatsApp não conectado.');const {n,jid}=await directJid(phone);const r=await sock.sendMessage(jid,{text:String(text||'').trim()});return{to:n,id:r?.key?.id||null}}
-async function sendImageText(phone,url,text){if(!sock||!connected)throw new Error('WhatsApp não conectado.');const {n,jid}=await directJid(phone);const r=await fetch(url);if(!r.ok)throw new Error('Não foi possível carregar a imagem.');const image=Buffer.from(await r.arrayBuffer());const out=await sock.sendMessage(jid,{image,caption:String(text||'').trim()});return{to:n,id:out?.key?.id||null}}
+function normalizeLid(v){const x=String(v||'').trim();if(!x)return'';if(x.endsWith('@lid'))return x;const d=digits(x);return d?`${d}@lid`:''}
+async function directJid(phone){
+  const n=normalizeBR(phone);if(!validBRPhone(n))throw new Error('Telefone inválido.');
+  const pn=`${n}@s.whatsapp.net`;let lid='';
+  try{const rows=await sb(`/rest/v1/pz_jid_map?phone=eq.${encodeURIComponent(n)}&select=lid_jid&limit=1`);lid=normalizeLid(rows?.[0]?.lid_jid)}catch{}
+  if(!lid){try{const fn=sock?.signalRepository?.lidMapping?.getLIDForPN;if(typeof fn==='function')lid=normalizeLid(await fn.call(sock.signalRepository.lidMapping,pn))}catch{}}
+  let ex=null;
+  try{ex=await sock.onWhatsApp(pn);if(ex?.[0]?.exists===false)throw new Error('Número não encontrado no WhatsApp.');if(!lid)lid=normalizeLid(ex?.[0]?.lid)}catch(e){if(String(e.message||'').includes('Número não encontrado'))throw e}
+  if(lid)await rememberLid(n,lid).catch(()=>{});
+  return {n,pn,lid:lid||null,jid:lid||ex?.[0]?.jid||pn};
+}
+async function sendText(phone,text){
+  if(!sock||!connected)throw new Error('WhatsApp não conectado.');
+  const {n,jid,pn,lid}=await directJid(phone);const r=await sock.sendMessage(jid,{text:String(text||'').trim()});await rememberRetryMessage(r).catch(()=>{});return{to:n,id:r?.key?.id||null,jid,pn,lid};
+}
+async function sendImageText(phone,url,text){
+  if(!sock||!connected)throw new Error('WhatsApp não conectado.');
+  const {n,jid,pn,lid}=await directJid(phone);const r=await fetch(url);if(!r.ok)throw new Error('Não foi possível carregar a imagem.');const image=Buffer.from(await r.arrayBuffer());const out=await sock.sendMessage(jid,{image,caption:String(text||'').trim()});await rememberRetryMessage(out).catch(()=>{});return{to:n,id:out?.key?.id||null,jid,pn,lid};
+}
 async function botSend(phone,text){if(!text)return;const out=await sendText(phone,text);await sb('/rest/v1/pz_messages',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({phone:normalizeBR(phone),meta_message_id:out.id||crypto.randomUUID(),direction:'OUT',message_type:'text',body:text,status:'sent',raw_payload:{source:'BOT'},created_at:nowIso()})}).catch(()=>{})}
 async function recordPurchase(recipient,source='MANUAL',notes=''){
   await sb('/rest/v1/pz_purchases',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({contact_id:recipient.contact_id||null,campaign_id:recipient.campaign_id||null,recipient_id:recipient.id,phone:recipient.phone,name:recipient.name||'',source,notes,created_at:nowIso()})}).catch(()=>{});
@@ -208,12 +240,12 @@ async function runDueCampaigns(){
   }finally{runnerBusy=false}
 }
 
-app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap',version:'5.7.1',connected,runnerBusy}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap',version:'5.7.2',connected,runnerBusy}));
 app.get('/api/whatsapp/status',(req,res)=>res.json({ok:true,connected,starting,number:connectedNumber||null,name:connectedName||null,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt}));
 app.post('/api/whatsapp/connect',async(req,res)=>{try{await startWhatsApp(Boolean(req.body?.force));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/pairing-code',async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!validBRPhone(phone))return res.status(400).json({error:'Telefone inválido.'});if(!sock)await startWhatsApp(false);if(connected)return res.json({ok:true,connected:true});await sleep(800);res.json({ok:true,code:await sock.requestPairingCode(phone)})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/disconnect',async(req,res)=>{try{try{await sock?.logout?.()}catch{}await closeSocket(true);await authClear().catch(()=>{});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/test',async(req,res)=>{try{if(!await ensureConnected())throw new Error('WhatsApp não conectado.');res.json({ok:true,...await sendText(req.body?.phone,req.body?.message||'Teste Projeto Zap V5.7.1 ✅')})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/test',async(req,res)=>{try{if(!await ensureConnected())throw new Error('WhatsApp não conectado.');res.json({ok:true,...await sendText(req.body?.phone,req.body?.message||'Teste Projeto Zap V5.7.2 ✅')})}catch(e){res.status(500).json({error:e.message})}});
 
 app.get('/api/settings/bot',async(req,res)=>{try{res.json({ok:true,settings:await getBotSettings()})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/settings/bot',async(req,res)=>{try{const s={enabled:req.body?.enabled!==false,pix_key:String(req.body?.pix_key||''),pix_name:String(req.body?.pix_name||'REINO DA SORTE'),trigger_keywords:Array.isArray(req.body?.trigger_keywords)?req.body.trigger_keywords.map(String).filter(Boolean):BOT_DEFAULT.trigger_keywords,order_prompt:String(req.body?.order_prompt||BOT_DEFAULT.order_prompt),thank_you_message:String(req.body?.thank_you_message||BOT_DEFAULT.thank_you_message)};res.json({ok:true,settings:await saveBotSettings(s)})}catch(e){res.status(500).json({error:e.message})}});
@@ -246,4 +278,4 @@ app.get('/api/purchases',async(req,res)=>{try{res.json({ok:true,purchases:await 
 app.post('/api/runner',async(req,res)=>{try{res.json({ok:true,result:await runDueCampaigns()})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/cron/run',async(req,res)=>{if(CRON_SECRET&&req.headers['x-cron-secret']!==CRON_SECRET)return res.status(401).json({error:'Não autorizado'});try{res.json({ok:true,result:await runDueCampaigns()})}catch(e){res.status(500).json({error:e.message})}});
 app.get('/',(req,res)=>res.sendFile(__dirname+'/index.html'));
-app.listen(PORT,()=>{console.log(`Projeto Zap V5.7.1 online na porta ${PORT}`);startWhatsApp(false).catch(()=>{});setInterval(()=>runDueCampaigns().catch(()=>{}),60000)});
+app.listen(PORT,()=>{console.log(`Projeto Zap V5.7.2 online na porta ${PORT}`);startWhatsApp(false).catch(()=>{});setInterval(()=>runDueCampaigns().catch(()=>{}),60000)});
