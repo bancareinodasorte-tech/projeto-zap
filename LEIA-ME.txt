@@ -1,26 +1,51 @@
-PROJETO ZAP V5.1 — CONEXÃO WHATSAPP
+PROJETO ZAP V5.8 — INSTALAÇÃO
 
-Esta atualização transplanta somente o mecanismo de conexão do projeto antigo.
+ARQUIVOS PRINCIPAIS (nomes fixos para substituir no GitHub):
+index.html
+app.js
+styles.css
+server.js
+package.json
+manifest.webmanifest
+icone.svg
+sw.js
+MIGRACAO.sql
+.env.example
 
-ARQUIVOS
-- server.js
-- package.json
-- supabase-zap-auth.sql
+PASSO 1 — SUPABASE
+Abra SQL Editor, cole TODO o conteúdo de MIGRACAO.sql e execute uma única vez.
+Resultado esperado: PROJETO ZAP V5.8 - MIGRAÇÃO APLICADA COM SUCESSO.
 
-RENDER — VARIÁVEIS NECESSÁRIAS
-- SUPABASE_URL
-- SUPABASE_ANON_KEY
-- SUPABASE_SERVICE_ROLE_KEY
-- FRONTEND_ORIGIN
+PASSO 2 — GITHUB
+No repositório atual, substitua os arquivos pelos arquivos deste pacote.
+Não renomeie index.html, app.js, styles.css, server.js ou package.json.
+Os nomes são fixos justamente para não criar novas cópias a cada versão.
 
-PODEM SER REMOVIDAS DESTA ETAPA
-- META_PHONE_NUMBER_ID
-- META_WA_TOKEN
-- META_VERIFY_TOKEN
-- GRAPH_API_VERSION
+PASSO 3 — RENDER
+Mantenha as variáveis já usadas:
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+FRONTEND_ORIGIN
 
-PASSO RESUMIDO
-1. Substitua server.js e package.json no repositório do backend.
-2. Se a tabela zap_auth não existir, execute supabase-zap-auth.sql no Supabase.
-3. No Render: Save, rebuild, and deploy.
-4. O backend restaura sessão automaticamente ou gera QR para nova conexão.
+Não é necessário META_PHONE_NUMBER_ID. A conexão permanece via Baileys/QR/código.
+Faça o deploy/redeploy depois do upload do GitHub.
+
+PASSO 4 — TESTE CURTO
+1. Ajustes: confirme “WhatsApp conectado”.
+2. Teste rápido: envie 1 mensagem.
+3. Contatos: cadastre ou importe VCF/CSV.
+4. Campanhas: crie uma campanha, defina o primeiro horário e adicione as mensagens 1/2/3.
+5. Escolha Todos, Grupo, Manual ou Todos exceto selecionados.
+6. Salvar e agendar.
+7. Execução: acompanhe a fila.
+8. Responda pelo WhatsApp e confira Retornos.
+9. Para comprovante, envie imagem/PDF; ele entra em conferência manual.
+10. Compras: confirmar PIX e depois finalizar compra.
+
+IMPORTANTE
+- Salvar campanha NÃO envia imediatamente. O primeiro envio respeita start_at.
+- Reenvios são cancelados quando o destinatário responde ou conclui compra.
+- A imagem selecionada mostra miniatura antes de salvar.
+- Importação VCF/CSV mostra prévia e valida números antes de gravar.
+- Foto/PDF não é considerado pagamento confirmado automaticamente. O operador confirma o PIX.
