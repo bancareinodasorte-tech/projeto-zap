@@ -1,37 +1,58 @@
-CANAL DE VENDAS RDS V6.1
+CANAL DE VENDAS RDS — V6.2 CORRIGIDA
+
+PACOTE COM 11 ARQUIVOS. Os nomes internos são fixos e SEM versão para SUBSTITUIR os arquivos antigos no GitHub, sem acumular novos nomes.
+
+11 arquivos:
+1. server.js
+2. app.js
+3. index.html
+4. styles.css
+5. package.json
+6. manifest.webmanifest
+7. sw.js
+8. icone.svg
+9. MIGRACAO.sql
+10. LEIA-ME.txt
+11. .env.exemplo
+
+CORREÇÕES BASEADAS NOS PRINTS E TESTES:
+- Campanha não dispara ao salvar/ativar: fila só envia quando scheduled_at chega ao horário.
+- Horário do primeiro envio preservado em ISO/UTC; tela converte para horário local.
+- Lembretes são cumulativos a partir do envio anterior.
+- Campanhas e Execução deixaram de ter a mesma função: Campanhas configura; Execução mostra a fila real.
+- Seleção de público: todos, grupo e contatos individuais.
+- Cadastro de contato: grupo agora é LISTA de grupos já criados.
+- Opção + Criar novo grupo e Gerenciar grupos.
+- Grupos padrão: NOVOS, INTERESSADOS, CLIENTES, COMPRA REALIZADA, VIP, INATIVOS, ENTRADA WHATSAPP.
+- Importação VCF/CSV lê FN/N para preservar nomes.
+- Prévia da importação: duplicados/inválidos ficam identificados e desmarcados; operador escolhe o que salvar.
+- Bot responde qualquer número, mesmo fora da agenda, e cria contato ENTRADA WHATSAPP.
+- Bot comercial: interesse -> coleta Nome/Quantidade/Contato -> calcula total -> PIX -> comprovante -> alerta -> confirmação manual -> conclusão.
+- Imagem/PDF recebido entra como COMPROVANTE_RECEBIDO.
+- Operador confirma pagamento no painel.
+- Ao enviar imagem/PDF dos bilhetes depois da confirmação, o sistema pode concluir automaticamente e enviar mensagem final.
+- CTA de compra por campanha com token da campanha.
+- Imagem de campanha pode ser removida/trocada antes da ativação.
+- Bot mostra data/hora da última configuração salva.
 
 INSTALAÇÃO
-1. No Supabase > SQL Editor, execute todo o arquivo MIGRACAO.sql UMA VEZ.
-2. O resultado esperado no final é:
-   CANAL DE VENDAS RDS V6.1 - MIGRACAO APLICADA COM SUCESSO
-3. No GitHub, substitua os arquivos do projeto pelos arquivos desta pasta.
-   Não renomeie os arquivos internos e não crie cópias com número da versão.
-4. Aguarde o Render concluir o deploy.
-5. Abra o sistema > Ajustes > confirme WhatsApp, PIX, escritório e mensagens do bot.
+1) GitHub: suba os 11 arquivos na RAIZ do repositório. Eles devem substituir os arquivos com os mesmos nomes.
+2) Supabase: abra SQL Editor, cole TODO o MIGRACAO.sql e execute UMA VEZ. Resultado esperado: CANAL DE VENDAS RDS V6.2 - MIGRAÇÃO APLICADA COM SUCESSO.
+3) Render: aguarde deploy automático ou Manual Deploy > Deploy latest commit.
+4) Variáveis do Render: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY precisam continuar configuradas.
+5) Abra o sistema, Ajustes, confirme WhatsApp conectado e salve o bot.
 
-TESTE RECOMENDADO
-A. Em Ajustes, use "Teste de entrega" para um número real.
-B. Em Contatos, use "Validar" antes de incluir um número importante em campanha.
-C. Crie uma campanha selecionando os contatos individualmente.
-D. Na tela Execução, diferencie:
-   - ENVIADA SERVIDOR = WhatsApp aceitou o envio;
-   - ENTREGUE = aparelho destinatário confirmou entrega;
-   - LIDA = leitura confirmada quando disponível.
-E. Responda a mensagem recebida. O retorno deve aparecer em Retornos mesmo se a pessoa não estiver em uma campanha.
-F. Escreva QUERO COMPRAR. O bot deve iniciar pedido, coletar dados, calcular PIX e aguardar comprovante.
-G. Ao receber comprovante, Compras deve sinalizar COMPROVANTE RECEBIDO. A conferência continua manual.
+TESTE PRINCIPAL DO AGENDAMENTO
+- Crie campanha para UM contato.
+- Marque primeiro envio para alguns minutos no futuro.
+- Salve: NÃO deve enviar.
+- Ative: NÃO deve enviar antes do horário.
+- Abra Execução: deve aparecer AGENDADA.
+- Somente no horário deverá mudar para ENVIADA.
 
-NOVIDADES V6.1
-- Seleção individual, por grupo ou todos os contatos.
-- Carteira de contatos com cidade, tags, origem, status e validação do número no WhatsApp.
-- Importação VCF/CSV com seleção antes de salvar.
-- Campanhas editáveis antes do primeiro envio, duplicação, pausa e retomada.
-- Execução separada de Campanhas, com fila por destinatário e status de entrega.
-- Retornos registra qualquer mensagem recebida, inclusive de número criado automaticamente.
-- Bot mostra data/hora da última configuração salva e possui teste próprio.
-- Mensagens recebidas por clientes fora da agenda são encaminhadas ao fluxo comercial.
-- Alertas de comprovante no navegador quando o operador ativar os alertas.
-- Correção de reenvio criptográfico com getMessage e armazenamento temporário das mensagens.
-
-OBSERVAÇÃO
-A conexão usa Baileys/WhatsApp Web, não a API oficial da Meta. Portanto, o sistema não deve chamar um envio de "entregue" apenas porque sendMessage retornou sucesso. A V6.1 separa despacho, entrega e leitura.
+TESTE DO BOT
+- Do telefone recebedor envie QUERO COMPRAR.
+- Preencha Nome, Quantidade e Contato.
+- Confira cálculo + PIX.
+- Envie imagem/PDF do comprovante.
+- Abra Compras e confirme pagamento.
