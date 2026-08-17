@@ -93,8 +93,8 @@ async function resolveMessagePhone(m){
   for(const cand of [k.remoteJidAlt,k.participantPn,k.participantAlt,k.senderPn,k.remoteJid]){const p=jidToPhone(cand);if(p)return p}
   const raw=String(k.remoteJid||'');
   if(raw.endsWith('@lid')){
-    try{const fn=sock?.signalRepository?.lidMapping?.getPNForLID;if(typeof fn==='function'){const pn=await fn.call(sock.signalRepository.lidMapping,raw);const p=jidToPhone(pn)||normalizeBR(pn);if(/^55\d{10,11}$/.test(p)){await rememberLid(p,raw);return p}}}catch{}
     try{const saved=await authRead(`pn-for-${raw}`);const p=normalizeBR(saved);if(/^55\d{10,11}$/.test(p))return p}catch{}
+    try{const fn=sock?.signalRepository?.lidMapping?.getPNForLID;if(typeof fn==='function'){const pn=await fn.call(sock.signalRepository.lidMapping,raw);const p=jidToPhone(pn)||normalizeBR(pn);if(/^55\d{10,11}$/.test(p)){await rememberLid(p,raw);return p}}}catch{}
   }
   const stanza=String(m?.message?.extendedTextMessage?.contextInfo?.stanzaId||m?.message?.imageMessage?.contextInfo?.stanzaId||m?.message?.documentMessage?.contextInfo?.stanzaId||'');
   if(stanza){try{const rows=await sb(`/rest/v1/pz_whatsapp_messages?wa_message_id=eq.${encodeURIComponent(stanza)}&select=phone&order=created_at.desc&limit=1`);const p=normalizeBR(rows?.[0]?.phone);if(/^55\d{10,11}$/.test(p))return p}catch{}}
@@ -135,9 +135,10 @@ async function startWhatsApp(force=false){
 }
 
 async function waExists(to){return directJid(to)}
-async function sendText(to,text){if(!sock||!connected)throw new Error('WhatsApp ainda não está conectado.');const {n,jid,pn,lid}=await directJid(to);const r=await sock.sendMessage(jid,{text:safeText(text)});await rememberRetryMessage(r).catch(()=>{});return{id:r?.key?.id||null,to:n,jid,pn,lid}}
+async function rememberSentRoute(phone,r,fallbackJid=''){const n=normalizeBR(phone);const actual=String(r?.key?.remoteJid||fallbackJid||'');if(/^55\d{10,11}$/.test(n)&&actual.endsWith('@lid')){await rememberLid(n,actual);await authWrite(`pn-for-${actual}`,n).catch(()=>{})}}
+async function sendText(to,text){if(!sock||!connected)throw new Error('WhatsApp ainda não está conectado.');const {n,jid,pn,lid}=await directJid(to);const r=await sock.sendMessage(jid,{text:safeText(text)});await rememberSentRoute(n,r,jid).catch(()=>{});await rememberRetryMessage(r).catch(()=>{});return{id:r?.key?.id||null,to:n,jid:String(r?.key?.remoteJid||jid),pn,lid}}
 function dataUrlToBuffer(dataUrl){const m=String(dataUrl||'').match(/^data:([^;]+);base64,(.+)$/);if(!m)throw new Error('Imagem inválida.');return{mime:m[1],buffer:Buffer.from(m[2],'base64')}}
-async function sendImage(to,dataUrl,caption=''){if(!sock||!connected)throw new Error('WhatsApp ainda não está conectado.');const {n,jid,pn,lid}=await directJid(to);const {mime,buffer}=dataUrlToBuffer(dataUrl);if(!mime.startsWith('image/'))throw new Error('Arquivo da campanha não é uma imagem.');const r=await sock.sendMessage(jid,{image:buffer,caption:safeText(caption)});await rememberRetryMessage(r).catch(()=>{});return{id:r?.key?.id||null,to:n,jid,pn,lid}}
+async function sendImage(to,dataUrl,caption=''){if(!sock||!connected)throw new Error('WhatsApp ainda não está conectado.');const {n,jid,pn,lid}=await directJid(to);const {mime,buffer}=dataUrlToBuffer(dataUrl);if(!mime.startsWith('image/'))throw new Error('Arquivo da campanha não é uma imagem.');const r=await sock.sendMessage(jid,{image:buffer,caption:safeText(caption)});await rememberSentRoute(n,r,jid).catch(()=>{});await rememberRetryMessage(r).catch(()=>{});return{id:r?.key?.id||null,to:n,jid:String(r?.key?.remoteJid||jid),pn,lid}}
 
 // ---------- helpers de dados ----------
 async function findContactByPhone(from,ownerId=null){const q=ownerId?`&owner_id=eq.${encodeURIComponent(ownerId)}`:'';const rows=await sb(`/rest/v1/pz_contacts?select=id,owner_id,phone,name,group_name,status&limit=10000${q}`);const tail=tailPhone(from);return(rows||[]).find(c=>tailPhone(c.phone)===tail)||null}
