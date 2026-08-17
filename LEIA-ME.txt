@@ -1,10 +1,19 @@
-PROJETO ZAP V5.8.2 — CORREÇÃO DE SESSÃO INTERNA
+PROJETO ZAP V5.8.3 — CORREÇÃO OPERACIONAL COMPLETA
 
-- Remove o login obrigatório do Supabase nesta etapa.
-- O backend usa uma identidade interna estável para o operador único.
-- Preserva contatos, campanhas, agendamento, WhatsApp e bot da V5.8.
-- NÃO execute nova migração SQL.
-- Envie estes arquivos com os mesmos nomes para substituir os atuais no GitHub.
-- Aguarde o deploy do Render e atualize a página.
+Correções desta versão:
+- Contatos voltam a salvar sem depender de ON CONFLICT/constraint do banco antigo.
+- Importação VCF/CSV evita duplicados sem exigir índice único legado.
+- Bot de pedidos salva em armazenamento interno estável, sem depender da coluna owner_id de pz_settings.
+- Campanhas em RASCUNHO agora possuem botão EDITAR.
+- Edição permite alterar nome, valor, horário, destinatários, textos e imagens.
+- Imagem errada pode ser removida e substituída antes de ativar a campanha.
+- Ativação da campanha volta a montar a fila usando os contatos ativos salvos.
+- Mantém a conexão WhatsApp e o agendador da V5.8.
+- Cache/PWA atualizado para não carregar arquivos antigos.
 
-O login multioperador ficará para a etapa final do aplicativo.
+INSTALAÇÃO:
+1. Envie TODOS os arquivos desta pasta para o GitHub substituindo os atuais.
+2. Não renomeie arquivos.
+3. Aguarde o Render concluir o deploy.
+4. Atualize a página com Ctrl+F5 no computador.
+5. NÃO é necessário executar SQL para estas correções.
