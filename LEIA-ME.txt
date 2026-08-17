@@ -1,26 +1,37 @@
-CANAL DE VENDAS RDS — V6.0
-
-OBJETIVO DESTA VERSÃO
-- Nova base independente das tabelas antigas pz_* para parar de acumular remendos.
-- Atendimento universal: qualquer número que mandar mensagem entra no fluxo.
-- CTA de compra rastreável em cada etapa da campanha.
-- Cliente que responde sai dos próximos lembretes daquela campanha.
-- Pedido -> PIX -> comprovante -> conferência manual -> bilhetes enviados -> mensagem final.
-- Importação VCF/CSV com prévia, duplicados e seleção antes de salvar.
+CANAL DE VENDAS RDS V6.1
 
 INSTALAÇÃO
-1. No Supabase > SQL Editor, execute o arquivo MIGRACAO.sql UMA VEZ.
-2. No GitHub do projeto, substitua os arquivos antigos pelos arquivos deste pacote.
-3. No Render mantenha/configure:
-   SUPABASE_URL
-   SUPABASE_SERVICE_ROLE_KEY
-4. Faça o deploy.
-5. Abra Ajustes e confirme PIX, favorecido e WhatsApp do escritório.
-6. Se necessário, reconecte o WhatsApp por QR Code.
+1. No Supabase > SQL Editor, execute todo o arquivo MIGRACAO.sql UMA VEZ.
+2. O resultado esperado no final é:
+   CANAL DE VENDAS RDS V6.1 - MIGRACAO APLICADA COM SUCESSO
+3. No GitHub, substitua os arquivos do projeto pelos arquivos desta pasta.
+   Não renomeie os arquivos internos e não crie cópias com número da versão.
+4. Aguarde o Render concluir o deploy.
+5. Abra o sistema > Ajustes > confirme WhatsApp, PIX, escritório e mensagens do bot.
 
-IMPORTANTE
-- Esta versão NÃO apaga as tabelas antigas. Ela usa novas tabelas rds_*.
-- A confirmação do pagamento continua manual por segurança.
-- Imagem/PDF recebido é tratado como possível comprovante, não como pagamento confirmado.
-- O fechamento oficial acontece no botão "Bilhetes enviados ✅".
-- Para esta versão não foi criado login por operador; segurança multioperador fica para a etapa final do app.
+TESTE RECOMENDADO
+A. Em Ajustes, use "Teste de entrega" para um número real.
+B. Em Contatos, use "Validar" antes de incluir um número importante em campanha.
+C. Crie uma campanha selecionando os contatos individualmente.
+D. Na tela Execução, diferencie:
+   - ENVIADA SERVIDOR = WhatsApp aceitou o envio;
+   - ENTREGUE = aparelho destinatário confirmou entrega;
+   - LIDA = leitura confirmada quando disponível.
+E. Responda a mensagem recebida. O retorno deve aparecer em Retornos mesmo se a pessoa não estiver em uma campanha.
+F. Escreva QUERO COMPRAR. O bot deve iniciar pedido, coletar dados, calcular PIX e aguardar comprovante.
+G. Ao receber comprovante, Compras deve sinalizar COMPROVANTE RECEBIDO. A conferência continua manual.
+
+NOVIDADES V6.1
+- Seleção individual, por grupo ou todos os contatos.
+- Carteira de contatos com cidade, tags, origem, status e validação do número no WhatsApp.
+- Importação VCF/CSV com seleção antes de salvar.
+- Campanhas editáveis antes do primeiro envio, duplicação, pausa e retomada.
+- Execução separada de Campanhas, com fila por destinatário e status de entrega.
+- Retornos registra qualquer mensagem recebida, inclusive de número criado automaticamente.
+- Bot mostra data/hora da última configuração salva e possui teste próprio.
+- Mensagens recebidas por clientes fora da agenda são encaminhadas ao fluxo comercial.
+- Alertas de comprovante no navegador quando o operador ativar os alertas.
+- Correção de reenvio criptográfico com getMessage e armazenamento temporário das mensagens.
+
+OBSERVAÇÃO
+A conexão usa Baileys/WhatsApp Web, não a API oficial da Meta. Portanto, o sistema não deve chamar um envio de "entregue" apenas porque sendMessage retornou sucesso. A V6.1 separa despacho, entrega e leitura.

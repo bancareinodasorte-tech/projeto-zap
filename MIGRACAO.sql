@@ -1,6 +1,5 @@
--- CANAL DE VENDAS RDS V6.0
--- Estrutura NOVA e independente das tabelas pz_* antigas.
--- Não apaga dados anteriores. Pode ser executada novamente com segurança.
+-- CANAL DE VENDAS RDS V6.1
+-- Migração incremental e idempotente sobre a estrutura V6.x.
 create extension if not exists pgcrypto;
 
 create table if not exists public.zap_auth (
@@ -23,6 +22,9 @@ create table if not exists public.rds_settings (
   updated_at timestamptz not null default now()
 );
 insert into public.rds_settings(id) values('main') on conflict(id) do nothing;
+alter table public.rds_settings add column if not exists bot_cooldown_seconds integer not null default 12;
+alter table public.rds_settings add column if not exists auto_create_contacts boolean not null default true;
+alter table public.rds_settings add column if not exists last_bot_test_at timestamptz;
 
 create table if not exists public.rds_contacts (
   id uuid primary key default gen_random_uuid(),
@@ -35,6 +37,13 @@ create table if not exists public.rds_contacts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.rds_contacts add column if not exists city text not null default '';
+alter table public.rds_contacts add column if not exists tags text not null default '';
+alter table public.rds_contacts add column if not exists wa_valid boolean;
+alter table public.rds_contacts add column if not exists wa_checked_at timestamptz;
+alter table public.rds_contacts add column if not exists last_interaction_at timestamptz;
+alter table public.rds_contacts add column if not exists total_orders integer not null default 0;
+alter table public.rds_contacts add column if not exists total_purchases integer not null default 0;
 create index if not exists rds_contacts_group_idx on public.rds_contacts(group_name,status);
 
 create table if not exists public.rds_campaigns (
@@ -48,6 +57,9 @@ create table if not exists public.rds_campaigns (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.rds_campaigns add column if not exists selected_contact_ids jsonb not null default '[]'::jsonb;
+alter table public.rds_campaigns add column if not exists paused_at timestamptz;
+alter table public.rds_campaigns add column if not exists archived boolean not null default false;
 
 create table if not exists public.rds_campaign_steps (
   id uuid primary key default gen_random_uuid(),
@@ -91,7 +103,11 @@ create table if not exists public.rds_deliveries (
   updated_at timestamptz not null default now(),
   unique(recipient_id,step_index)
 );
+alter table public.rds_deliveries add column if not exists delivered_at timestamptz;
+alter table public.rds_deliveries add column if not exists read_at timestamptz;
+alter table public.rds_deliveries add column if not exists target_jid text;
 create index if not exists rds_deliveries_due_idx on public.rds_deliveries(status,scheduled_at);
+create index if not exists rds_deliveries_wa_idx on public.rds_deliveries(wa_message_id);
 
 create table if not exists public.rds_messages (
   id uuid primary key default gen_random_uuid(),
@@ -143,4 +159,21 @@ create table if not exists public.rds_events (
   created_at timestamptz not null default now()
 );
 
-select 'CANAL DE VENDAS RDS V6.0 - MIGRACAO APLICADA COM SUCESSO' as resultado;
+create table if not exists public.rds_conversations (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid references public.rds_contacts(id) on delete set null,
+  phone text not null unique,
+  stage text not null default 'NOVO_CONTATO',
+  unread_count integer not null default 0,
+  last_inbound_text text not null default '',
+  last_inbound_at timestamptz,
+  last_outbound_at timestamptz,
+  bot_last_reply_at timestamptz,
+  current_order_id uuid,
+  current_campaign_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists rds_conversations_stage_idx on public.rds_conversations(stage,updated_at desc);
+
+select 'CANAL DE VENDAS RDS V6.1 - MIGRACAO APLICADA COM SUCESSO' as resultado;
