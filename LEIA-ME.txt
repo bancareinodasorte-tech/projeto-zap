@@ -1,25 +1,10 @@
-PROJETO ZAP V5.8.1 — CORREÇÃO DE SESSÃO
+PROJETO ZAP V5.8.2 — CORREÇÃO DE SESSÃO INTERNA
 
-O QUE FOI CORRIGIDO
-- Corrigido erro “Sessão ausente” ao salvar rascunho ou agendar campanha.
-- Sessão do Supabase agora é validada e renovada automaticamente quando existe refresh token.
-- Em sessão vencida/ausente, o sistema abre uma tela segura de acesso em vez de deixar os botões falharem.
-- Mantida a conexão WhatsApp/Baileys e toda a estrutura da V5.8.
-- Cache do PWA atualizado para evitar carregar app.js antigo.
+- Remove o login obrigatório do Supabase nesta etapa.
+- O backend usa uma identidade interna estável para o operador único.
+- Preserva contatos, campanhas, agendamento, WhatsApp e bot da V5.8.
+- NÃO execute nova migração SQL.
+- Envie estes arquivos com os mesmos nomes para substituir os atuais no GitHub.
+- Aguarde o deploy do Render e atualize a página.
 
-INSTALAÇÃO
-1. GITHUB: substitua os arquivos atuais pelos arquivos deste ZIP mantendo exatamente os mesmos nomes.
-2. RENDER: aguarde o deploy automático ou faça Manual Deploy > Deploy latest commit.
-3. SUPABASE: NÃO execute nova migração se a mensagem “PROJETO ZAP V5.8 - MIGRACAO CORRIGIDA APLICADA COM SUCESSO” já apareceu.
-4. Abra o Projeto Zap e atualize a página.
-
-SE APARECER “ENTRAR NO PAINEL”
-- Use o mesmo usuário/e-mail e senha do Supabase Auth que gerou a sessão anterior; OU
-- Abra “Usar token de acesso” e cole um access token válido.
-- Depois do login, a sessão fica salva no navegador e é renovada automaticamente quando houver refresh token.
-
-TESTE
-1. Confirme WhatsApp conectado.
-2. Abra Campanhas > Nova campanha.
-3. Preencha, escolha as imagens e clique Salvar rascunho ou Salvar e agendar.
-4. Não deve aparecer “Sessão ausente”.
+O login multioperador ficará para a etapa final do aplicativo.

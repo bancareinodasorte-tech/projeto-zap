@@ -32,18 +32,26 @@ async function sb(path,opt={},service=true){
   if(!r.ok) throw new Error(data?.message||data?.details||data?.hint||`Supabase ${r.status}`);
   return data;
 }
-async function verifyUser(req,res,next){
-  try{
-    const token=(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-    if(!token)return res.status(401).json({error:'Sessão ausente.'});
-    const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}});
-    const u=await r.json(); if(!r.ok||!u?.id)return res.status(401).json({error:'Sessão inválida.'});
-    req.user=u;next();
-  }catch(e){res.status(401).json({error:'Não foi possível validar a sessão.'})}
+const OWNER_ENV=String(process.env.PROJETO_ZAP_OWNER_ID||process.env.DEFAULT_OWNER_ID||'').trim();
+let resolvedOwnerId='';
+const isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v||''));
+async function resolveOwnerId(){
+  if(isUuid(OWNER_ENV))return OWNER_ENV;
+  if(isUuid(resolvedOwnerId))return resolvedOwnerId;
+  try{const saved=await authRead('app-owner-id');if(isUuid(saved)){resolvedOwnerId=saved;return resolvedOwnerId}}catch{}
+  for(const table of ['pz_contacts','pz_campaigns','pz_settings','pz_orders']){
+    try{const rows=await sb(`/rest/v1/${table}?select=owner_id&owner_id=not.is.null&limit=1`);const id=rows?.[0]?.owner_id;if(isUuid(id)){resolvedOwnerId=id;break}}catch{}
+  }
+  if(!isUuid(resolvedOwnerId))resolvedOwnerId=crypto.randomUUID();
+  try{await authWrite('app-owner-id',resolvedOwnerId)}catch{}
+  return resolvedOwnerId;
 }
-
-app.get('/api/auth/config',(req,res)=>{res.setHeader('Cache-Control','no-store');res.json({supabaseUrl:SUPABASE_URL,anonKey:SUPABASE_ANON_KEY})});
-app.get('/api/auth/me',verifyUser,(req,res)=>res.json({id:req.user.id,email:req.user.email||null}));
+async function verifyUser(req,res,next){
+  try{req.user={id:await resolveOwnerId(),email:null,mode:'single-operator'};next()}
+  catch(e){res.status(500).json({error:'Não foi possível iniciar a sessão interna do Projeto Zap.'})}
+}
+app.get('/api/auth/config',(req,res)=>{res.setHeader('Cache-Control','no-store');res.json({mode:'single-operator',loginRequired:false})});
+app.get('/api/auth/me',verifyUser,(req,res)=>res.json({id:req.user.id,email:null,mode:'single-operator'}));
 
 // ---------- WhatsApp: mantém a base estável aprovada ----------
 let sock=null,starting=false,connected=false,qrDataUrl='',connectedNumber='',lastError='',lastConnectionAt=null;
@@ -58,7 +66,7 @@ async function startWhatsApp(force=false){
   if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSocket();
   try{
     const {state,saveCreds}=await useSupabaseAuthState();const {version}=await fetchLatestBaileysVersion();
-    sock=makeWASocket({version,auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:['Projeto Zap','Chrome','5.8.1'],markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});
+    sock=makeWASocket({version,auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:['Projeto Zap','Chrome','5.8.2'],markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});
     sock.ev.on('creds.update',saveCreds);
     sock.ev.on('connection.update',async update=>{
       const {connection,lastDisconnect,qr}=update;
@@ -158,11 +166,11 @@ async function processDueDeliveries(limit=30){
 setInterval(()=>processDueDeliveries().catch(e=>console.error('scheduler',e.message)),SCHEDULER_INTERVAL_MS).unref();
 
 // ---------- API ----------
-app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap-v5.8',connector:'baileys',connected}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap-v5.8.2',connector:'baileys',connected}));
 app.get('/api/whatsapp/status',verifyUser,(req,res)=>res.json({ok:true,connected,starting,number:connectedNumber||null,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt}));
 app.post('/api/whatsapp/connect',verifyUser,async(req,res)=>{try{await startWhatsApp(Boolean(req.body?.force));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/pairing-code',verifyUser,async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!/^55\d{10,11}$/.test(phone))return res.status(400).json({error:'Telefone inválido.'});if(!sock)await startWhatsApp(false);if(connected)return res.json({ok:true,connected:true});const code=await sock.requestPairingCode(phone);res.json({ok:true,code})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/send-test',verifyUser,async(req,res)=>{try{const d=await sendText(req.body?.to,req.body?.text||'Teste Projeto Zap V5.8.1 ✅');res.json({ok:true,...d})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/send-test',verifyUser,async(req,res)=>{try{const d=await sendText(req.body?.to,req.body?.text||'Teste Projeto Zap V5.8.2 ✅');res.json({ok:true,...d})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/logout',verifyUser,async(req,res)=>{try{if(sock)try{await sock.logout()}catch{}await closeSocket();await authClearAll();qrDataUrl='';lastError='';res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 
 app.get('/api/dashboard',verifyUser,async(req,res)=>{try{const oid=req.user.id;const [contacts,campaigns,returns,orders]=await Promise.all([sb(`/rest/v1/pz_contacts?owner_id=eq.${oid}&select=id,status`),sb(`/rest/v1/pz_campaigns?owner_id=eq.${oid}&select=id,status,start_at,name&order=created_at.desc`),sb(`/rest/v1/pz_campaign_recipients?owner_id=eq.${oid}&recipient_status=in.(RESPONDEU,PEDIDO,AGUARDANDO_COMPROVANTE,AGUARDANDO_CONFERENCIA)&select=id`),sb(`/rest/v1/pz_orders?owner_id=eq.${oid}&select=id,status`)]);res.json({contacts:(contacts||[]).length,campaigns:(campaigns||[]).length,scheduled:(campaigns||[]).filter(x=>x.status==='AGENDADA').length,running:(campaigns||[]).filter(x=>x.status==='EM_EXECUCAO').length,returns:(returns||[]).length,purchases:(orders||[]).filter(x=>x.status==='CONCLUIDA').length,next:(campaigns||[]).filter(x=>['RASCUNHO','AGENDADA'].includes(x.status)).sort((a,b)=>String(a.start_at).localeCompare(String(b.start_at))).slice(0,5)})}catch(e){res.status(500).json({error:e.message})}});
