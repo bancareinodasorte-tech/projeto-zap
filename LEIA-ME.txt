@@ -1,0 +1,32 @@
+PROJETO ZAP V5.9.1 — pacote completo
+
+ATUALIZAÇÃO:
+1. Envie todos os arquivos deste pacote para a raiz do mesmo repositório GitHub.
+2. Substitua os arquivos com os mesmos nomes. Não crie pastas/versionamentos extras.
+3. Aguarde o deploy do Render concluir.
+4. Reabra o sistema e atualize a página.
+
+NÃO execute SQL para esta atualização se a V5.8.4 já estava abrindo e operando.
+
+PRINCIPAIS AJUSTES:
+- WhatsApp usa novamente o motor estável com cache de retry/getMessage e resolução PN/LID.
+- Retornos por @lid passam a ser associados ao telefone/contato correto.
+- Bot: intenção -> coleta de dados -> PIX -> comprovante -> conferência manual -> finalização.
+- Importação VCF/CSV com seleção antes de salvar; duplicados ficam desmarcados.
+- Se um duplicado já cadastrado for selecionado, ele é atualizado/mesclado, não duplicado.
+- Campanhas = criação/configuração/agendamento.
+- Execução = acompanhamento de filas ativadas.
+- Retornos mostram última mensagem recebida e etapa do atendimento.
+
+CORREÇÃO V5.9.1
+- Removida a dependência externa node-cache, que era a única dependência nova em relação à base que já compilava no Render.
+- O cache de retry de mensagens agora usa implementação interna em memória, sem pacote adicional.
+- Mantidos os mesmos 11 nomes fixos de arquivos para substituir os existentes no GitHub.
+- O arquivo .env.example é oculto em alguns gerenciadores de arquivos por começar com ponto.
+
+INSTALAÇÃO RÁPIDA
+1. Extraia este ZIP.
+2. Envie os 11 arquivos para a raiz do repositório GitHub e escolha substituir os existentes.
+3. Não crie arquivos com nome de versão dentro do GitHub.
+4. Aguarde o Render concluir o deploy.
+5. Depois teste /health e o Teste rápido do WhatsApp.
