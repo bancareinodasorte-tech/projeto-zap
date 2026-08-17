@@ -4,12 +4,62 @@ const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');se
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function fmtDate(v){if(!v)return'-';try{return new Date(v).toLocaleString('pt-BR')}catch{return v}}
 function money(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
-function getToken(){
-  const direct=['pz_access_token','projetoZapAccessToken','access_token'].map(k=>localStorage.getItem(k)).find(Boolean);if(direct)return direct;
-  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k||!k.includes('auth-token'))continue;try{const x=JSON.parse(localStorage.getItem(k));if(x?.access_token)return x.access_token;if(x?.currentSession?.access_token)return x.currentSession.access_token}catch{}}
-  return '';
+const AUTH_STORE='pz_auth_session';
+let authConfig=null,authRefreshPromise=null,authReadyPromise=null;
+function readStoredSession(){
+  const keys=[AUTH_STORE];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.includes('auth-token')&&!keys.includes(k))keys.push(k)}
+  let fallback=null;
+  for(const k of keys){try{const raw=localStorage.getItem(k);if(!raw)continue;const x=JSON.parse(raw);const s=x?.currentSession||x?.session||x;if(s?.access_token){const found={...s,_storageKey:k};if(found.refresh_token)return found;if(!fallback)fallback=found}}catch{}}
+  if(fallback)return fallback;
+  for(const k of ['pz_access_token','projetoZapAccessToken','access_token']){const token=localStorage.getItem(k);if(token)return {access_token:token,_storageKey:k}}
+  return null;
 }
-async function api(path,opt={}){const token=getToken();const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(opt.headers||{})}});const txt=await r.text();let data={};try{data=txt?JSON.parse(txt):{}}catch{data={error:txt}}if(!r.ok)throw new Error(data.error||`Erro ${r.status}`);return data}
+function saveSession(s,storageKey=AUTH_STORE){
+  if(!s?.access_token)return;
+  const clean={access_token:s.access_token,refresh_token:s.refresh_token||null,expires_at:s.expires_at||null,expires_in:s.expires_in||null,token_type:s.token_type||'bearer',user:s.user||null};
+  localStorage.setItem(AUTH_STORE,JSON.stringify(clean));
+  localStorage.setItem('pz_access_token',s.access_token);
+  if(storageKey&&storageKey!==AUTH_STORE&&storageKey!=='pz_access_token'){try{const old=JSON.parse(localStorage.getItem(storageKey)||'{}');localStorage.setItem(storageKey,JSON.stringify({...old,...clean}))}catch{}}
+}
+function clearSession(){['pz_access_token','projetoZapAccessToken','access_token',AUTH_STORE].forEach(k=>localStorage.removeItem(k))}
+function getToken(){return readStoredSession()?.access_token||''}
+async function getAuthConfig(){if(authConfig)return authConfig;const r=await fetch('/api/auth/config',{cache:'no-store'});if(!r.ok)throw new Error('Não foi possível carregar a configuração de acesso.');authConfig=await r.json();return authConfig}
+async function validateToken(token){if(!token)return null;const r=await fetch('/api/auth/me',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});if(!r.ok)return null;return r.json()}
+async function refreshSession(){
+  if(authRefreshPromise)return authRefreshPromise;
+  authRefreshPromise=(async()=>{const s=readStoredSession();if(!s?.refresh_token)return null;const cfg=await getAuthConfig();const r=await fetch(`${cfg.supabaseUrl}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:cfg.anonKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});if(!r.ok)return null;const n=await r.json();saveSession(n,s._storageKey);return n})();
+  try{return await authRefreshPromise}finally{authRefreshPromise=null}
+}
+function showAuth(reason='Sua sessão do painel expirou ou não está disponível.'){$('#authReason').textContent=reason;$('#authGate').classList.add('open');document.body.classList.add('auth-locked')}
+function hideAuth(){$('#authGate').classList.remove('open');document.body.classList.remove('auth-locked')}
+async function ensureSession(showGate=true){
+  const s=readStoredSession();
+  if(s?.access_token&&await validateToken(s.access_token)){hideAuth();return true}
+  const n=await refreshSession().catch(()=>null);
+  if(n?.access_token&&await validateToken(n.access_token)){hideAuth();return true}
+  if(showGate)showAuth(s?'Sua sessão expirou. Entre novamente para continuar.':'Faça login no painel para continuar.');
+  return false;
+}
+async function api(path,opt={},retry=true){
+  let token=getToken();
+  if(!token){const ok=await ensureSession(true);if(!ok)throw new Error('Sessão ausente. Faça login no painel.');token=getToken()}
+  const headers={'Content-Type':'application/json',Authorization:`Bearer ${token}`,...(opt.headers||{})};
+  const r=await fetch(path,{...opt,headers,cache:opt.cache||'no-store'});
+  if(r.status===401&&retry){const n=await refreshSession().catch(()=>null);if(n?.access_token)return api(path,opt,false);showAuth('Sua sessão expirou. Entre novamente para continuar.');throw new Error('Sessão expirada.')}
+  const txt=await r.text();let data={};try{data=txt?JSON.parse(txt):{}}catch{data={error:txt}}if(!r.ok)throw new Error(data.error||`Erro ${r.status}`);return data
+}
+async function loginWithPassword(){
+  const email=$('#authEmail').value.trim(),password=$('#authPassword').value;
+  if(!email||!password){$('#authError').textContent='Informe e-mail e senha.';return}
+  $('#authLoginBtn').disabled=true;$('#authError').textContent='Validando acesso…';
+  try{const cfg=await getAuthConfig();const r=await fetch(`${cfg.supabaseUrl}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:cfg.anonKey,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const d=await r.json();if(!r.ok||!d?.access_token)throw new Error(d?.error_description||d?.msg||d?.message||'E-mail ou senha inválidos.');saveSession(d);hideAuth();$('#authPassword').value='';$('#authError').textContent='';await refreshAllAfterLogin()}catch(e){$('#authError').textContent=e.message}finally{$('#authLoginBtn').disabled=false}
+}
+async function loginWithToken(){
+  const token=$('#authToken').value.trim();if(!token){$('#authError').textContent='Cole um token de acesso válido.';return}
+  $('#authError').textContent='Validando token…';const u=await validateToken(token).catch(()=>null);if(!u){$('#authError').textContent='Token inválido ou expirado.';return}saveSession({access_token:token,user:u});hideAuth();$('#authToken').value='';$('#authError').textContent='';await refreshAllAfterLogin()
+}
+async function refreshAllAfterLogin(){await Promise.allSettled([refreshWA(),loadDashboard()]);const active=$('.view.active')?.id;if(active==='contacts')loadContacts();if(active==='campaigns'||active==='execution')loadCampaigns();if(active==='returns')loadReturns();if(active==='orders')loadOrders();if(active==='settings')loadSettings()}
 function modal(html){$('#modalContent').innerHTML=html;$('#modal').classList.add('open')}
 function closeModal(){$('#modal').classList.remove('open');$('#modalContent').innerHTML=''}
 $('#modalClose').onclick=closeModal;$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
@@ -66,4 +116,5 @@ $('#pairBtn').onclick=async()=>{try{const r=await api('/api/whatsapp/pairing-cod
 $('#testBtn').onclick=async()=>{try{await api('/api/whatsapp/send-test',{method:'POST',body:JSON.stringify({to:$('#testPhone').value,text:$('#testText').value})});toast('Mensagem enviada ✅')}catch(e){toast(e.message)}};
 $('#logoutBtn').onclick=async()=>{if(!confirm('Desconectar a sessão do WhatsApp?'))return;try{await api('/api/whatsapp/logout',{method:'POST',body:'{}'});toast('WhatsApp desconectado');refreshWA()}catch(e){toast(e.message)}};
 
-(async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});await refreshWA();await loadDashboard();setInterval(refreshWA,30000)})();
+$('#authLoginBtn').onclick=loginWithPassword;$('#authTokenBtn').onclick=loginWithToken;$('#authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')loginWithPassword()});$('#authLogoutBtn').onclick=()=>{clearSession();showAuth('Sessão encerrada. Entre novamente para continuar.')};
+(async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});authReadyPromise=ensureSession(true);if(await authReadyPromise){await refreshWA();await loadDashboard()}setInterval(()=>{if(getToken())refreshWA()},30000)})();

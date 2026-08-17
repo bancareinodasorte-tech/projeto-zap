@@ -6,6 +6,7 @@ const {default:makeWASocket,DisconnectReason,fetchLatestBaileysVersion,initAuthC
 
 const app=express();
 app.use(express.json({limit:'12mb'}));
+app.use((req,res,next)=>{if(/\.(?:js|css|html|webmanifest)$/.test(req.path)||req.path==='/'||req.path==='/sw.js')res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');next()});
 app.use(express.static(__dirname,{extensions:['html']}));
 
 const PORT=process.env.PORT||3000;
@@ -41,6 +42,9 @@ async function verifyUser(req,res,next){
   }catch(e){res.status(401).json({error:'Não foi possível validar a sessão.'})}
 }
 
+app.get('/api/auth/config',(req,res)=>{res.setHeader('Cache-Control','no-store');res.json({supabaseUrl:SUPABASE_URL,anonKey:SUPABASE_ANON_KEY})});
+app.get('/api/auth/me',verifyUser,(req,res)=>res.json({id:req.user.id,email:req.user.email||null}));
+
 // ---------- WhatsApp: mantém a base estável aprovada ----------
 let sock=null,starting=false,connected=false,qrDataUrl='',connectedNumber='',lastError='',lastConnectionAt=null;
 async function authRead(id){const rows=await sb(`/rest/v1/zap_auth?select=value&id=eq.${encodeURIComponent(id)}&limit=1`);const row=Array.isArray(rows)?rows[0]:null;return row?JSON.parse(JSON.stringify(row.value),BufferJSON.reviver):null}
@@ -54,7 +58,7 @@ async function startWhatsApp(force=false){
   if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSocket();
   try{
     const {state,saveCreds}=await useSupabaseAuthState();const {version}=await fetchLatestBaileysVersion();
-    sock=makeWASocket({version,auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:['Projeto Zap','Chrome','5.8.0'],markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});
+    sock=makeWASocket({version,auth:state,printQRInTerminal:false,logger:pino({level:'silent'}),browser:['Projeto Zap','Chrome','5.8.1'],markOnlineOnConnect:false,syncFullHistory:false,shouldSyncHistoryMessage:()=>false,generateHighQualityLinkPreview:false});
     sock.ev.on('creds.update',saveCreds);
     sock.ev.on('connection.update',async update=>{
       const {connection,lastDisconnect,qr}=update;
@@ -158,7 +162,7 @@ app.get('/health',(req,res)=>res.json({ok:true,service:'projeto-zap-v5.8',connec
 app.get('/api/whatsapp/status',verifyUser,(req,res)=>res.json({ok:true,connected,starting,number:connectedNumber||null,qrAvailable:Boolean(qrDataUrl),qrDataUrl:qrDataUrl||null,lastError:lastError||null,lastConnectionAt}));
 app.post('/api/whatsapp/connect',verifyUser,async(req,res)=>{try{await startWhatsApp(Boolean(req.body?.force));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/pairing-code',verifyUser,async(req,res)=>{try{const phone=normalizeBR(req.body?.phone);if(!/^55\d{10,11}$/.test(phone))return res.status(400).json({error:'Telefone inválido.'});if(!sock)await startWhatsApp(false);if(connected)return res.json({ok:true,connected:true});const code=await sock.requestPairingCode(phone);res.json({ok:true,code})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/send-test',verifyUser,async(req,res)=>{try{const d=await sendText(req.body?.to,req.body?.text||'Teste Projeto Zap V5.8 ✅');res.json({ok:true,...d})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/whatsapp/send-test',verifyUser,async(req,res)=>{try{const d=await sendText(req.body?.to,req.body?.text||'Teste Projeto Zap V5.8.1 ✅');res.json({ok:true,...d})}catch(e){res.status(500).json({error:e.message})}});
 app.post('/api/whatsapp/logout',verifyUser,async(req,res)=>{try{if(sock)try{await sock.logout()}catch{}await closeSocket();await authClearAll();qrDataUrl='';lastError='';res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 
 app.get('/api/dashboard',verifyUser,async(req,res)=>{try{const oid=req.user.id;const [contacts,campaigns,returns,orders]=await Promise.all([sb(`/rest/v1/pz_contacts?owner_id=eq.${oid}&select=id,status`),sb(`/rest/v1/pz_campaigns?owner_id=eq.${oid}&select=id,status,start_at,name&order=created_at.desc`),sb(`/rest/v1/pz_campaign_recipients?owner_id=eq.${oid}&recipient_status=in.(RESPONDEU,PEDIDO,AGUARDANDO_COMPROVANTE,AGUARDANDO_CONFERENCIA)&select=id`),sb(`/rest/v1/pz_orders?owner_id=eq.${oid}&select=id,status`)]);res.json({contacts:(contacts||[]).length,campaigns:(campaigns||[]).length,scheduled:(campaigns||[]).filter(x=>x.status==='AGENDADA').length,running:(campaigns||[]).filter(x=>x.status==='EM_EXECUCAO').length,returns:(returns||[]).length,purchases:(orders||[]).filter(x=>x.status==='CONCLUIDA').length,next:(campaigns||[]).filter(x=>['RASCUNHO','AGENDADA'].includes(x.status)).sort((a,b)=>String(a.start_at).localeCompare(String(b.start_at))).slice(0,5)})}catch(e){res.status(500).json({error:e.message})}});

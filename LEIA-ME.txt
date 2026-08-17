@@ -1,51 +1,25 @@
-PROJETO ZAP V5.8 — INSTALAÇÃO
+PROJETO ZAP V5.8.1 — CORREÇÃO DE SESSÃO
 
-ARQUIVOS PRINCIPAIS (nomes fixos para substituir no GitHub):
-index.html
-app.js
-styles.css
-server.js
-package.json
-manifest.webmanifest
-icone.svg
-sw.js
-MIGRACAO.sql
-.env.example
+O QUE FOI CORRIGIDO
+- Corrigido erro “Sessão ausente” ao salvar rascunho ou agendar campanha.
+- Sessão do Supabase agora é validada e renovada automaticamente quando existe refresh token.
+- Em sessão vencida/ausente, o sistema abre uma tela segura de acesso em vez de deixar os botões falharem.
+- Mantida a conexão WhatsApp/Baileys e toda a estrutura da V5.8.
+- Cache do PWA atualizado para evitar carregar app.js antigo.
 
-PASSO 1 — SUPABASE
-Abra SQL Editor, cole TODO o conteúdo de MIGRACAO.sql e execute uma única vez.
-Resultado esperado: PROJETO ZAP V5.8 - MIGRAÇÃO APLICADA COM SUCESSO.
+INSTALAÇÃO
+1. GITHUB: substitua os arquivos atuais pelos arquivos deste ZIP mantendo exatamente os mesmos nomes.
+2. RENDER: aguarde o deploy automático ou faça Manual Deploy > Deploy latest commit.
+3. SUPABASE: NÃO execute nova migração se a mensagem “PROJETO ZAP V5.8 - MIGRACAO CORRIGIDA APLICADA COM SUCESSO” já apareceu.
+4. Abra o Projeto Zap e atualize a página.
 
-PASSO 2 — GITHUB
-No repositório atual, substitua os arquivos pelos arquivos deste pacote.
-Não renomeie index.html, app.js, styles.css, server.js ou package.json.
-Os nomes são fixos justamente para não criar novas cópias a cada versão.
+SE APARECER “ENTRAR NO PAINEL”
+- Use o mesmo usuário/e-mail e senha do Supabase Auth que gerou a sessão anterior; OU
+- Abra “Usar token de acesso” e cole um access token válido.
+- Depois do login, a sessão fica salva no navegador e é renovada automaticamente quando houver refresh token.
 
-PASSO 3 — RENDER
-Mantenha as variáveis já usadas:
-SUPABASE_URL
-SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-FRONTEND_ORIGIN
-
-Não é necessário META_PHONE_NUMBER_ID. A conexão permanece via Baileys/QR/código.
-Faça o deploy/redeploy depois do upload do GitHub.
-
-PASSO 4 — TESTE CURTO
-1. Ajustes: confirme “WhatsApp conectado”.
-2. Teste rápido: envie 1 mensagem.
-3. Contatos: cadastre ou importe VCF/CSV.
-4. Campanhas: crie uma campanha, defina o primeiro horário e adicione as mensagens 1/2/3.
-5. Escolha Todos, Grupo, Manual ou Todos exceto selecionados.
-6. Salvar e agendar.
-7. Execução: acompanhe a fila.
-8. Responda pelo WhatsApp e confira Retornos.
-9. Para comprovante, envie imagem/PDF; ele entra em conferência manual.
-10. Compras: confirmar PIX e depois finalizar compra.
-
-IMPORTANTE
-- Salvar campanha NÃO envia imediatamente. O primeiro envio respeita start_at.
-- Reenvios são cancelados quando o destinatário responde ou conclui compra.
-- A imagem selecionada mostra miniatura antes de salvar.
-- Importação VCF/CSV mostra prévia e valida números antes de gravar.
-- Foto/PDF não é considerado pagamento confirmado automaticamente. O operador confirma o PIX.
+TESTE
+1. Confirme WhatsApp conectado.
+2. Abra Campanhas > Nova campanha.
+3. Preencha, escolha as imagens e clique Salvar rascunho ou Salvar e agendar.
+4. Não deve aparecer “Sessão ausente”.
