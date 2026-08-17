@@ -1,4 +1,4 @@
-PROJETO ZAP V5.8.3 — CORREÇÃO OPERACIONAL COMPLETA
+PROJETO ZAP V5.8.4 — CORREÇÃO OPERACIONAL COMPLETA
 
 Correções desta versão:
 - Contatos voltam a salvar sem depender de ON CONFLICT/constraint do banco antigo.
