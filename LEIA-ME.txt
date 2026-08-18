@@ -1,58 +1,55 @@
-CANAL DE VENDAS RDS — V6.2 CORRIGIDA
+CANAL DE VENDAS RDS — V10 FINAL
+================================
 
-PACOTE COM 11 ARQUIVOS. Os nomes internos são fixos e SEM versão para SUBSTITUIR os arquivos antigos no GitHub, sem acumular novos nomes.
+OBJETIVO
+Versão reconstruída sobre um banco V10 próprio (tabelas rds10_*), sem depender das estruturas quebradas das versões V5/V6. A sessão do WhatsApp continua usando zap_auth para poder reaproveitar a conexão existente.
 
-11 arquivos:
-1. server.js
-2. app.js
-3. index.html
-4. styles.css
-5. package.json
-6. manifest.webmanifest
-7. sw.js
-8. icone.svg
-9. MIGRACAO.sql
-10. LEIA-ME.txt
-11. .env.exemplo
+INSTALAÇÃO — ORDEM EXATA
+1) SUPABASE
+   - Abra SQL Editor > New query.
+   - Cole TODO o conteúdo de MIGRACAO-V10.sql.
+   - Clique Run UMA VEZ.
+   - O resultado esperado no final é:
+     CANAL DE VENDAS RDS V10 FINAL - BANCO INSTALADO COM SUCESSO
+   - A migração é idempotente: pode ser executada novamente sem apagar dados V10.
 
-CORREÇÕES BASEADAS NOS PRINTS E TESTES:
-- Campanha não dispara ao salvar/ativar: fila só envia quando scheduled_at chega ao horário.
-- Horário do primeiro envio preservado em ISO/UTC; tela converte para horário local.
-- Lembretes são cumulativos a partir do envio anterior.
-- Campanhas e Execução deixaram de ter a mesma função: Campanhas configura; Execução mostra a fila real.
-- Seleção de público: todos, grupo e contatos individuais.
-- Cadastro de contato: grupo agora é LISTA de grupos já criados.
-- Opção + Criar novo grupo e Gerenciar grupos.
-- Grupos padrão: NOVOS, INTERESSADOS, CLIENTES, COMPRA REALIZADA, VIP, INATIVOS, ENTRADA WHATSAPP.
-- Importação VCF/CSV lê FN/N para preservar nomes.
-- Prévia da importação: duplicados/inválidos ficam identificados e desmarcados; operador escolhe o que salvar.
-- Bot responde qualquer número, mesmo fora da agenda, e cria contato ENTRADA WHATSAPP.
-- Bot comercial: interesse -> coleta Nome/Quantidade/Contato -> calcula total -> PIX -> comprovante -> alerta -> confirmação manual -> conclusão.
-- Imagem/PDF recebido entra como COMPROVANTE_RECEBIDO.
-- Operador confirma pagamento no painel.
-- Ao enviar imagem/PDF dos bilhetes depois da confirmação, o sistema pode concluir automaticamente e enviar mensagem final.
-- CTA de compra por campanha com token da campanha.
-- Imagem de campanha pode ser removida/trocada antes da ativação.
-- Bot mostra data/hora da última configuração salva.
+2) GITHUB
+   - No repositório atual, substitua os arquivos de mesmo nome pelos arquivos deste pacote.
+   - NÃO renomeie app.js, server.js, index.html, styles.css, package.json, sw.js, manifest.webmanifest ou icone.svg.
+   - MIGRACAO-V10.sql, LEIA-ME.txt e CHECKLIST-TESTE-V10.txt podem permanecer no repositório.
 
-INSTALAÇÃO
-1) GitHub: suba os 11 arquivos na RAIZ do repositório. Eles devem substituir os arquivos com os mesmos nomes.
-2) Supabase: abra SQL Editor, cole TODO o MIGRACAO.sql e execute UMA VEZ. Resultado esperado: CANAL DE VENDAS RDS V6.2 - MIGRAÇÃO APLICADA COM SUCESSO.
-3) Render: aguarde deploy automático ou Manual Deploy > Deploy latest commit.
-4) Variáveis do Render: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY precisam continuar configuradas.
-5) Abra o sistema, Ajustes, confirme WhatsApp conectado e salve o bot.
+3) RENDER
+   - Confirme as variáveis existentes:
+     SUPABASE_URL
+     SUPABASE_SERVICE_ROLE_KEY
+   - O Start Command deve ser: npm start
+   - Aguarde o deploy ficar Live.
 
-TESTE PRINCIPAL DO AGENDAMENTO
-- Crie campanha para UM contato.
-- Marque primeiro envio para alguns minutos no futuro.
-- Salve: NÃO deve enviar.
-- Ative: NÃO deve enviar antes do horário.
-- Abra Execução: deve aparecer AGENDADA.
-- Somente no horário deverá mudar para ENVIADA.
+4) PRIMEIRA ABERTURA
+   - Abra Ajustes > Diagnóstico.
+   - Todas as tabelas rds10_* devem aparecer OK.
+   - Confira se WhatsApp está conectado. Se não estiver, gere novo QR.
+   - Salve as configurações do bot e faça um teste para um número seu.
 
-TESTE DO BOT
-- Do telefone recebedor envie QUERO COMPRAR.
-- Preencha Nome, Quantidade e Contato.
-- Confira cálculo + PIX.
-- Envie imagem/PDF do comprovante.
-- Abra Compras e confirme pagamento.
+PRINCIPAIS RECURSOS V10
+- Banco novo e independente das tabelas conflitantes V5/V6.
+- Campanha em RASCUNHO não envia nada.
+- Ativação cria a fila, mas só envia quando scheduled_at chegar.
+- Sequência de lembretes por minutos, com imagem opcional em cada etapa.
+- Segmentação por todos, grupo ou contatos individuais.
+- CTA clicável PEDIR AGORA usando código curto da campanha.
+- Interrompe futuros lembretes quando o cliente inicia pedido.
+- Bot aceita QUERO COMPRAR e também frases como QUERO 2.
+- Quantidade pode ser detectada diretamente da mensagem.
+- Cliente novo que manda mensagem entra automaticamente na carteira.
+- Opt-out: cliente pode pedir para parar mensagens e é excluído da automação.
+- Handoff para escritório por palavras como ATENDENTE/ESCRITÓRIO.
+- Comprovante por imagem/PDF gera alerta e muda o pedido de etapa.
+- Confirmação de pagamento permanece manual pelo operador.
+- Envio de bilhete pelo operador após pagamento confirmado conclui o pedido automaticamente quando for mídia/documento.
+- Dashboard com fila, envios, entregas, leituras, interesses, comprovantes, compras e receita.
+- Diagnóstico interno do schema V10.
+- Importação VCF/CSV com prévia, nomes, duplicados e inválidos antes de salvar.
+
+IMPORTANTE
+A V10 foi validada por análise estática/sintática e consistência interna do pacote. A conexão real com Supabase, Render e WhatsApp depende das credenciais e do ambiente online; por isso use CHECKLIST-TESTE-V10.txt antes de operação em massa.

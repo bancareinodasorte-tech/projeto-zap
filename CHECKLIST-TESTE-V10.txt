@@ -1,0 +1,49 @@
+CHECKLIST DE HOMOLOGAÇÃO — CANAL DE VENDAS RDS V10 FINAL
+========================================================
+
+FASE 1 — BANCO E CONEXÃO
+[ ] Executar MIGRACAO-V10.sql e obter mensagem de sucesso.
+[ ] Abrir Ajustes > Diagnóstico e confirmar todas as tabelas rds10_* = OK.
+[ ] Confirmar WhatsApp conectado.
+[ ] Enviar mensagem de teste e conferir no WhatsApp Web E no celular.
+
+FASE 2 — BOT
+[ ] Salvar bot sem erro.
+[ ] Enviar QUERO COMPRAR de um número recebedor.
+[ ] Bot pedir quantidade.
+[ ] Responder QUERO 2.
+[ ] Bot calcular 2 x preço configurado e enviar PIX.
+[ ] Enviar imagem/PDF como comprovante.
+[ ] Pedido aparecer como COMPROVANTE_RECEBIDO.
+[ ] Confirmar pagamento pelo painel.
+[ ] Cliente receber confirmação.
+[ ] Operador enviar imagem/PDF dos bilhetes.
+[ ] Pedido concluir e cliente receber mensagem final.
+
+FASE 3 — CAMPANHA
+[ ] Criar campanha para 1 contato individual.
+[ ] Programar primeiro envio pelo menos 5 minutos no futuro.
+[ ] Criar etapa 2 após 2 min e etapa 3 após 2 min.
+[ ] Salvar: confirmar que NADA é enviado.
+[ ] Ativar: confirmar que NADA é enviado antes do horário.
+[ ] Abrir Execução e conferir fila com horários previstos.
+[ ] No horário, conferir recebimento no celular e WhatsApp Web.
+[ ] Clicar PEDIR AGORA e confirmar abertura do WhatsApp com RDS:XXXXXXXX.
+[ ] Enviar a mensagem pronta e confirmar início do pedido.
+[ ] Confirmar cancelamento dos próximos lembretes daquele cliente.
+
+FASE 4 — CONTATOS
+[ ] Criar contato escolhendo grupo da lista.
+[ ] Criar um novo grupo manualmente.
+[ ] Importar VCF do iPhone/Android.
+[ ] Confirmar nomes e números na prévia.
+[ ] Confirmar duplicados desmarcados.
+[ ] Desmarcar manualmente um contato antes de salvar.
+[ ] Salvar e conferir nomes preservados.
+
+FASE 5 — SAÍDA/ATENDENTE
+[ ] Enviar ATENDENTE e conferir link do escritório.
+[ ] Enviar NÃO QUERO RECEBER.
+[ ] Confirmar contato como não receber e futuros envios cancelados.
+
+SÓ DEPOIS DESTAS 5 FASES use campanhas em massa.

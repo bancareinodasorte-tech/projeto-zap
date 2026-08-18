@@ -1,0 +1,1 @@
+V10 usa exclusivamente as tabelas rds10_* para dados do sistema, mantendo apenas zap_auth compartilhada para sessão WhatsApp. Isso elimina os dois conflitos observados na V6.2: pz_settings.id bigint versus "main" e ausência da coluna phone em pz_campaign_deliveries.
