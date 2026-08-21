@@ -33,6 +33,15 @@ function normalizeBR(v){
   return n;
 }
 function shortCode(){ return crypto.randomBytes(4).toString('hex').toUpperCase(); }
+async function uniqueCampaignCode(){
+  for(let i=0;i<20;i++){
+    const code=shortCode();
+    const byCode=await one('rds10_campaigns',`select=id&code=eq.${encodeURIComponent(code)}`);
+    const byLegacy=await one('rds10_campaigns',`select=id&short_code=eq.${encodeURIComponent(code)}`).catch(()=>null);
+    if(!byCode && !byLegacy) return code;
+  }
+  return crypto.randomBytes(8).toString('hex').toUpperCase();
+}
 function orderCode(){ return 'RDS-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function money(v){ return Number(v || 0).toFixed(2).replace('.', ','); }
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
@@ -187,7 +196,7 @@ async function startWhatsApp(force=false){
       auth: state,
       printQRInTerminal:false,
       logger:pino({level:'silent'}),
-      browser:['CANAL DE VENDAS RDS','Chrome','10.2.1'],
+      browser:['CANAL DE VENDAS RDS','Chrome','10.2.2'],
       markOnlineOnConnect:false,
       syncFullHistory:false,
       shouldSyncHistoryMessage:()=>false,
@@ -502,7 +511,7 @@ setInterval(()=>{
 }, 120000);
 
 // ---------------- API ----------------
-app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.1',connected,lastConnectionAt,lastError}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.2',connected,lastConnectionAt,lastError}));
 app.get('/api/status',(req,res)=>res.json({ok:true,connected,number:connectedNumber||null,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size}));
 app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/whatsapp/logout',async(req,res)=>{ try{ if(sock) try{await sock.logout();}catch{}; await closeSocket(); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
@@ -544,15 +553,15 @@ app.post('/api/contacts/import',async(req,res)=>{
 app.get('/api/campaigns',async(req,res)=>{ try{ const cs=await list('rds10_campaigns','select=*&order=created_at.desc'); for(const c of cs){ const ds=await list('rds10_deliveries',`select=status&campaign_id=eq.${c.id}`); c.metrics={total:ds.length,queue:ds.filter(x=>x.status==='AGENDADA').length,sent:ds.filter(x=>x.status==='ENVIADA').length,failed:ds.filter(x=>x.status==='FALHA').length,cancelled:ds.filter(x=>x.status==='CANCELADA').length}; } res.json(cs);}catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/campaigns',async(req,res)=>{
   try{
-    const b=req.body||{}; const code=shortCode();
-    const rows=await insert('rds10_campaigns',{code,name:cleanText(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:Array.isArray(b.selected_contact_ids)?b.selected_contact_ids:[],cta_enabled:b.cta_enabled!==false,status:'RASCUNHO',created_at:nowISO(),updated_at:nowISO()});
+    const b=req.body||{}; const code=await uniqueCampaignCode();
+    const rows=await insert('rds10_campaigns',{code,short_code:code,name:cleanText(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:Array.isArray(b.selected_contact_ids)?b.selected_contact_ids:[],cta_enabled:b.cta_enabled!==false,status:'RASCUNHO',created_at:nowISO(),updated_at:nowISO()});
     const c=rows[0]; const steps=Array.isArray(b.steps)?b.steps:[];
     for(let i=0;i<steps.length;i++) await insert('rds10_campaign_steps',{campaign_id:c.id,step_index:i+1,delay_minutes:i===0?0:Number(steps[i].delay_minutes||0),message:cleanText(steps[i].message),created_at:nowISO()},'minimal');
     res.json(c);
   }catch(e){res.status(400).json({error:e.message});}
 });
 app.post('/api/campaigns/:id/activate',async(req,res)=>{ try{res.json({ok:true,...await activateCampaign(req.params.id)});}catch(e){res.status(400).json({error:e.message});} });
-app.post('/api/campaigns/:id/duplicate',async(req,res)=>{ try{ const c=await one('rds10_campaigns',`select=*&id=eq.${req.params.id}`); const steps=await list('rds10_campaign_steps',`select=*&campaign_id=eq.${req.params.id}&order=step_index.asc`); const rows=await insert('rds10_campaigns',{...c,id:undefined,code:shortCode(),name:`${c.name} (cópia)`,status:'RASCUNHO',activated_at:null,created_at:nowISO(),updated_at:nowISO()}); const nc=rows[0]; for(const s of steps) await insert('rds10_campaign_steps',{campaign_id:nc.id,step_index:s.step_index,delay_minutes:s.delay_minutes,message:s.message,created_at:nowISO()},'minimal'); res.json(nc);}catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/campaigns/:id/duplicate',async(req,res)=>{ try{ const c=await one('rds10_campaigns',`select=*&id=eq.${req.params.id}`); const steps=await list('rds10_campaign_steps',`select=*&campaign_id=eq.${req.params.id}&order=step_index.asc`); const newCode=await uniqueCampaignCode(); const rows=await insert('rds10_campaigns',{...c,id:undefined,code:newCode,short_code:newCode,name:`${c.name} (cópia)`,status:'RASCUNHO',activated_at:null,created_at:nowISO(),updated_at:nowISO()}); const nc=rows[0]; for(const s of steps) await insert('rds10_campaign_steps',{campaign_id:nc.id,step_index:s.step_index,delay_minutes:s.delay_minutes,message:s.message,created_at:nowISO()},'minimal'); res.json(nc);}catch(e){res.status(400).json({error:e.message});} });
 app.delete('/api/campaigns/:id',async(req,res)=>{ try{await del('rds10_deliveries',`campaign_id=eq.${req.params.id}`);await del('rds10_campaign_steps',`campaign_id=eq.${req.params.id}`);await del('rds10_campaigns',`id=eq.${req.params.id}`);res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
 app.get('/api/campaigns/:id/details',async(req,res)=>{ try{ const c=await one('rds10_campaigns',`select=*&id=eq.${req.params.id}`); const steps=await list('rds10_campaign_steps',`select=*&campaign_id=eq.${req.params.id}&order=step_index.asc`); const deliveries=await list('rds10_deliveries',`select=*&campaign_id=eq.${req.params.id}&order=scheduled_at.asc`); res.json({campaign:c,steps,deliveries});}catch(e){res.status(500).json({error:e.message});} });
 
@@ -574,11 +583,11 @@ app.post('/api/alerts/read-all',async(req,res)=>{ try{await patch('rds10_alerts'
 app.get('/api/diagnostic',async(req,res)=>{
   const tables=['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_settings','rds10_orders','rds10_alerts','rds10_events','zap_auth'];
   const db={}; for(const t of tables){ try{await list(t,'select=*&limit=1');db[t]='OK';}catch(e){db[t]=e.message;} }
-  res.json({version:'10.2.1',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
+  res.json({version:'10.2.2',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
 });
 
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 app.listen(PORT,async()=>{
-  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.1.1 — porta ${PORT}`);
+  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.2 — porta ${PORT}`);
   try{ await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
 });
