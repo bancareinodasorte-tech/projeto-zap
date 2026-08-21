@@ -1,0 +1,3 @@
+CANAL DE VENDAS RDS
+V10 FINAL 10.2.2
+Correção de compatibilidade da migração com rds10_groups legado (normalized_name NOT NULL).

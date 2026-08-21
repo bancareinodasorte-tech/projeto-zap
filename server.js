@@ -1,157 +1,584 @@
-import express from 'express';
-import crypto from 'crypto';
-import pino from 'pino';
-import QRCode from 'qrcode';
-import makeWASocket,{DisconnectReason,fetchLatestBaileysVersion,initAuthCreds,BufferJSON,proto} from '@whiskeysockets/baileys';
+const express = require('express');
+const crypto = require('crypto');
+const QRCode = require('qrcode');
+const pino = require('pino');
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  BufferJSON,
+  initAuthCreds,
+  proto,
+  fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
 
-const app=express();
-app.use(express.json({limit:'30mb'}));
-app.use(express.static('.'));
-const PORT=Number(process.env.PORT||3000);
-const SB=(process.env.SUPABASE_URL||'').replace(/\/+$/,'');
-const KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||'';
-const now=()=>new Date().toISOString();
-const safe=v=>String(v??'').trim();
-const digits=v=>String(v??'').replace(/\D/g,'');
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-function norm(v){let n=digits(v);if(!n.startsWith('55')&&(n.length===10||n.length===11))n='55'+n;return n}
-function code(){return 'RDS-'+Math.random().toString(36).slice(2,7).toUpperCase()+'-'+String(Math.floor(Math.random()*900)+100)}
-function shortCode(){return crypto.randomBytes(4).toString('hex').toUpperCase()}
-function listWords(v){return safe(v).split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)}
-function hasAny(text,words){const t=safe(text).toLowerCase();return words.some(w=>t.includes(w))}
-function money(v){return Number(v||0).toFixed(2).replace('.',',')}
+const app = express();
+app.use(express.json({ limit: '15mb' }));
+app.use(express.static(__dirname, { etag: false, maxAge: 0 }));
 
-async function sb(path,opt={}){
-  if(!SB||!KEY)throw Error('Supabase não configurado no Render.');
-  const r=await fetch(SB+path,{...opt,headers:{apikey:KEY,Authorization:`Bearer ${KEY}`,'Content-Type':'application/json',...(opt.headers||{})}});
-  const t=await r.text();let d;try{d=t?JSON.parse(t):null}catch{d=t}
-  if(!r.ok)throw Error(d?.message||d?.details||d?.hint||`Supabase ${r.status}`);return d;
+const PORT = Number(process.env.PORT || 3000);
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const OFFICE_WA_DEFAULT = String(process.env.OFFICE_WHATSAPP || '5588994943632').replace(/\D/g, '');
+const PUBLIC_URL = String(process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
+
+function nowISO(){ return new Date().toISOString(); }
+function digits(v){ return String(v || '').replace(/\D/g, ''); }
+function cleanText(v){ return String(v || '').replace(/\u0000/g, '').trim(); }
+function validBRPhone(v){ return /^55\d{10,11}$/.test(digits(v)); }
+function normalizeBR(v){
+  let n = digits(v);
+  if(!n) return '';
+  if(n.startsWith('00')) n = n.slice(2);
+  if(!n.startsWith('55')) n = '55' + n;
+  return n;
 }
-const T={groups:'rds10_groups',contacts:'rds10_contacts',campaigns:'rds10_campaigns',steps:'rds10_campaign_steps',deliveries:'rds10_deliveries',messages:'rds10_messages',settings:'rds10_settings',orders:'rds10_orders',alerts:'rds10_alerts',events:'rds10_events'};
+function shortCode(){ return crypto.randomBytes(4).toString('hex').toUpperCase(); }
+function orderCode(){ return 'RDS-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
+function money(v){ return Number(v || 0).toFixed(2).replace('.', ','); }
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-let sock=null,connected=false,starting=false,qrDataUrl='',connectedNumber='',lastError='',lastConnectionAt=null,processing=false;
-async function authRead(id){const r=await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}&select=value&limit=1`);return r?.[0]?.value?JSON.parse(JSON.stringify(r[0].value),BufferJSON.reviver):null}
-async function authWrite(id,value){const v=JSON.parse(JSON.stringify(value,BufferJSON.replacer));await sb('/rest/v1/zap_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,value:v,updated_at:now()})})}
-async function authDelete(id){await sb(`/rest/v1/zap_auth?id=eq.${encodeURIComponent(id)}`,{method:'DELETE'})}
-async function authClear(){await sb('/rest/v1/zap_auth?id=not.is.null',{method:'DELETE'})}
-async function authState(){const creds=(await authRead('creds'))||initAuthCreds();return{state:{creds,keys:{get:async(type,ids)=>{const out={};for(const id of ids){let v=await authRead(`${type}-${id}`);if(type==='app-state-sync-key'&&v)v=proto.Message.AppStateSyncKeyData.fromObject(v);out[id]=v}return out},set:async data=>{for(const c of Object.keys(data))for(const id of Object.keys(data[c]))data[c][id]?await authWrite(`${c}-${id}`,data[c][id]):await authDelete(`${c}-${id}`)}}},saveCreds:()=>authWrite('creds',creds)}}
-async function closeSock(){try{sock?.ws?.close?.()}catch{}sock=null;connected=false}
-function textOf(m){const x=m?.message||{};return x.conversation||x.extendedTextMessage?.text||x.imageMessage?.caption||x.documentMessage?.caption||x.videoMessage?.caption||''}
-function typeOf(m){const x=m?.message||{};if(x.imageMessage)return'image';if(x.documentMessage)return String(x.documentMessage.mimetype||'').includes('pdf')?'pdf':'document';if(x.videoMessage)return'video';return'text'}
-async function settings(){return (await sb(`/rest/v1/${T.settings}?id=eq.1&select=*&limit=1`))?.[0]||{}}
-async function event(event_type,data={}){try{await sb(`/rest/v1/${T.events}`,{method:'POST',body:JSON.stringify({event_type,...data,metadata:data.metadata||{}})})}catch{}}
-async function findContact(phone){return (await sb(`/rest/v1/${T.contacts}?phone=eq.${encodeURIComponent(norm(phone))}&select=*&limit=1`))?.[0]||null}
-async function ensureContact(phone,name=''){let c=await findContact(phone);if(c)return c;const r=await sb(`/rest/v1/${T.contacts}`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name:safe(name)||`WhatsApp ${norm(phone).slice(-4)}`,phone:norm(phone),group_name:'ENTRADA WHATSAPP',origin:'WHATSAPP',notes:'Criado automaticamente por mensagem recebida.',last_interaction_at:now()})});return r?.[0]}
-async function latestOrder(phone){return (await sb(`/rest/v1/${T.orders}?phone=eq.${encodeURIComponent(norm(phone))}&status=in.(COLETANDO_DADOS,AGUARDANDO_PAGAMENTO,COMPROVANTE_RECEBIDO,PAGAMENTO_CONFIRMADO)&select=*&order=updated_at.desc&limit=1`))?.[0]||null}
-async function patchOrder(id,p){return sb(`/rest/v1/${T.orders}?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...p,updated_at:now()})})}
-async function createOrder(phone,campaignId=null,pushName=''){const c=await ensureContact(phone,pushName),cfg=await settings();const r=await sb(`/rest/v1/${T.orders}`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({code:code(),contact_id:c?.id||null,campaign_id:campaignId,phone:norm(phone),customer_name:c?.name&&!/^WhatsApp /i.test(c.name)&&c.name!=='SEM NOME'?c.name:null,contact_phone:norm(phone),unit_price:Number(cfg.default_unit_price||3),status:'COLETANDO_DADOS'})});const o=r?.[0];if(o)await event('ORDER_CREATED',{order_id:o.id,contact_id:c?.id||null,campaign_id:campaignId,phone:norm(phone)});return o}
-async function makeAlert(type,title,message,phone,orderId=null){await sb(`/rest/v1/${T.alerts}`,{method:'POST',body:JSON.stringify({type,title,message,phone:norm(phone),order_id:orderId})})}
-async function cancelFutureFor(phone,campaignId=null,reason='Cliente respondeu'){let q=`phone=eq.${encodeURIComponent(norm(phone))}&status=eq.AGENDADA`;if(campaignId)q+=`&campaign_id=eq.${campaignId}`;await sb(`/rest/v1/${T.deliveries}?${q}`,{method:'PATCH',body:JSON.stringify({status:'CANCELADA',error_text:reason,updated_at:now()})})}
-async function sendText(to,text){if(!sock||!connected)throw Error('WhatsApp não conectado.');const n=norm(to),jid=`${n}@s.whatsapp.net`;const ex=await sock.onWhatsApp(jid);if(ex?.length===0)throw Error('Número não possui WhatsApp.');const target=ex?.[0]?.jid||jid;const r=await sock.sendMessage(target,{text:safe(text)});return r?.key?.id||null}
-async function sendImage(to,dataUrl,caption=''){const m=String(dataUrl||'').match(/^data:([^;]+);base64,(.+)$/);if(!m)return sendText(to,caption);if(!sock||!connected)throw Error('WhatsApp não conectado.');const n=norm(to),jid=`${n}@s.whatsapp.net`;const ex=await sock.onWhatsApp(jid);if(ex?.length===0)throw Error('Número não possui WhatsApp.');const target=ex?.[0]?.jid||jid;const r=await sock.sendMessage(target,{image:Buffer.from(m[2],'base64'),caption:safe(caption)});return r?.key?.id||null}
-async function logMsg(phone,direction,type,body,id,status='sent',campaignId=null){try{await sb(`/rest/v1/${T.messages}`,{method:'POST',body:JSON.stringify({phone:norm(phone),direction,message_type:type,body:body||null,wa_message_id:id||crypto.randomUUID(),status,campaign_id:campaignId})})}catch{}}
-function extractQuantity(text){const t=safe(text).toLowerCase();let m=t.match(/(?:quero|quantidade|qtd|me d[êe]|reserve|reservar|comprar?)\s*[:=-]?\s*(\d{1,4})/i);if(!m)m=t.match(/^\s*(\d{1,4})\s*(?:bilhete|bilhetes)?\s*$/i);const q=Number(m?.[1]||0);return q>0&&q<=9999?q:0}
-function extractCampaignToken(text){const m=safe(text).match(/RDS[:\s-]*([A-F0-9]{8})/i);return m?.[1]?.toUpperCase()||null}
-async function campaignByToken(token){if(!token)return null;return (await sb(`/rest/v1/${T.campaigns}?short_code=eq.${encodeURIComponent(token)}&select=*&limit=1`))?.[0]||null}
-function ctaText(campaign){if(!campaign||!connectedNumber)return'';const txt=encodeURIComponent(`QUERO COMPRAR RDS:${campaign.short_code}`);return `\n\n🛒 *PEDIR AGORA:* https://wa.me/${connectedNumber}?text=${txt}`}
-async function lastFallback(phone){return (await sb(`/rest/v1/${T.messages}?phone=eq.${encodeURIComponent(norm(phone))}&direction=eq.OUT&status=eq.FALLBACK&select=created_at&order=created_at.desc&limit=1`))?.[0]?.created_at||null}
-
-async function inbound(m){
-  const remote=String(m.key?.remoteJid||'');if(remote.endsWith('@g.us')||remote==='status@broadcast')return;
-  const phone=norm(remote.split('@')[0]),body=textOf(m),type=typeOf(m),fromMe=!!m.key?.fromMe;
-  if(!phone)return;
-  if(fromMe){
-    await logMsg(phone,'OUT',type,body,m.key?.id,'sent');
-    const o=await latestOrder(phone);
-    if(o&&o.status==='PAGAMENTO_CONFIRMADO'&&['image','pdf','document'].includes(type)){
-      const cfg=await settings();await sendText(phone,cfg.final_message||'🍀 Compra concluída. Boa sorte! 🍀');
-      await patchOrder(o.id,{status:'CONCLUIDO',completed_at:now()});
-      await sb(`/rest/v1/${T.contacts}?phone=eq.${encodeURIComponent(phone)}`,{method:'PATCH',body:JSON.stringify({group_name:'COMPRA REALIZADA',updated_at:now(),last_interaction_at:now()})});
-      await makeAlert('VENDA_CONCLUIDA','Venda concluída',`Bilhetes enviados para ${phone}.`,phone,o.id);await event('ORDER_COMPLETED',{order_id:o.id,phone});
+async function sb(path, opt={}){
+  if(!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase não configurado no Render.');
+  const r = await fetch(SUPABASE_URL + path, {
+    ...opt,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      ...(opt.headers || {})
     }
+  });
+  const txt = await r.text();
+  let data = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+  if(!r.ok) throw new Error(data?.message || data?.details || data?.hint || `Supabase ${r.status}`);
+  return data;
+}
+async function insert(table, row, returning='representation'){
+  return sb(`/rest/v1/${table}`, { method:'POST', headers:{Prefer:`return=${returning}`}, body:JSON.stringify(row) });
+}
+async function patch(table, filter, row){
+  return sb(`/rest/v1/${table}?${filter}`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });
+}
+async function del(table, filter){
+  return sb(`/rest/v1/${table}?${filter}`, { method:'DELETE', headers:{Prefer:'return=minimal'} });
+}
+async function one(table, query){
+  const rows = await sb(`/rest/v1/${table}?${query}&limit=1`);
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+async function list(table, query='select=*'){
+  const rows = await sb(`/rest/v1/${table}?${query}`);
+  return Array.isArray(rows) ? rows : [];
+}
+
+// ---------------- WhatsApp / Baileys ----------------
+let sock = null, starting = false, connected = false, qrDataUrl = '', connectedNumber = '', lastError = '', lastConnectionAt = null;
+const messageCache = new Map(); // key.id -> full message, usado para reenvio/recuperação de mensagem
+const lidToPn = new Map();
+let lastInboundAt = 0;
+
+async function authRead(id){
+  const row = await one('zap_auth', `select=value&id=eq.${encodeURIComponent(id)}`);
+  return row ? JSON.parse(JSON.stringify(row.value), BufferJSON.reviver) : null;
+}
+async function authWrite(id, value){
+  const safe = JSON.parse(JSON.stringify(value, BufferJSON.replacer));
+  await sb('/rest/v1/zap_auth?on_conflict=id', { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({ id, value:safe, updated_at:nowISO() }) });
+}
+async function authDelete(id){ await del('zap_auth', `id=eq.${encodeURIComponent(id)}`); }
+async function useSupabaseAuthState(){
+  const creds = (await authRead('creds')) || initAuthCreds();
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async(type, ids) => {
+          const data = {};
+          await Promise.all(ids.map(async id => {
+            let value = await authRead(`${type}-${id}`);
+            if(type === 'app-state-sync-key' && value) value = proto.Message.AppStateSyncKeyData.fromObject(value);
+            data[id] = value;
+          }));
+          return data;
+        },
+        set: async(data) => {
+          const tasks = [];
+          for(const category of Object.keys(data || {})){
+            for(const id of Object.keys(data[category] || {})){
+              const value = data[category][id];
+              tasks.push(value ? authWrite(`${category}-${id}`, value) : authDelete(`${category}-${id}`));
+            }
+          }
+          await Promise.all(tasks);
+        }
+      }
+    },
+    saveCreds: () => authWrite('creds', creds)
+  };
+}
+function rememberMessage(m){
+  const id = m?.key?.id;
+  if(!id) return;
+  messageCache.set(id, m);
+  if(messageCache.size > 1500){
+    const first = messageCache.keys().next().value;
+    messageCache.delete(first);
+  }
+}
+function pnJidFromKey(m){
+  const key = m?.key || {};
+  const candidates = [
+    key.senderPn, key.remoteJidAlt, key.participantAlt,
+    m?.senderPn, m?.remoteJidAlt, m?.participantAlt,
+    key.remoteJid, key.participant
+  ].filter(Boolean).map(String);
+  for(const jid of candidates){
+    if(jid.endsWith('@s.whatsapp.net')) return jid;
+  }
+  return '';
+}
+function resolveInboundIdentity(m){
+  const remote = String(m?.key?.remoteJid || '');
+  const pnJid = pnJidFromKey(m);
+  let phone = pnJid ? digits(pnJid.split('@')[0]) : '';
+  if(phone && !phone.startsWith('55')) phone = normalizeBR(phone);
+  if(remote.endsWith('@lid') && phone) lidToPn.set(remote, phone);
+  if(!phone && remote.endsWith('@lid') && lidToPn.has(remote)) phone = lidToPn.get(remote);
+  if(!phone && remote.endsWith('@s.whatsapp.net')) phone = normalizeBR(remote.split('@')[0]);
+  return { remoteJid:remote, phone:validBRPhone(phone) ? phone : '', lid:remote.endsWith('@lid') ? remote : '' };
+}
+function unwrapMessageContent(m){
+  let x = m?.message || {};
+  if(x.ephemeralMessage?.message) x = x.ephemeralMessage.message;
+  if(x.viewOnceMessage?.message) x = x.viewOnceMessage.message;
+  if(x.viewOnceMessageV2?.message) x = x.viewOnceMessageV2.message;
+  if(x.documentWithCaptionMessage?.message) x = x.documentWithCaptionMessage.message;
+  return x;
+}
+function extractInbound(m){
+  const x = unwrapMessageContent(m);
+  const text = cleanText(
+    x.conversation || x.extendedTextMessage?.text || x.imageMessage?.caption || x.videoMessage?.caption ||
+    x.documentMessage?.caption || x.buttonsResponseMessage?.selectedDisplayText || x.listResponseMessage?.title ||
+    x.templateButtonReplyMessage?.selectedDisplayText || ''
+  );
+  let type = 'text';
+  let media = false;
+  if(x.imageMessage){ type='image'; media=true; }
+  else if(x.documentMessage){ type='document'; media=true; }
+  else if(x.videoMessage){ type='video'; media=true; }
+  else if(x.audioMessage){ type='audio'; media=true; }
+  else if(x.stickerMessage){ type='sticker'; media=true; }
+  return { text, type, media, rawKeys:Object.keys(x) };
+}
+async function closeSocket(){ try{ sock?.ws?.close?.(); }catch{} sock=null; connected=false; connectedNumber=''; }
+
+async function startWhatsApp(force=false){
+  if(starting) return;
+  if(sock && !force) return;
+  starting = true;
+  if(force) await closeSocket();
+  try{
+    const { state, saveCreds } = await useSupabaseAuthState();
+    const { version } = await fetchLatestBaileysVersion();
+    sock = makeWASocket({
+      version,
+      auth: state,
+      printQRInTerminal:false,
+      logger:pino({level:'silent'}),
+      browser:['CANAL DE VENDAS RDS','Chrome','10.2.1'],
+      markOnlineOnConnect:false,
+      syncFullHistory:false,
+      shouldSyncHistoryMessage:()=>false,
+      generateHighQualityLinkPreview:false,
+      maxMsgRetryCount:8,
+      retryRequestDelayMs:250,
+      getMessage: async(key) => messageCache.get(key?.id)?.message || undefined
+    });
+    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('connection.update', async update => {
+      const { connection, lastDisconnect, qr } = update;
+      if(qr){ qrDataUrl = await QRCode.toDataURL(qr,{margin:2,width:420}); connected=false; lastError=''; }
+      if(connection === 'open'){
+        connected = true; qrDataUrl='';
+        connectedNumber = normalizeBR(String(sock.user?.id || '').split(':')[0].split('@')[0]);
+        lastConnectionAt = nowISO(); lastError='';
+        try{ await sock.sendPresenceUpdate('unavailable'); }catch{}
+      }
+      if(connection === 'close'){
+        connected=false;
+        const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode || 0;
+        const loggedOut = code === DisconnectReason.loggedOut;
+        lastError = loggedOut ? 'WhatsApp desconectado pelo usuário.' : cleanText(lastDisconnect?.error?.message || 'Conexão encerrada.');
+        await closeSocket();
+        if(!loggedOut) setTimeout(()=>startWhatsApp(false).catch(()=>{}), 2500);
+      }
+    });
+    sock.ev.on('messages.upsert', async ({messages, type, requestId}) => {
+      // Segurança: ignore payloads de sincronização/solicitação que não sejam novas notificações.
+      if(type !== 'notify' || requestId) return;
+      for(const m of messages || []){
+        rememberMessage(m);
+        if(!m?.message || m.key?.fromMe) continue;
+        const remote = String(m.key?.remoteJid || '');
+        if(remote.endsWith('@g.us') || remote === 'status@broadcast' || remote.endsWith('@broadcast')) continue;
+        lastInboundAt = Date.now();
+        await handleInbound(m).catch(async e => {
+          console.error('INBOUND', e.message);
+          try{ await addAlert('ERRO_ENTRADA', e.message, { remoteJid:remote }); }catch{}
+        });
+      }
+    });
+    sock.ev.on('messages.update', updates => {
+      for(const u of updates || []){
+        if(u?.key?.id && messageCache.has(u.key.id)){
+          const old = messageCache.get(u.key.id);
+          messageCache.set(u.key.id, {...old, update:u.update});
+        }
+      }
+    });
+  }catch(e){ lastError=e.message; await closeSocket(); throw e; }
+  finally{ starting=false; }
+}
+
+async function ensureTargetJid(phone){
+  if(!sock || !connected) throw new Error('WhatsApp não está conectado.');
+  const n = normalizeBR(phone);
+  if(!validBRPhone(n)) throw new Error('Telefone inválido para envio.');
+  const pn = `${n}@s.whatsapp.net`;
+  const found = await sock.onWhatsApp(pn);
+  if(!found?.[0]?.exists) throw new Error('Número não possui WhatsApp ou não pôde ser validado.');
+  const jid = found[0].jid || pn;
+  if(found[0].lid) lidToPn.set(String(found[0].lid), n);
+  return { phone:n, jid };
+}
+async function sendToJid(jid, content){
+  if(!sock || !connected) throw new Error('WhatsApp não está conectado.');
+  const r = await sock.sendMessage(jid, content);
+  rememberMessage(r);
+  try{ await sock.sendPresenceUpdate('unavailable'); }catch{}
+  return r;
+}
+async function sendTextPhone(phone, text){
+  const { phone:n, jid } = await ensureTargetJid(phone);
+  const body = cleanText(text);
+  if(!body) throw new Error('Mensagem vazia bloqueada.');
+  const r = await sendToJid(jid,{text:body});
+  await logMessage({phone:n,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid}});
+  return {id:r?.key?.id,phone:n,jid};
+}
+async function replyInbound(identity, text){
+  const body = cleanText(text);
+  if(!body) return;
+  let jid = identity.remoteJid;
+  if(identity.phone){
+    try{ jid = (await ensureTargetJid(identity.phone)).jid; }catch{ /* resposta pelo chat original */ }
+  }
+  const r = await sendToJid(jid,{text:body});
+  await logMessage({phone:identity.phone || null,lid:identity.lid || null,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid}});
+  return r;
+}
+
+// ---------------- Persistência operacional ----------------
+async function addAlert(kind, title, payload={}){
+  try{ await insert('rds10_alerts',{kind,title,payload,is_read:false,created_at:nowISO()},'minimal'); }catch{}
+}
+async function logEvent(kind, payload={}){
+  try{ await insert('rds10_events',{kind,payload,created_at:nowISO()},'minimal'); }catch{}
+}
+async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){
+  try{
+    await insert('rds10_messages',{phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');
+  }catch{}
+}
+async function getSettings(){
+  let s = await one('rds10_settings','select=*&id=eq.1');
+  if(!s){
+    const rows = await insert('rds10_settings',{id:1,bot_enabled:true,office_whatsapp:OFFICE_WA_DEFAULT,unit_price:3,router_enabled:true,updated_at:nowISO()});
+    s = rows?.[0] || {};
+  }
+  return s;
+}
+async function findContact(phone){
+  if(!phone) return null;
+  return one('rds10_contacts',`select=*&phone=eq.${encodeURIComponent(phone)}`);
+}
+async function upsertInboundContact(identity, pushName=''){
+  if(!identity.phone) return null; // NUNCA grava LID como número de telefone.
+  let c = await findContact(identity.phone);
+  if(c){
+    await patch('rds10_contacts',`id=eq.${c.id}`,{last_seen_at:nowISO(),lid:identity.lid || c.lid || null,updated_at:nowISO()});
+    return {...c,lid:identity.lid || c.lid};
+  }
+  const suffix = identity.phone.slice(-4);
+  const name = cleanText(pushName) || `Cliente ${suffix}`;
+  const rows = await insert('rds10_contacts',{name,phone:identity.phone,lid:identity.lid || null,group_name:'ENTRADA WHATSAPP',origin:'WHATSAPP',status:'ATIVO',validated:true,last_seen_at:nowISO(),created_at:nowISO(),updated_at:nowISO()});
+  return rows?.[0] || null;
+}
+async function activeOrder(phone){
+  return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);
+}
+async function createOrder(phone, campaignCode=null){
+  const existing = await activeOrder(phone);
+  if(existing) return existing;
+  const s = await getSettings();
+  const rows = await insert('rds10_orders',{code:orderCode(),phone,campaign_code:campaignCode,status:'COLETANDO_DADOS',unit_price:Number(s.unit_price||3),created_at:nowISO(),updated_at:nowISO()});
+  return rows?.[0];
+}
+function parseOrderForm(text){
+  const t = cleanText(text);
+  const get = label => {
+    const re = new RegExp(`${label}\\s*[:\-]\\s*([^\\n\\r]+)`,'i');
+    return cleanText(t.match(re)?.[1] || '');
+  };
+  let qty = Number((get('quantidade').match(/\d+/)||[])[0] || 0);
+  return { quantity:qty, name:get('nome'), contact:get('contato') };
+}
+function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\s*COMPRAR|COMPRE\s*AGORA/i.test(text); }
+function isOfficeRoute(text){ return /OUTRO\s*ASSUNTO|ATENDENTE|ESCRIT[ÓO]RIO/i.test(text); }
+function looksLikeForm(text){ return /quantidade\s*[:\-]/i.test(text) || (/nome\s*[:\-]/i.test(text) && /contato\s*[:\-]/i.test(text)); }
+function routerMessage(settings){
+  const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+  const buyText = encodeURIComponent('QUERO COMPRAR RDS-COMPRAR');
+  const officeText = encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.');
+  const channel = connectedNumber || '';
+  return `Olá! 👋 Você está no *CANAL DE VENDAS RDS*.\nEste canal é exclusivo para compras.\n\n🛒 *COMPRE AGORA*\nhttps://wa.me/${channel}?text=${buyText}\n\n🏢 *OUTRO ASSUNTO*\nhttps://wa.me/${office}?text=${officeText}`;
+}
+async function beginOrder(identity, campaignCode=null){
+  if(!identity.phone){
+    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente *QUERO COMPRAR* ou use o link da campanha.');
     return;
   }
-  await logMsg(phone,'IN',type,body,m.key?.id,'received');
-  const c=await ensureContact(phone,m.pushName||'');
-  await sb(`/rest/v1/${T.contacts}?id=eq.${c.id}`,{method:'PATCH',body:JSON.stringify({last_interaction_at:now(),updated_at:now()})});
-  const cfg=await settings();
-  if(c.opted_out)return;
-  const lower=safe(body).toLowerCase();
-  if(hasAny(lower,listWords(cfg.optout_words))){await sb(`/rest/v1/${T.contacts}?id=eq.${c.id}`,{method:'PATCH',body:JSON.stringify({opted_out:true,status:'INATIVO',group_name:'NÃO QUER RECEBER',updated_at:now()})});await cancelFutureFor(phone,null,'Opt-out solicitado');await sendText(phone,'✅ Tudo certo. Você não receberá novas campanhas automáticas por este canal.');await event('OPTOUT',{contact_id:c.id,phone});return}
-  if(!cfg.bot_enabled)return;
-  if(hasAny(lower,listWords(cfg.handoff_words))){let msg='🏢 Vou direcionar você para o escritório.';if(cfg.office_whatsapp)msg+=`\n\n👉 https://wa.me/${norm(cfg.office_whatsapp)}`;await sendText(phone,msg);await makeAlert('ATENDENTE','Cliente pediu atendimento humano',`${c.name||phone} solicitou o escritório.`,phone);return}
-  let o=await latestOrder(phone);
-  if(['image','pdf','document'].includes(type)){
-    if(!o)o=await createOrder(phone,null,m.pushName||'');
-    if(['AGUARDANDO_PAGAMENTO','COLETANDO_DADOS'].includes(o.status)){
-      await patchOrder(o.id,{status:'COMPROVANTE_RECEBIDO',proof_type:type,proof_received_at:now(),last_inbound_text:body||null});
-      await makeAlert('COMPROVANTE','Novo comprovante recebido',`Verificar pagamento de ${c?.name||phone}.`,phone,o.id);
-      await sendText(phone,cfg.proof_received_message||'✅ Comprovante recebido. Aguarde a conferência.');await event('PROOF_RECEIVED',{order_id:o.id,contact_id:c.id,phone});return;
+  const order = await createOrder(identity.phone,campaignCode);
+  await replyInbound(identity,'🛒 *PREENCHER PEDIDO*');
+  await sleep(350);
+  await replyInbound(identity,`Copie, preencha e envie 👇\n\nQuantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
+  await cancelFutureDeliveries(identity.phone,'INTERESSE');
+  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
+}
+async function handleOrderForm(identity, order, text){
+  const p = parseOrderForm(text);
+  const missing=[];
+  if(!p.quantity || p.quantity < 1) missing.push('Quantidade');
+  if(!p.name) missing.push('Nome');
+  if(!p.contact) missing.push('Contato');
+  if(missing.length){
+    await replyInbound(identity,`Falta preencher: *${missing.join(', ')}*.\nEnvie novamente somente o bloco preenchido.`);
+    return;
+  }
+  const total = Number((p.quantity * Number(order.unit_price || 3)).toFixed(2));
+  await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:p.name,contact_phone:p.contact,quantity:p.quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
+  const s = await getSettings();
+  const pix = cleanText(s.pix_key || 'PIX NÃO CONFIGURADO');
+  const payMsg = `✅ *PEDIDO RECEBIDO*\n\n👤 ${p.name}\n🎟 ${p.quantity} bilhete(s)\n💰 Total: *R$ ${money(total)}*\n🧾 Pedido: ${order.code}\n\n💳 *PAGAMENTO PIX*\nChave: ${pix}\nFavorecido: ${cleanText(s.pix_name || 'REINO DA SORTE')}\nValor: *R$ ${money(total)}*\n\nApós pagar, envie o comprovante aqui 👇`;
+  await replyInbound(identity,payMsg);
+  await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity:p.quantity,total});
+}
+async function handleProof(identity, order, inbound){
+  await patch('rds10_orders',`id=eq.${order.id}`,{status:'AGUARDANDO_CONFERENCIA',proof_type:inbound.type,proof_received_at:nowISO(),updated_at:nowISO()});
+  await addAlert('COMPROVANTE',`Comprovante recebido — ${order.code}`,{phone:identity.phone,order:order.code});
+  await replyInbound(identity,`✅ Comprovante recebido.\nSeu pedido *${order.code}* está aguardando conferência do pagamento.`);
+  await logEvent('COMPROVANTE_RECEBIDO',{phone:identity.phone,order:order.code});
+}
+async function handleInbound(m){
+  const identity = resolveInboundIdentity(m);
+  const inbound = extractInbound(m);
+  const pushName = cleanText(m?.pushName || '');
+  await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'IN',type:inbound.type,body:inbound.text||null,status:'RECEBIDA',waId:m?.key?.id,raw:{remoteJid:identity.remoteJid,remoteJidAlt:m?.key?.remoteJidAlt||null,senderPn:m?.key?.senderPn||null,pushName,rawKeys:inbound.rawKeys}});
+
+  if(!identity.phone && identity.lid){
+    await addAlert('LID_SEM_PN','Mensagem recebida com LID sem número real; contato não foi criado.',{lid:identity.lid,pushName,text:inbound.text});
+  }
+  const contact = await upsertInboundContact(identity,pushName);
+  const settings = await getSettings();
+  if(!settings.bot_enabled) return;
+
+  const text = inbound.text;
+  let order = identity.phone ? await activeOrder(identity.phone) : null;
+
+  // Comprovante tem prioridade quando há pedido aguardando pagamento.
+  if(order && inbound.media && ['AGUARDANDO_PAGAMENTO','AGUARDANDO_COMPROVANTE'].includes(order.status)){
+    return handleProof(identity,order,inbound);
+  }
+
+  if(order){
+    if(order.status === 'COLETANDO_DADOS'){
+      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
+      if(isOfficeRoute(text)){
+        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
+        return replyInbound(identity,`🏢 Atendimento do escritório:\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
+      }
+      return replyInbound(identity,'Seu pedido já foi iniciado. Copie e envie o formulário com *Quantidade, Nome e Contato*.');
     }
+    if(order.status === 'AGUARDANDO_PAGAMENTO'){
+      if(inbound.media) return handleProof(identity,order,inbound);
+      return replyInbound(identity,`Seu pedido *${order.code}* está aguardando pagamento de *R$ ${money(order.total_amount)}*. Após pagar, envie o comprovante aqui.`);
+    }
+    if(order.status === 'AGUARDANDO_CONFERENCIA') return replyInbound(identity,`Seu comprovante do pedido *${order.code}* já está aguardando conferência. Assim que confirmado, seguimos com a emissão dos bilhetes.`);
+    if(order.status === 'PAGO_AGUARDANDO_BILHETES') return replyInbound(identity,`Pagamento confirmado ✅\nPedido *${order.code}* aguardando envio dos bilhetes pelo operador.`);
   }
-  const token=extractCampaignToken(body),camp=await campaignByToken(token);
-  const intent=hasAny(lower,listWords(cfg.trigger_words))||!!token||extractQuantity(body)>0;
-  if(!o&&intent){o=await createOrder(phone,camp?.id||null,m.pushName||'');await cancelFutureFor(phone,camp?.id||null,'Cliente iniciou pedido');const q=extractQuantity(body);if(q>0){const total=q*Number(camp?.unit_price||o.unit_price||cfg.default_unit_price||3);await patchOrder(o.id,{quantity:q,total_amount:total,unit_price:Number(camp?.unit_price||o.unit_price||cfg.default_unit_price||3),status:'AGUARDANDO_PAGAMENTO',last_inbound_text:body});await sendText(phone,`✅ *Pedido ${o.code}*\n\n👤 ${o.customer_name||c.name||'Cliente'}\n🎟️ Quantidade: *${q}*\n💰 Total: *R$ ${money(total)}*\n\n📲 *PIX*\nChave: ${cfg.pix_key||'-'}\nFavorecido: ${cfg.pix_name||'-'}\n\nApós pagar, envie o comprovante aqui.`)}else{await sendText(phone,`${cfg.order_prompt}\n\nPedido: ${o.code}`)}await event('INTENT',{order_id:o.id,contact_id:c.id,campaign_id:camp?.id||null,phone});return}
-  if(!o){const lf=await lastFallback(phone),cool=Number(cfg.fallback_cooldown_minutes||3)*60000;if(lf&&Date.now()-new Date(lf).getTime()<cool)return;let msg=cfg.fallback_message||'🛒 Para comprar, responda QUERO COMPRAR.';if(cfg.office_whatsapp)msg+=`\n\n🏢 Escritório: https://wa.me/${norm(cfg.office_whatsapp)}`;const id=await sendText(phone,msg);await logMsg(phone,'OUT','text',msg,id,'FALLBACK');return}
-  if(o.status==='COLETANDO_DADOS'){
-    const q=extractQuantity(body);if(q>0){const camp=o.campaign_id?(await sb(`/rest/v1/${T.campaigns}?id=eq.${o.campaign_id}&select=*&limit=1`))?.[0]:null;const price=Number(camp?.unit_price||o.unit_price||cfg.default_unit_price||3),total=q*price;await patchOrder(o.id,{quantity:q,total_amount:total,unit_price:price,status:'AGUARDANDO_PAGAMENTO',last_inbound_text:body});await sendText(phone,`✅ *Pedido ${o.code}*\n\n👤 ${o.customer_name||c.name||'Cliente'}\n🎟️ Quantidade: *${q}*\n💰 Total: *R$ ${money(total)}*\n\n📲 *PIX*\nChave: ${cfg.pix_key||'-'}\nFavorecido: ${cfg.pix_name||'-'}\n\nApós pagar, envie o comprovante aqui.`);await event('ORDER_READY',{order_id:o.id,contact_id:c.id,phone,metadata:{quantity:q,total}})}else await sendText(phone,cfg.order_prompt);return;
+
+  if(isOfficeRoute(text)){
+    const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+    await logEvent('ENCAMINHADO_ESCRITORIO',{phone:identity.phone||null});
+    return replyInbound(identity,`🏢 *OUTRO ASSUNTO*\nFale diretamente com o escritório:\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
   }
-  if(o.status==='AGUARDANDO_PAGAMENTO'){await sendText(phone,'💳 Seu pedido já está aberto. Após realizar o PIX, envie o comprovante (imagem ou PDF) nesta conversa.');return}
-  if(o.status==='COMPROVANTE_RECEBIDO'){await sendText(phone,'✅ Seu comprovante já foi recebido e está aguardando conferência do operador.');return}
-  if(o.status==='PAGAMENTO_CONFIRMADO'){await sendText(phone,'✅ Pagamento confirmado. Aguarde o envio dos seus bilhetes nesta conversa.');return}
+  if(isBuyRoute(text)){
+    const code = (text.match(/RDS[-_:]?([A-Z0-9]{6,12})/i)||[])[1] || null;
+    return beginOrder(identity,code);
+  }
+  return replyInbound(identity,routerMessage(settings));
 }
 
-async function start(force=false){if(starting)return;if(sock&&!force)return;starting=true;if(force)await closeSock();try{const {state,saveCreds}=await authState(),{version}=await fetchLatestBaileysVersion();sock=makeWASocket({version,auth:state,logger:pino({level:'silent'}),printQRInTerminal:false,browser:['CANAL DE VENDAS RDS','Chrome','10.0'],markOnlineOnConnect:false,syncFullHistory:false,generateHighQualityLinkPreview:false});sock.ev.on('creds.update',saveCreds);sock.ev.on('messages.upsert',async({messages,type})=>{if(type!=='notify'&&type!=='append')return;for(const m of messages||[])try{await inbound(m)}catch(e){console.log('inbound',e.message)}});sock.ev.on('message-receipt.update',async ups=>{for(const u of ups||[]){const id=u.key?.id;if(!id)continue;const st=u.receipt?.readTimestamp?'LIDA':u.receipt?.receiptTimestamp?'ENTREGUE':'ENVIADA';const p={status:st,updated_at:now()};if(st==='ENTREGUE')p.delivered_at=now();if(st==='LIDA')p.read_at=now();try{await sb(`/rest/v1/${T.deliveries}?wa_message_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(p)})}catch{}}});sock.ev.on('connection.update',async u=>{const{connection,lastDisconnect,qr}=u;if(qr){qrDataUrl=await QRCode.toDataURL(qr,{width:420,margin:2});connected=false}if(connection==='open'){connected=true;qrDataUrl='';connectedNumber=digits(sock.user?.id?.split(':')?.[0]||sock.user?.id||'');lastConnectionAt=now();lastError=''}if(connection==='close'){connected=false;const c=lastDisconnect?.error?.output?.statusCode||lastDisconnect?.error?.statusCode||0,out=c===DisconnectReason.loggedOut;lastError=out?'Sessão desconectada.':safe(lastDisconnect?.error?.message)||'Conexão encerrada';sock=null;if(!out)setTimeout(()=>start(false).catch(()=>{}),2500)}})}finally{starting=false}}
+// ---------------- Campanhas / fila ----------------
+async function cancelFutureDeliveries(phone, reason){
+  if(!phone) return;
+  const rows = await list('rds10_deliveries',`select=id,status&phone=eq.${encodeURIComponent(phone)}&status=eq.AGENDADA`);
+  for(const d of rows) await patch('rds10_deliveries',`id=eq.${d.id}`,{status:'CANCELADA',cancel_reason:reason,updated_at:nowISO()});
+}
+async function campaignTargets(c){
+  if(c.target_mode === 'individual'){
+    const ids = Array.isArray(c.selected_contact_ids) ? c.selected_contact_ids : [];
+    if(!ids.length) return [];
+    return list('rds10_contacts',`select=*&id=in.(${ids.join(',')})&status=eq.ATIVO&validated=eq.true`);
+  }
+  if(c.target_mode === 'group') return list('rds10_contacts',`select=*&group_name=eq.${encodeURIComponent(c.target_group)}&status=eq.ATIVO&validated=eq.true`);
+  return list('rds10_contacts','select=*&status=eq.ATIVO&validated=eq.true');
+}
+async function activateCampaign(campaignId){
+  const c = await one('rds10_campaigns',`select=*&id=eq.${campaignId}`);
+  if(!c) throw new Error('Campanha não encontrada.');
+  const steps = await list('rds10_campaign_steps',`select=*&campaign_id=eq.${campaignId}&order=step_index.asc`);
+  if(!steps.length) throw new Error('Campanha sem mensagens.');
+  const targets = await campaignTargets(c);
+  if(!targets.length) throw new Error('Nenhum contato válido selecionado.');
+  const start = new Date(c.start_at);
+  if(Number.isNaN(start.getTime())) throw new Error('Data/hora inicial inválida.');
+  let cumulative = 0;
+  for(const contact of targets){
+    cumulative = 0;
+    for(const step of steps){
+      cumulative += Number(step.delay_minutes || 0);
+      const scheduled = new Date(start.getTime() + cumulative*60000).toISOString();
+      await insert('rds10_deliveries',{campaign_id:c.id,campaign_code:c.code,step_id:step.id,step_index:step.step_index,contact_id:contact.id,phone:contact.phone,scheduled_at:scheduled,status:'AGENDADA',created_at:nowISO(),updated_at:nowISO()},'minimal');
+    }
+  }
+  await patch('rds10_campaigns',`id=eq.${campaignId}`,{status:'ATIVA',activated_at:nowISO(),updated_at:nowISO()});
+  return {targets:targets.length,deliveries:targets.length*steps.length};
+}
+async function sendDelivery(d){
+  const order = await activeOrder(d.phone);
+  if(order){
+    await patch('rds10_deliveries',`id=eq.${d.id}`,{status:'CANCELADA',cancel_reason:'CLIENTE_EM_PEDIDO',updated_at:nowISO()});
+    return;
+  }
+  const step = await one('rds10_campaign_steps',`select=*&id=eq.${d.step_id}`);
+  if(!step) throw new Error('Etapa não encontrada.');
+  const c = await one('rds10_campaigns',`select=*&id=eq.${d.campaign_id}`);
+  const cta = c?.cta_enabled !== false ? `\n\n🛒 *COMPRE AGORA:* https://wa.me/${connectedNumber}?text=${encodeURIComponent('QUERO COMPRAR RDS-' + (c?.code || ''))}` : '';
+  const body = cleanText(step.message) + cta;
+  const result = await sendTextPhone(d.phone,body);
+  await patch('rds10_deliveries',`id=eq.${d.id}`,{status:'ENVIADA',sent_at:nowISO(),wa_message_id:result.id,updated_at:nowISO()});
+}
+let queueBusy = false;
+async function processQueue(){
+  if(queueBusy || !connected) return;
+  queueBusy=true;
+  try{
+    const due = await list('rds10_deliveries',`select=*&status=eq.AGENDADA&scheduled_at=lte.${encodeURIComponent(nowISO())}&order=scheduled_at.asc&limit=20`);
+    for(const d of due){
+      try{ await sendDelivery(d); }
+      catch(e){ await patch('rds10_deliveries',`id=eq.${d.id}`,{status:'FALHA',error_text:e.message,updated_at:nowISO()}); await addAlert('FALHA_ENVIO',`Falha no envio para ${d.phone}`,{delivery:d.id,error:e.message}); }
+      await sleep(900);
+    }
+  }finally{ queueBusy=false; }
+}
+setInterval(()=>processQueue().catch(()=>{}), 15000);
+setInterval(()=>{
+  // detector de conexão “surda”: se a sessão aparenta conectada mas houve erro conhecido, reinicia de forma conservadora.
+  if(connected && lastError) startWhatsApp(true).catch(()=>{});
+}, 120000);
 
-async function processQueue(){if(processing||!connected)return;processing=true;try{const due=await sb(`/rest/v1/${T.deliveries}?status=eq.AGENDADA&scheduled_at=lte.${encodeURIComponent(now())}&select=*&order=scheduled_at.asc&limit=20`);for(const d of due||[]){try{const ct=(await sb(`/rest/v1/${T.contacts}?id=eq.${d.contact_id}&select=*&limit=1`))?.[0];if(!ct||ct.status!=='ATIVO'||ct.opted_out){await sb(`/rest/v1/${T.deliveries}?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'CANCELADA',error_text:'Contato inelegível',updated_at:now()})});continue}const step=(await sb(`/rest/v1/${T.steps}?id=eq.${d.step_id}&select=*&limit=1`))?.[0],camp=(await sb(`/rest/v1/${T.campaigns}?id=eq.${d.campaign_id}&select=*&limit=1`))?.[0];if(!step||!camp||camp.status!=='ATIVA'){await sb(`/rest/v1/${T.deliveries}?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'CANCELADA',error_text:'Campanha não ativa',updated_at:now()})});continue}let caption=step.message||'';if(step.cta_enabled)caption+=ctaText(camp);const id=step.image_data_url?await sendImage(d.phone,step.image_data_url,caption):await sendText(d.phone,caption);await sb(`/rest/v1/${T.deliveries}?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:'ENVIADA',sent_at:now(),wa_message_id:id,updated_at:now(),error_text:null})});await logMsg(d.phone,'OUT',step.image_data_url?'image':'text',caption,id,'ENVIADA',camp.id);await event('CAMPAIGN_SENT',{campaign_id:camp.id,contact_id:d.contact_id,phone:d.phone,metadata:{step_index:d.step_index}});await sleep(900)}catch(e){const retry=Number(d.retry_count||0)+1,final=retry>=3;await sb(`/rest/v1/${T.deliveries}?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:final?'FALHA':'AGENDADA',retry_count:retry,error_text:e.message,scheduled_at:final?d.scheduled_at:new Date(Date.now()+2*60000).toISOString(),updated_at:now()})})}}const active=await sb(`/rest/v1/${T.campaigns}?status=eq.ATIVA&select=id`);for(const c of active||[]){const pending=await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${c.id}&status=eq.AGENDADA&select=id&limit=1`);if(!pending?.length)await sb(`/rest/v1/${T.campaigns}?id=eq.${c.id}`,{method:'PATCH',body:JSON.stringify({status:'FINALIZADA',finished_at:now(),updated_at:now()})})}}catch(e){console.log('queue',e.message)}finally{processing=false}}
-setInterval(()=>processQueue().catch(()=>{}),30000);
+// ---------------- API ----------------
+app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.1',connected,lastConnectionAt,lastError}));
+app.get('/api/status',(req,res)=>res.json({ok:true,connected,number:connectedNumber||null,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size}));
+app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/whatsapp/logout',async(req,res)=>{ try{ if(sock) try{await sock.logout();}catch{}; await closeSocket(); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/whatsapp/test',async(req,res)=>{ try{ const r=await sendTextPhone(req.body.phone, req.body.text || '✅ Teste CANAL DE VENDAS RDS V10 FINAL'); res.json({ok:true,...r}); }catch(e){res.status(400).json({error:e.message});} });
 
-async function campaignStats(id){const d=await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${id}&select=status`);const count=s=>d.filter(x=>x.status===s).length;return{total:d.length,queue:count('AGENDADA'),sent:count('ENVIADA')+count('ENTREGUE')+count('LIDA'),delivered:count('ENTREGUE')+count('LIDA'),read:count('LIDA'),failed:count('FALHA'),canceled:count('CANCELADA')}}
-async function audience(c){if(c.target_mode==='group')return sb(`/rest/v1/${T.contacts}?status=eq.ATIVO&opted_out=eq.false&group_name=eq.${encodeURIComponent(c.target_group||'')}&select=*`);if(c.target_mode==='selected'){const ids=Array.isArray(c.selected_contact_ids)?c.selected_contact_ids:[];return ids.length?sb(`/rest/v1/${T.contacts}?status=eq.ATIVO&opted_out=eq.false&id=in.(${ids.join(',')})&select=*`):[]}return sb(`/rest/v1/${T.contacts}?status=eq.ATIVO&opted_out=eq.false&select=*`)}
-async function saveSteps(campaignId,steps){await sb(`/rest/v1/${T.steps}?campaign_id=eq.${campaignId}`,{method:'DELETE'});for(let i=0;i<steps.length;i++){const s=steps[i];await sb(`/rest/v1/${T.steps}`,{method:'POST',body:JSON.stringify({campaign_id:campaignId,step_index:i+1,delay_minutes:i?Math.max(1,Number(s.delay_minutes||1)):0,message:safe(s.message),image_data_url:s.image_data_url||null,image_name:s.image_name||null,cta_enabled:s.cta_enabled!==false})})}}
+app.get('/api/dashboard',async(req,res)=>{
+  try{
+    const [contacts,campaigns,queue,sent,returns,orders,alerts] = await Promise.all([
+      list('rds10_contacts','select=id&status=eq.ATIVO'), list('rds10_campaigns','select=id&status=neq.EXCLUIDA'), list('rds10_deliveries','select=id&status=eq.AGENDADA'), list('rds10_deliveries','select=id&status=eq.ENVIADA'), list('rds10_messages','select=id&direction=eq.IN'), list('rds10_orders','select=id,status,total_amount'), list('rds10_alerts','select=id&is_read=eq.false')
+    ]);
+    const purchases=orders.filter(x=>x.status==='CONCLUIDO');
+    const revenue=purchases.reduce((s,x)=>s+Number(x.total_amount||0),0);
+    res.json({contacts:contacts.length,campaigns:campaigns.length,queue:queue.length,sent:sent.length,returns:returns.length,orders:orders.length,purchases:purchases.length,revenue,alerts:alerts.length,connected,number:connectedNumber});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 
-app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS',version:'10.0 FINAL',connected}));
-app.get('/api/status',(req,res)=>res.json({connected,starting,number:connectedNumber,qrDataUrl,lastError,lastConnectionAt,version:'10.0 FINAL'}));
-app.post('/api/whatsapp/connect',async(req,res)=>{try{await start(!!req.body?.force);res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/logout',async(req,res)=>{try{try{await sock?.logout()}catch{}await closeSock();await authClear();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/whatsapp/test',async(req,res)=>{try{const text=req.body.text||'✅ Teste CANAL DE VENDAS RDS V10 FINAL';const id=await sendText(req.body.to,text);res.json({ok:true,id})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/groups',async(req,res)=>{ try{res.json(await list('rds10_groups','select=*&order=name.asc'));}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/groups',async(req,res)=>{ try{ const name=cleanText(req.body.name).toUpperCase(); if(!name) throw new Error('Nome obrigatório.'); const rows=await insert('rds10_groups',{name,created_at:nowISO()}); res.json(rows[0]);}catch(e){res.status(400).json({error:e.message});} });
 
-app.get('/api/diagnostics',async(req,res)=>{const out={version:'10.0 FINAL',supabase:false,whatsapp:connected,tables:{},number:connectedNumber,time:now()};try{for(const t of Object.values(T)){try{await sb(`/rest/v1/${t}?select=*&limit=1`);out.tables[t]=true}catch(e){out.tables[t]=e.message}}out.supabase=Object.values(out.tables).every(v=>v===true);res.json(out)}catch(e){res.status(500).json({...out,error:e.message})}});
+app.get('/api/contacts',async(req,res)=>{ try{res.json(await list('rds10_contacts','select=*&order=created_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/contacts',async(req,res)=>{
+  try{ const phone=normalizeBR(req.body.phone); if(!validBRPhone(phone)) throw new Error('Telefone inválido.'); const found=connected?await sock.onWhatsApp(`${phone}@s.whatsapp.net`):null; const valid=connected?Boolean(found?.[0]?.exists):false; const rows=await insert('rds10_contacts',{name:cleanText(req.body.name)||`Cliente ${phone.slice(-4)}`,phone,group_name:cleanText(req.body.group_name)||'NOVOS',city:cleanText(req.body.city)||null,tags:cleanText(req.body.tags)||null,status:req.body.status||'ATIVO',origin:'MANUAL',validated:valid,created_at:nowISO(),updated_at:nowISO()}); res.json(rows[0]); }catch(e){res.status(400).json({error:e.message});}
+});
+app.put('/api/contacts/:id',async(req,res)=>{ try{ const row={...req.body,updated_at:nowISO()}; if(row.phone) row.phone=normalizeBR(row.phone); const rows=await patch('rds10_contacts',`id=eq.${req.params.id}`,row); res.json(rows[0]); }catch(e){res.status(400).json({error:e.message});} });
+app.delete('/api/contacts/:id',async(req,res)=>{ try{await del('rds10_contacts',`id=eq.${req.params.id}`);res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/contacts/:id/validate',async(req,res)=>{ try{ const c=await one('rds10_contacts',`select=*&id=eq.${req.params.id}`); if(!c) throw new Error('Contato não encontrado.'); const pn=`${normalizeBR(c.phone)}@s.whatsapp.net`; const f=await sock.onWhatsApp(pn); const ok=Boolean(f?.[0]?.exists); const rows=await patch('rds10_contacts',`id=eq.${c.id}`,{validated:ok,updated_at:nowISO()}); res.json(rows[0]); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/contacts/import',async(req,res)=>{
+  try{
+    const items=Array.isArray(req.body.items)?req.body.items:[]; const saved=[],duplicates=[],invalid=[];
+    for(const item of items){
+      const phone=normalizeBR(item.phone); if(!validBRPhone(phone)){invalid.push(item);continue;}
+      if(await findContact(phone)){duplicates.push(item);continue;}
+      const rows=await insert('rds10_contacts',{name:cleanText(item.name)||`Cliente ${phone.slice(-4)}`,phone,group_name:cleanText(item.group_name)||'IMPORTADOS',origin:'IMPORTACAO',status:'ATIVO',validated:false,created_at:nowISO(),updated_at:nowISO()}); saved.push(rows[0]);
+    }
+    res.json({saved:saved.length,duplicates:duplicates.length,invalid:invalid.length});
+  }catch(e){res.status(400).json({error:e.message});}
+});
 
-app.get('/api/groups',async(req,res)=>{try{res.json(await sb(`/rest/v1/${T.groups}?select=*&order=is_system.desc,name.asc`))}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/groups',async(req,res)=>{try{const name=safe(req.body.name).toUpperCase();if(!name)return res.status(400).json({error:'Informe o nome do grupo.'});const r=await sb(`/rest/v1/${T.groups}?on_conflict=normalized_name`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({name,normalized_name:name,is_system:false})});res.json(r?.[0]||{name})}catch(e){res.status(500).json({error:e.message})}});
-app.delete('/api/groups/:id',async(req,res)=>{try{const g=(await sb(`/rest/v1/${T.groups}?id=eq.${req.params.id}&select=*`))?.[0];if(!g)return res.json({ok:true});if(g.is_system)return res.status(400).json({error:'Grupo padrão não pode ser excluído.'});const used=await sb(`/rest/v1/${T.contacts}?group_name=eq.${encodeURIComponent(g.name)}&select=id&limit=1`);if(used?.length)return res.status(400).json({error:'Transfira os contatos antes de excluir o grupo.'});await sb(`/rest/v1/${T.groups}?id=eq.${req.params.id}`,{method:'DELETE'});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/campaigns',async(req,res)=>{ try{ const cs=await list('rds10_campaigns','select=*&order=created_at.desc'); for(const c of cs){ const ds=await list('rds10_deliveries',`select=status&campaign_id=eq.${c.id}`); c.metrics={total:ds.length,queue:ds.filter(x=>x.status==='AGENDADA').length,sent:ds.filter(x=>x.status==='ENVIADA').length,failed:ds.filter(x=>x.status==='FALHA').length,cancelled:ds.filter(x=>x.status==='CANCELADA').length}; } res.json(cs);}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/campaigns',async(req,res)=>{
+  try{
+    const b=req.body||{}; const code=shortCode();
+    const rows=await insert('rds10_campaigns',{code,name:cleanText(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:Array.isArray(b.selected_contact_ids)?b.selected_contact_ids:[],cta_enabled:b.cta_enabled!==false,status:'RASCUNHO',created_at:nowISO(),updated_at:nowISO()});
+    const c=rows[0]; const steps=Array.isArray(b.steps)?b.steps:[];
+    for(let i=0;i<steps.length;i++) await insert('rds10_campaign_steps',{campaign_id:c.id,step_index:i+1,delay_minutes:i===0?0:Number(steps[i].delay_minutes||0),message:cleanText(steps[i].message),created_at:nowISO()},'minimal');
+    res.json(c);
+  }catch(e){res.status(400).json({error:e.message});}
+});
+app.post('/api/campaigns/:id/activate',async(req,res)=>{ try{res.json({ok:true,...await activateCampaign(req.params.id)});}catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/campaigns/:id/duplicate',async(req,res)=>{ try{ const c=await one('rds10_campaigns',`select=*&id=eq.${req.params.id}`); const steps=await list('rds10_campaign_steps',`select=*&campaign_id=eq.${req.params.id}&order=step_index.asc`); const rows=await insert('rds10_campaigns',{...c,id:undefined,code:shortCode(),name:`${c.name} (cópia)`,status:'RASCUNHO',activated_at:null,created_at:nowISO(),updated_at:nowISO()}); const nc=rows[0]; for(const s of steps) await insert('rds10_campaign_steps',{campaign_id:nc.id,step_index:s.step_index,delay_minutes:s.delay_minutes,message:s.message,created_at:nowISO()},'minimal'); res.json(nc);}catch(e){res.status(400).json({error:e.message});} });
+app.delete('/api/campaigns/:id',async(req,res)=>{ try{await del('rds10_deliveries',`campaign_id=eq.${req.params.id}`);await del('rds10_campaign_steps',`campaign_id=eq.${req.params.id}`);await del('rds10_campaigns',`id=eq.${req.params.id}`);res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
+app.get('/api/campaigns/:id/details',async(req,res)=>{ try{ const c=await one('rds10_campaigns',`select=*&id=eq.${req.params.id}`); const steps=await list('rds10_campaign_steps',`select=*&campaign_id=eq.${req.params.id}&order=step_index.asc`); const deliveries=await list('rds10_deliveries',`select=*&campaign_id=eq.${req.params.id}&order=scheduled_at.asc`); res.json({campaign:c,steps,deliveries});}catch(e){res.status(500).json({error:e.message});} });
 
-app.get('/api/contacts',async(req,res)=>{try{res.json(await sb(`/rest/v1/${T.contacts}?select=*&order=name.asc&limit=10000`))}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/contacts',async(req,res)=>{try{const phone=norm(req.body.phone);if(!/^55\d{10,11}$/.test(phone))return res.status(400).json({error:'Telefone inválido.'});const b={name:safe(req.body.name)||'SEM NOME',phone,group_name:safe(req.body.group_name)||'NOVOS',city:safe(req.body.city)||null,tags:safe(req.body.tags)||null,status:req.body.status||'ATIVO',origin:req.body.origin||'MANUAL',notes:safe(req.body.notes),opted_out:!!req.body.opted_out,updated_at:now()};const r=await sb(`/rest/v1/${T.contacts}?on_conflict=phone`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify(b)});res.json(r?.[0])}catch(e){res.status(500).json({error:e.message})}});
-app.put('/api/contacts/:id',async(req,res)=>{try{const b={...req.body,phone:norm(req.body.phone),updated_at:now()};delete b.id;delete b.created_at;res.json((await sb(`/rest/v1/${T.contacts}?id=eq.${req.params.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(b)}))?.[0])}catch(e){res.status(500).json({error:e.message})}});
-app.delete('/api/contacts/:id',async(req,res)=>{try{await sb(`/rest/v1/${T.contacts}?id=eq.${req.params.id}`,{method:'DELETE'});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/contacts/validate',async(req,res)=>{try{const ids=req.body.ids||[];let valid=0,invalid=0;for(const id of ids){const c=(await sb(`/rest/v1/${T.contacts}?id=eq.${id}&select=*`))?.[0];if(!c)continue;let ok=false;try{if(connected){const jid=`${norm(c.phone)}@s.whatsapp.net`;ok=(await sock.onWhatsApp(jid))?.length>0}}catch{}await sb(`/rest/v1/${T.contacts}?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({whatsapp_validated:ok,updated_at:now()})});ok?valid++:invalid++}res.json({ok:true,valid,invalid})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/execution',async(req,res)=>{ try{ const cs=await list('rds10_campaigns','select=*&status=in.(ATIVA,FINALIZADA)&order=created_at.desc'); for(const c of cs){ c.deliveries=await list('rds10_deliveries',`select=*&campaign_id=eq.${c.id}&order=scheduled_at.asc`); } res.json(cs);}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/process-now',async(req,res)=>{ try{await processQueue();res.json({ok:true});}catch(e){res.status(500).json({error:e.message});} });
 
-app.get('/api/campaigns',async(req,res)=>{try{const cs=await sb(`/rest/v1/${T.campaigns}?select=*&order=created_at.desc&limit=100`);for(const c of cs||[])c.stats=await campaignStats(c.id);res.json(cs)}catch(e){res.status(500).json({error:e.message})}});
-app.get('/api/campaigns/:id',async(req,res)=>{try{const c=(await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}&select=*`))?.[0];if(!c)return res.status(404).json({error:'Campanha não encontrada.'});c.steps=await sb(`/rest/v1/${T.steps}?campaign_id=eq.${c.id}&select=*&order=step_index.asc`);c.deliveries=await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${c.id}&select=*&order=scheduled_at.asc&limit=10000`);c.stats=await campaignStats(c.id);res.json(c)}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/campaigns',async(req,res)=>{try{const b=req.body;if(!safe(b.name)||!b.start_at||!b.steps?.length)return res.status(400).json({error:'Preencha nome, horário e ao menos uma mensagem.'});if(new Date(b.start_at).getTime()<Date.now()-60000)return res.status(400).json({error:'O primeiro envio não pode ficar no passado.'});const c=(await sb(`/rest/v1/${T.campaigns}`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({short_code:shortCode(),name:safe(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:b.selected_contact_ids||[],status:'RASCUNHO',stop_on_reply:b.stop_on_reply!==false,stop_on_order:b.stop_on_order!==false})}))?.[0];await saveSteps(c.id,b.steps);res.json(c)}catch(e){res.status(500).json({error:e.message})}});
-app.put('/api/campaigns/:id',async(req,res)=>{try{const old=(await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}&select=*`))?.[0];if(!old)return res.status(404).json({error:'Campanha não encontrada.'});if(!['RASCUNHO','ATIVA'].includes(old.status))return res.status(400).json({error:'Campanha finalizada não pode ser editada. Duplique-a para reutilizar.'});const b=req.body;if(new Date(b.start_at).getTime()<Date.now()-60000&&old.status==='RASCUNHO')return res.status(400).json({error:'O primeiro envio não pode ficar no passado.'});await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}`,{method:'PATCH',body:JSON.stringify({name:safe(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode,target_group:b.target_group||null,selected_contact_ids:b.selected_contact_ids||[],stop_on_reply:b.stop_on_reply!==false,stop_on_order:b.stop_on_order!==false,updated_at:now()})});await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${req.params.id}`,{method:'DELETE'});await saveSteps(req.params.id,b.steps||[]);if(old.status==='ATIVA')await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}`,{method:'PATCH',body:JSON.stringify({status:'RASCUNHO',activated_at:null})});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/campaigns/:id/activate',async(req,res)=>{try{const c=(await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}&select=*`))?.[0];if(!c)return res.status(404).json({error:'Campanha não encontrada.'});if(new Date(c.start_at).getTime()<Date.now()-30000)return res.status(400).json({error:'O horário do primeiro envio já passou. Edite a campanha antes de ativar.'});const steps=await sb(`/rest/v1/${T.steps}?campaign_id=eq.${c.id}&select=*&order=step_index.asc`),contacts=await audience(c);if(!steps.length)return res.status(400).json({error:'Campanha sem mensagens.'});if(!contacts.length)return res.status(400).json({error:'Nenhum contato elegível selecionado.'});await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${c.id}`,{method:'DELETE'});const rows=[];for(const ct of contacts){let cursor=new Date(c.start_at);for(const s of steps){if(s.step_index>1)cursor=new Date(cursor.getTime()+Number(s.delay_minutes||0)*60000);rows.push({campaign_id:c.id,contact_id:ct.id,step_id:s.id,step_index:s.step_index,phone:ct.phone,scheduled_at:cursor.toISOString(),status:'AGENDADA'})}}for(let i=0;i<rows.length;i+=300)await sb(`/rest/v1/${T.deliveries}`,{method:'POST',body:JSON.stringify(rows.slice(i,i+300))});await sb(`/rest/v1/${T.campaigns}?id=eq.${c.id}`,{method:'PATCH',body:JSON.stringify({status:'ATIVA',activated_at:now(),finished_at:null,updated_at:now()})});await event('CAMPAIGN_ACTIVATED',{campaign_id:c.id,metadata:{contacts:contacts.length,deliveries:rows.length}});res.json({ok:true,contacts:contacts.length,deliveries:rows.length,first_send:c.start_at})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/campaigns/:id/cancel',async(req,res)=>{try{await sb(`/rest/v1/${T.deliveries}?campaign_id=eq.${req.params.id}&status=eq.AGENDADA`,{method:'PATCH',body:JSON.stringify({status:'CANCELADA',error_text:'Campanha cancelada',updated_at:now()})});await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}`,{method:'PATCH',body:JSON.stringify({status:'CANCELADA',finished_at:now(),updated_at:now()})});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/campaigns/:id/duplicate',async(req,res)=>{try{const c=(await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}&select=*`))?.[0];if(!c)return res.status(404).json({error:'Campanha não encontrada.'});const steps=await sb(`/rest/v1/${T.steps}?campaign_id=eq.${c.id}&select=*&order=step_index.asc`);const nc=(await sb(`/rest/v1/${T.campaigns}`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({short_code:shortCode(),name:`${c.name} - CÓPIA`,unit_price:c.unit_price,start_at:new Date(Date.now()+3600000).toISOString(),target_mode:c.target_mode,target_group:c.target_group,selected_contact_ids:c.selected_contact_ids,status:'RASCUNHO',stop_on_reply:c.stop_on_reply,stop_on_order:c.stop_on_order})}))?.[0];await saveSteps(nc.id,steps);res.json(nc)}catch(e){res.status(500).json({error:e.message})}});
-app.delete('/api/campaigns/:id',async(req,res)=>{try{await sb(`/rest/v1/${T.campaigns}?id=eq.${req.params.id}`,{method:'DELETE'});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/returns',async(req,res)=>{ try{res.json(await list('rds10_messages','select=*&direction=eq.IN&order=created_at.desc&limit=300'));}catch(e){res.status(500).json({error:e.message});} });
+app.get('/api/orders',async(req,res)=>{ try{res.json(await list('rds10_orders','select=*&order=updated_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); const s=await getSettings(); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,cleanText(s.final_message)||`✅ *COMPRA CONCLUÍDA*\nSeus bilhetes foram enviados. 🍀\nA Reino da Sorte agradece sua compra.\nBoa sorte! 🍀\n\nPedido ${o.code}`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/cancel',async(req,res)=>{ try{await patch('rds10_orders',`id=eq.${req.params.id}`,{status:'CANCELADO',updated_at:nowISO()});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
 
-app.get('/api/settings',async(req,res)=>{try{res.json(await settings())}catch(e){res.status(500).json({error:e.message})}});
-app.put('/api/settings',async(req,res)=>{try{const b={...req.body,id:1,saved_at:now()};res.json((await sb(`/rest/v1/${T.settings}?on_conflict=id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify(b)}))?.[0])}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/bot/test',async(req,res)=>{try{const cfg=await settings();const id=await sendText(req.body.to,`✅ *Bot V10 FINAL ativo*\n\n${cfg.fallback_message||''}`);res.json({ok:true,id})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/settings',async(req,res)=>{ try{res.json(await getSettings());}catch(e){res.status(500).json({error:e.message});} });
+app.put('/api/settings',async(req,res)=>{ try{ const rows=await patch('rds10_settings','id=eq.1',{...req.body,id:undefined,updated_at:nowISO()}); res.json(rows[0]);}catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/settings/test-bot',async(req,res)=>{ try{ const s=await getSettings(); const phone=normalizeBR(req.body.phone||connectedNumber); await sendTextPhone(phone,routerMessage(s)); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
 
-app.get('/api/orders',async(req,res)=>{try{res.json(await sb(`/rest/v1/${T.orders}?select=*&order=updated_at.desc&limit=500`))}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/orders/:id/confirm-payment',async(req,res)=>{try{const o=(await patchOrder(req.params.id,{status:'PAGAMENTO_CONFIRMADO',payment_confirmed_at:now()}))?.[0];if(o){await sendText(o.phone,'✅ *Pagamento confirmado!*\n\nSeu pedido está sendo finalizado. Aguarde o envio dos seus bilhetes por esta conversa.');await event('PAYMENT_CONFIRMED',{order_id:o.id,contact_id:o.contact_id,phone:o.phone})}res.json(o)}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/orders/:id/complete',async(req,res)=>{try{const o=(await sb(`/rest/v1/${T.orders}?id=eq.${req.params.id}&select=*`))?.[0];if(!o)return res.status(404).json({error:'Pedido não encontrado.'});const cfg=await settings();await sendText(o.phone,cfg.final_message||'🍀 Compra concluída.');const r=(await patchOrder(o.id,{status:'CONCLUIDO',completed_at:now()}))?.[0];await sb(`/rest/v1/${T.contacts}?id=eq.${o.contact_id}`,{method:'PATCH',body:JSON.stringify({group_name:'COMPRA REALIZADA',updated_at:now()})});await event('ORDER_COMPLETED',{order_id:o.id,contact_id:o.contact_id,phone:o.phone});res.json(r)}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/orders/:id/cancel',async(req,res)=>{try{res.json((await patchOrder(req.params.id,{status:'CANCELADO'}))?.[0])}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/alerts',async(req,res)=>{ try{res.json(await list('rds10_alerts','select=*&order=created_at.desc&limit=100'));}catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/alerts/read-all',async(req,res)=>{ try{await patch('rds10_alerts','is_read=eq.false',{is_read:true});res.json({ok:true});}catch(e){res.status(500).json({error:e.message});} });
+app.get('/api/diagnostic',async(req,res)=>{
+  const tables=['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_settings','rds10_orders','rds10_alerts','rds10_events','zap_auth'];
+  const db={}; for(const t of tables){ try{await list(t,'select=*&limit=1');db[t]='OK';}catch(e){db[t]=e.message;} }
+  res.json({version:'10.2.1',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
+});
 
-app.get('/api/messages',async(req,res)=>{try{res.json(await sb(`/rest/v1/${T.messages}?direction=eq.IN&select=*&order=created_at.desc&limit=500`))}catch(e){res.status(500).json({error:e.message})}});
-app.get('/api/alerts',async(req,res)=>{try{res.json(await sb(`/rest/v1/${T.alerts}?select=*&order=created_at.desc&limit=200`))}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/alerts/:id/read',async(req,res)=>{try{await sb(`/rest/v1/${T.alerts}?id=eq.${req.params.id}`,{method:'PATCH',body:JSON.stringify({is_read:true})});res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-app.post('/api/queue/process',async(req,res)=>{try{await processQueue();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
-
-app.get('/api/dashboard',async(req,res)=>{try{const [ct,cs,ds,ms,os,as,ev]=await Promise.all([sb(`/rest/v1/${T.contacts}?status=eq.ATIVO&opted_out=eq.false&select=id`),sb(`/rest/v1/${T.campaigns}?select=id,status`),sb(`/rest/v1/${T.deliveries}?select=status`),sb(`/rest/v1/${T.messages}?direction=eq.IN&select=id`),sb(`/rest/v1/${T.orders}?select=id,status,total_amount`),sb(`/rest/v1/${T.alerts}?is_read=eq.false&select=id`),sb(`/rest/v1/${T.events}?select=event_type`)]);res.json({contacts:ct.length,campaigns:cs.length,active_campaigns:cs.filter(x=>x.status==='ATIVA').length,queue:ds.filter(x=>x.status==='AGENDADA').length,sent:ds.filter(x=>['ENVIADA','ENTREGUE','LIDA'].includes(x.status)).length,delivered:ds.filter(x=>['ENTREGUE','LIDA'].includes(x.status)).length,read:ds.filter(x=>x.status==='LIDA').length,returns:ms.length,orders:os.length,proofs:os.filter(x=>x.status==='COMPROVANTE_RECEBIDO').length,completed:os.filter(x=>x.status==='CONCLUIDO').length,revenue:os.filter(x=>x.status==='CONCLUIDO').reduce((a,x)=>a+Number(x.total_amount||0),0),alerts:as.length,intents:ev.filter(x=>x.event_type==='INTENT').length,connected,number:connectedNumber})}catch(e){res.status(500).json({error:e.message})}});
-
-app.get('*',(req,res)=>res.sendFile(process.cwd()+'/index.html'));
-app.listen(PORT,async()=>{console.log(`CANAL DE VENDAS RDS V10 FINAL porta ${PORT}`);try{await start(false)}catch(e){console.log('WhatsApp:',e.message)}setTimeout(()=>processQueue().catch(()=>{}),8000)});
+app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
+app.listen(PORT,async()=>{
+  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.1.1 — porta ${PORT}`);
+  try{ await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
+});

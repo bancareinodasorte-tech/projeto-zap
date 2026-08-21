@@ -1,55 +1,40 @@
-CANAL DE VENDAS RDS — V10 FINAL
-================================
+CANAL DE VENDAS RDS — V10 FINAL OPERACIONAL 10.2.2
 
-OBJETIVO
-Versão reconstruída sobre um banco V10 próprio (tabelas rds10_*), sem depender das estruturas quebradas das versões V5/V6. A sessão do WhatsApp continua usando zap_auth para poder reaproveitar a conexão existente.
+PACOTE COM 11 ARQUIVOS.
 
-INSTALAÇÃO — ORDEM EXATA
-1) SUPABASE
-   - Abra SQL Editor > New query.
-   - Cole TODO o conteúdo de MIGRACAO-V10.sql.
-   - Clique Run UMA VEZ.
-   - O resultado esperado no final é:
-     CANAL DE VENDAS RDS V10 FINAL - BANCO INSTALADO COM SUCESSO
-   - A migração é idempotente: pode ser executada novamente sem apagar dados V10.
+INSTALAÇÃO / ATUALIZAÇÃO
+1. No Supabase > SQL Editor, abra o arquivo MIGRACAO_V10_FINAL.sql deste pacote.
+2. Execute TODO o arquivo uma única vez. Ele é incremental e NÃO apaga os dados V10 existentes.
+3. No repositório GitHub usado pelo Render, substitua os arquivos do projeto pelos 11 arquivos deste pacote.
+4. Confirme que o Render mantém as variáveis:
+   SUPABASE_URL
+   SUPABASE_SERVICE_ROLE_KEY
+5. Faça o deploy e aguarde ficar Live.
+6. Abra o site. O topo deve mostrar “V10 FINAL 10.2.2” e WhatsApp conectado.
+7. Em Ajustes, confira: WhatsApp do escritório, preço, chave PIX e favorecido. Salve.
+8. Use Diagnóstico V10. Todas as tabelas devem aparecer OK.
 
-2) GITHUB
-   - No repositório atual, substitua os arquivos de mesmo nome pelos arquivos deste pacote.
-   - NÃO renomeie app.js, server.js, index.html, styles.css, package.json, sw.js, manifest.webmanifest ou icone.svg.
-   - MIGRACAO-V10.sql, LEIA-ME.txt e CHECKLIST-TESTE-V10.txt podem permanecer no repositório.
+TESTE FINAL RECOMENDADO (1 CLIENTE)
+A. Criar campanha com 1 contato válido e 2 etapas (ex.: etapa 2 após 5 min).
+B. Ativar. A primeira mensagem deve sair somente no horário configurado.
+C. A mensagem da campanha terá “COMPRE AGORA” com link vinculado ao código da campanha.
+D. No cliente, clique no link ou envie “QUERO COMPRAR”.
+E. Bot deve enviar 2 mensagens separadas:
+   1) PREENCHER PEDIDO
+   2) Quantidade / Nome / Contato
+F. Responda preenchido, ex. Quantidade: 3. O sistema calcula R$ 9,00 se preço = R$ 3,00.
+G. Envie uma imagem/PDF como comprovante. O pedido deve mudar para AGUARDANDO_CONFERENCIA.
+H. No painel Compras, clique “Pagamento confirmado”.
+I. Depois de enviar os bilhetes manualmente ao cliente, clique “Bilhetes enviados”. O bot envia a mensagem final e encerra o pedido.
 
-3) RENDER
-   - Confirme as variáveis existentes:
-     SUPABASE_URL
-     SUPABASE_SERVICE_ROLE_KEY
-   - O Start Command deve ser: npm start
-   - Aguarde o deploy ficar Live.
-
-4) PRIMEIRA ABERTURA
-   - Abra Ajustes > Diagnóstico.
-   - Todas as tabelas rds10_* devem aparecer OK.
-   - Confira se WhatsApp está conectado. Se não estiver, gere novo QR.
-   - Salve as configurações do bot e faça um teste para um número seu.
-
-PRINCIPAIS RECURSOS V10
-- Banco novo e independente das tabelas conflitantes V5/V6.
-- Campanha em RASCUNHO não envia nada.
-- Ativação cria a fila, mas só envia quando scheduled_at chegar.
-- Sequência de lembretes por minutos, com imagem opcional em cada etapa.
-- Segmentação por todos, grupo ou contatos individuais.
-- CTA clicável PEDIR AGORA usando código curto da campanha.
-- Interrompe futuros lembretes quando o cliente inicia pedido.
-- Bot aceita QUERO COMPRAR e também frases como QUERO 2.
-- Quantidade pode ser detectada diretamente da mensagem.
-- Cliente novo que manda mensagem entra automaticamente na carteira.
-- Opt-out: cliente pode pedir para parar mensagens e é excluído da automação.
-- Handoff para escritório por palavras como ATENDENTE/ESCRITÓRIO.
-- Comprovante por imagem/PDF gera alerta e muda o pedido de etapa.
-- Confirmação de pagamento permanece manual pelo operador.
-- Envio de bilhete pelo operador após pagamento confirmado conclui o pedido automaticamente quando for mídia/documento.
-- Dashboard com fila, envios, entregas, leituras, interesses, comprovantes, compras e receita.
-- Diagnóstico interno do schema V10.
-- Importação VCF/CSV com prévia, nomes, duplicados e inválidos antes de salvar.
+CORREÇÃO CRÍTICA DE MENSAGENS / LID
+- O sistema NÃO transforma mais IDs @lid em número de telefone.
+- Ele prioriza senderPn / remoteJidAlt / participantAlt quando o WhatsApp fornece o número real.
+- Se vier apenas LID, grava alerta e retorno, mas NÃO cria contato com número falso.
+- As mensagens enviadas ficam em cache para atender pedidos de reenvio/recuperação de criptografia do WhatsApp Web.
+- O pacote usa Baileys 6.7.24 (linha v6 corrigida) e bloqueia eventos de sincronização que não sejam novas notificações.
 
 IMPORTANTE
-A V10 foi validada por análise estática/sintática e consistência interna do pacote. A conexão real com Supabase, Render e WhatsApp depende das credenciais e do ambiente online; por isso use CHECKLIST-TESTE-V10.txt antes de operação em massa.
+- “Aguardando mensagem...” é uma mensagem do próprio WhatsApp quando um dispositivo vinculado ainda não conseguiu recuperar/descriptografar o conteúdo. Esta versão inclui as correções aplicáveis no sistema (destino PN/LID, cache getMessage, reenvio e uso conservador da sessão), mas a confirmação definitiva precisa ser feita no teste real entre os aparelhos conectados.
+- Não use SQL antigo da V6/V10 anterior depois desta migração.
+- Não apague a sessão zap_auth se o WhatsApp já estiver conectado.
