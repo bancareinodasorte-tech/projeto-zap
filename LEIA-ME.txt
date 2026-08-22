@@ -1,4 +1,4 @@
-CANAL DE VENDAS RDS — V10 FINAL OPERACIONAL 10.2.2
+CANAL DE VENDAS RDS — V10 FINAL OPERACIONAL 10.2.3
 
 PACOTE COM 11 ARQUIVOS.
 
@@ -10,7 +10,7 @@ INSTALAÇÃO / ATUALIZAÇÃO
    SUPABASE_URL
    SUPABASE_SERVICE_ROLE_KEY
 5. Faça o deploy e aguarde ficar Live.
-6. Abra o site. O topo deve mostrar “V10 FINAL 10.2.2” e WhatsApp conectado.
+6. Abra o site. O topo deve mostrar “V10 FINAL 10.2.3” e WhatsApp conectado.
 7. Em Ajustes, confira: WhatsApp do escritório, preço, chave PIX e favorecido. Salve.
 8. Use Diagnóstico V10. Todas as tabelas devem aparecer OK.
 
@@ -38,3 +38,20 @@ IMPORTANTE
 - “Aguardando mensagem...” é uma mensagem do próprio WhatsApp quando um dispositivo vinculado ainda não conseguiu recuperar/descriptografar o conteúdo. Esta versão inclui as correções aplicáveis no sistema (destino PN/LID, cache getMessage, reenvio e uso conservador da sessão), mas a confirmação definitiva precisa ser feita no teste real entre os aparelhos conectados.
 - Não use SQL antigo da V6/V10 anterior depois desta migração.
 - Não apague a sessão zap_auth se o WhatsApp já estiver conectado.
+
+CORREÇÃO 10.2.3 — SINCRONIZAÇÃO DE MENSAGENS
+- Reforçado o armazenamento/cache das chaves Signal do WhatsApp Multi-Device.
+- Adicionado cache de tentativas de descriptografia/reenvio.
+- getMessage agora recupera mensagens de texto enviadas também do Supabase após restart/deploy.
+- Aumentada a tolerância de retry de mensagens.
+- Nenhuma migração nova é necessária para atualizar da 10.2.2 para a 10.2.3.
+
+TESTE APÓS O DEPLOY
+1. Não execute novamente a migração SQL.
+2. Aguarde o topo indicar WhatsApp conectado.
+3. Envie uma campanha para 1 contato de teste.
+4. Confirme a mensagem no WhatsApp Web e no celular.
+5. Responda pelo celular e confirme a resposta automática nos dois dispositivos.
+
+OBSERVAÇÃO
+Se mensagens antigas que já estavam como “Aguardando mensagem” continuarem assim, elas podem ter sido criptografadas antes desta correção. O teste válido deve ser feito com mensagens NOVAS após o deploy 10.2.3.

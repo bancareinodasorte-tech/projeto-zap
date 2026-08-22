@@ -8,7 +8,8 @@ const {
   BufferJSON,
   initAuthCreds,
   proto,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
 
 const app = express();
@@ -84,6 +85,8 @@ async function list(table, query='select=*'){
 // ---------------- WhatsApp / Baileys ----------------
 let sock = null, starting = false, connected = false, qrDataUrl = '', connectedNumber = '', lastError = '', lastConnectionAt = null;
 const messageCache = new Map(); // key.id -> full message, usado para reenvio/recuperação de mensagem
+const retryCounterCache = new Map(); // mantém o ciclo de retry de descriptografia durante reconexões do socket
+const signalLogger = pino({level:'silent'});
 const lidToPn = new Map();
 let lastInboundAt = 0;
 
@@ -135,6 +138,25 @@ function rememberMessage(m){
     messageCache.delete(first);
   }
 }
+async function recoverSentMessage(key){
+  const id = key?.id;
+  if(!id) return undefined;
+  const cached = messageCache.get(id)?.message;
+  if(cached) return cached;
+  // Retry após restart/deploy: recupera mensagens de texto já registradas no Supabase.
+  // O WhatsApp/Baileys usa getMessage quando um dispositivo pede nova tentativa de descriptografia.
+  try{
+    const row = await one('rds10_messages', `select=body,message_type&wa_message_id=eq.${encodeURIComponent(id)}&direction=eq.OUT&order=created_at.desc&limit=1`);
+    if(row?.message_type === 'text' && cleanText(row.body)) return proto.Message.fromObject({ conversation: cleanText(row.body) });
+  }catch{}
+  return undefined;
+}
+const retryCache = {
+  get: key => retryCounterCache.get(key),
+  set: (key,value) => { retryCounterCache.set(key,value); if(retryCounterCache.size>3000) retryCounterCache.delete(retryCounterCache.keys().next().value); },
+  del: key => retryCounterCache.delete(key),
+  flushAll: () => retryCounterCache.clear()
+};
 function pnJidFromKey(m){
   const key = m?.key || {};
   const candidates = [
@@ -191,19 +213,23 @@ async function startWhatsApp(force=false){
   try{
     const { state, saveCreds } = await useSupabaseAuthState();
     const { version } = await fetchLatestBaileysVersion();
+    // O cache do Signal evita leituras concorrentes/repetidas no banco durante a
+    // negociação das chaves dos vários dispositivos do mesmo contato.
+    const stableAuth = { ...state, keys: makeCacheableSignalKeyStore(state.keys, signalLogger) };
     sock = makeWASocket({
       version,
-      auth: state,
+      auth: stableAuth,
       printQRInTerminal:false,
       logger:pino({level:'silent'}),
-      browser:['CANAL DE VENDAS RDS','Chrome','10.2.2'],
+      browser:['CANAL DE VENDAS RDS','Chrome','10.2.3'],
       markOnlineOnConnect:false,
       syncFullHistory:false,
       shouldSyncHistoryMessage:()=>false,
       generateHighQualityLinkPreview:false,
-      maxMsgRetryCount:8,
-      retryRequestDelayMs:250,
-      getMessage: async(key) => messageCache.get(key?.id)?.message || undefined
+      maxMsgRetryCount:12,
+      retryRequestDelayMs:350,
+      msgRetryCounterCache: retryCache,
+      getMessage: recoverSentMessage
     });
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', async update => {
@@ -511,7 +537,7 @@ setInterval(()=>{
 }, 120000);
 
 // ---------------- API ----------------
-app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.2',connected,lastConnectionAt,lastError}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.3',connected,lastConnectionAt,lastError}));
 app.get('/api/status',(req,res)=>res.json({ok:true,connected,number:connectedNumber||null,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size}));
 app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/whatsapp/logout',async(req,res)=>{ try{ if(sock) try{await sock.logout();}catch{}; await closeSocket(); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
@@ -583,11 +609,11 @@ app.post('/api/alerts/read-all',async(req,res)=>{ try{await patch('rds10_alerts'
 app.get('/api/diagnostic',async(req,res)=>{
   const tables=['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_settings','rds10_orders','rds10_alerts','rds10_events','zap_auth'];
   const db={}; for(const t of tables){ try{await list(t,'select=*&limit=1');db[t]='OK';}catch(e){db[t]=e.message;} }
-  res.json({version:'10.2.2',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
+  res.json({version:'10.2.3',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
 });
 
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 app.listen(PORT,async()=>{
-  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.2 — porta ${PORT}`);
+  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.3 — porta ${PORT}`);
   try{ await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
 });
