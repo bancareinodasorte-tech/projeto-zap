@@ -1,12 +1,12 @@
 {
   "name": "canal-de-vendas-rds-laboratorio-v7",
-  "version": "7.0.0-lab.1",
+  "version": "7.0.1-lab.2",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node lab-v7.mjs",
+    "start": "node lab-v7-fixed.mjs",
     "start:legacy": "node server.js",
-    "check": "node --check lab-v7.mjs && node --check server.js && node --check app.js"
+    "check": "node --check lab-v7-fixed.mjs && node --check lab-v7.mjs && node --check server.js && node --check app.js"
   },
   "engines": {
     "node": ">=20"
