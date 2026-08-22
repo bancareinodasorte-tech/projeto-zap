@@ -1,57 +1,39 @@
-CANAL DE VENDAS RDS — V10 FINAL OPERACIONAL 10.2.3
+CANAL DE VENDAS RDS — V10.3 PREMIUM
 
-PACOTE COM 11 ARQUIVOS.
+BASE:
+- Construída diretamente sobre a V10.2.3 que concluiu o fluxo completo.
+- Não recria banco.
+- Não exige nova migração SQL.
+- Mantém a sessão WhatsApp/Baileys e tabelas rds10_* atuais.
 
-INSTALAÇÃO / ATUALIZAÇÃO
-1. No Supabase > SQL Editor, abra o arquivo MIGRACAO_V10_FINAL.sql deste pacote.
-2. Execute TODO o arquivo uma única vez. Ele é incremental e NÃO apaga os dados V10 existentes.
-3. No repositório GitHub usado pelo Render, substitua os arquivos do projeto pelos 11 arquivos deste pacote.
-4. Confirme que o Render mantém as variáveis:
-   SUPABASE_URL
-   SUPABASE_SERVICE_ROLE_KEY
-5. Faça o deploy e aguarde ficar Live.
-6. Abra o site. O topo deve mostrar “V10 FINAL 10.2.3” e WhatsApp conectado.
-7. Em Ajustes, confira: WhatsApp do escritório, preço, chave PIX e favorecido. Salve.
-8. Use Diagnóstico V10. Todas as tabelas devem aparecer OK.
+PRINCIPAIS AJUSTES:
+- Antiduplicidade de contatos por telefone normalizado.
+- Contato recebido pelo WhatsApp é atualizado em vez de duplicado.
+- Nome informado no pedido atualiza o CRM.
+- Compra concluída move cliente para COMPRA REALIZADA.
+- Removida a frase “Copie, preencha e envie”.
+- Formulário do pedido fica limpo: Quantidade / Nome / Contato / Pedido.
+- Aba Execução virou CENTRAL DE AUTOMAÇÃO.
+- CRM com perfil comercial e histórico.
+- Central inicial mostra apenas prioridades da operação.
+- Compras em funil operacional.
+- Retornos mostram estágio atual do cliente.
+- Reenvio manual de falhas pela Central de Automação.
+- Layout premium para desktop e mobile.
+- Motor WhatsApp, campanhas, PIX e comprovantes preservados.
 
-TESTE FINAL RECOMENDADO (1 CLIENTE)
-A. Criar campanha com 1 contato válido e 2 etapas (ex.: etapa 2 após 5 min).
-B. Ativar. A primeira mensagem deve sair somente no horário configurado.
-C. A mensagem da campanha terá “COMPRE AGORA” com link vinculado ao código da campanha.
-D. No cliente, clique no link ou envie “QUERO COMPRAR”.
-E. Bot deve enviar 2 mensagens separadas:
-   1) PREENCHER PEDIDO
-   2) Quantidade / Nome / Contato
-F. Responda preenchido, ex. Quantidade: 3. O sistema calcula R$ 9,00 se preço = R$ 3,00.
-G. Envie uma imagem/PDF como comprovante. O pedido deve mudar para AGUARDANDO_CONFERENCIA.
-H. No painel Compras, clique “Pagamento confirmado”.
-I. Depois de enviar os bilhetes manualmente ao cliente, clique “Bilhetes enviados”. O bot envia a mensagem final e encerra o pedido.
+INSTALAÇÃO:
+1. Substitua no GitHub todos os arquivos deste pacote pelos atuais.
+2. NÃO execute SQL.
+3. Aguarde o Render concluir o deploy.
+4. Confirme no log: CANAL DE VENDAS RDS V10.3 PREMIUM.
+5. Atualize a página com Ctrl+F5 ou feche/reabra o app no celular.
 
-CORREÇÃO CRÍTICA DE MENSAGENS / LID
-- O sistema NÃO transforma mais IDs @lid em número de telefone.
-- Ele prioriza senderPn / remoteJidAlt / participantAlt quando o WhatsApp fornece o número real.
-- Se vier apenas LID, grava alerta e retorno, mas NÃO cria contato com número falso.
-- As mensagens enviadas ficam em cache para atender pedidos de reenvio/recuperação de criptografia do WhatsApp Web.
-- O pacote usa Baileys 6.7.24 (linha v6 corrigida) e bloqueia eventos de sincronização que não sejam novas notificações.
+TESTE FINAL:
+1 contato → campanha → COMPRE AGORA → pedido → quantidade/nome/contato →
+PIX → comprovante → confirmar pagamento → bilhetes enviados → concluído.
 
-IMPORTANTE
-- “Aguardando mensagem...” é uma mensagem do próprio WhatsApp quando um dispositivo vinculado ainda não conseguiu recuperar/descriptografar o conteúdo. Esta versão inclui as correções aplicáveis no sistema (destino PN/LID, cache getMessage, reenvio e uso conservador da sessão), mas a confirmação definitiva precisa ser feita no teste real entre os aparelhos conectados.
-- Não use SQL antigo da V6/V10 anterior depois desta migração.
-- Não apague a sessão zap_auth se o WhatsApp já estiver conectado.
-
-CORREÇÃO 10.2.3 — SINCRONIZAÇÃO DE MENSAGENS
-- Reforçado o armazenamento/cache das chaves Signal do WhatsApp Multi-Device.
-- Adicionado cache de tentativas de descriptografia/reenvio.
-- getMessage agora recupera mensagens de texto enviadas também do Supabase após restart/deploy.
-- Aumentada a tolerância de retry de mensagens.
-- Nenhuma migração nova é necessária para atualizar da 10.2.2 para a 10.2.3.
-
-TESTE APÓS O DEPLOY
-1. Não execute novamente a migração SQL.
-2. Aguarde o topo indicar WhatsApp conectado.
-3. Envie uma campanha para 1 contato de teste.
-4. Confirme a mensagem no WhatsApp Web e no celular.
-5. Responda pelo celular e confirme a resposta automática nos dois dispositivos.
-
-OBSERVAÇÃO
-Se mensagens antigas que já estavam como “Aguardando mensagem” continuarem assim, elas podem ter sido criptografadas antes desta correção. O teste válido deve ser feito com mensagens NOVAS após o deploy 10.2.3.
+OBSERVAÇÃO:
+O atraso “Aguardando mensagem...” no app WhatsApp do celular é um comportamento de
+sincronização/descriptografia do próprio WhatsApp multi-dispositivo. A V10.3 preserva
+as correções de cache Signal/getMessage/retry já presentes na V10.2.3.

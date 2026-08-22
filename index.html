@@ -1,5 +1,49 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#174f93"><title>CANAL DE VENDAS RDS</title><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"></head><body>
-<header class="top"><div><b>💬 CANAL DE VENDAS RDS</b><small>Reino da Sorte • V10 FINAL 10.2.3</small></div><span id="waStatus" class="pill">WhatsApp...</span></header>
-<main id="app"></main>
-<nav id="nav"><button data-page="home">🏠<small>Início</small></button><button data-page="contacts">👥<small>Contatos</small></button><button data-page="campaigns">📣<small>Campanhas</small></button><button data-page="execution">📊<small>Execução</small></button><button data-page="returns">💬<small>Retornos</small></button><button data-page="orders">✅<small>Compras</small></button><button data-page="settings">⚙️<small>Ajustes</small></button></nav>
-<div id="toast"></div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b3f86">
+<title>CANAL DE VENDAS RDS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand-lockup">
+      <div class="brand-mark">RDS</div>
+      <div><strong>CANAL DE VENDAS</strong><small>Reino da Sorte • V10.3 PREMIUM</small></div>
+    </div>
+    <nav id="nav" class="side-nav">
+      <button data-page="home"><span>⌂</span><b>Central</b></button>
+      <button data-page="contacts"><span>◎</span><b>Clientes</b></button>
+      <button data-page="campaigns"><span>◈</span><b>Campanhas</b></button>
+      <button data-page="execution"><span>⚡</span><b>Automação</b></button>
+      <button data-page="returns"><span>↩</span><b>Retornos</b></button>
+      <button data-page="orders"><span>✓</span><b>Compras</b></button>
+      <button data-page="settings"><span>⚙</span><b>Ajustes</b></button>
+    </nav>
+    <div class="sidebar-foot"><span id="waStatus" class="status-dot">WhatsApp...</span></div>
+  </aside>
+  <section class="workspace">
+    <header class="top">
+      <div><b>CANAL DE VENDAS RDS</b><small>Operação comercial inteligente • V10.3 PREMIUM</small></div>
+      <div class="top-actions"><span id="clock"></span><span id="waStatusMobile" class="pill">WhatsApp...</span></div>
+    </header>
+    <main id="app"></main>
+  </section>
+</div>
+<nav id="mobileNav" class="mobile-nav">
+  <button data-page="home">⌂<small>Central</small></button>
+  <button data-page="contacts">◎<small>Clientes</small></button>
+  <button data-page="campaigns">◈<small>Campanhas</small></button>
+  <button data-page="execution">⚡<small>Automação</small></button>
+  <button data-page="returns">↩<small>Retornos</small></button>
+  <button data-page="orders">✓<small>Compras</small></button>
+  <button data-page="settings">⚙<small>Ajustes</small></button>
+</nav>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

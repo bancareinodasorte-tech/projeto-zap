@@ -221,7 +221,7 @@ async function startWhatsApp(force=false){
       auth: stableAuth,
       printQRInTerminal:false,
       logger:pino({level:'silent'}),
-      browser:['CANAL DE VENDAS RDS','Chrome','10.2.3'],
+      browser:['CANAL DE VENDAS RDS','Chrome','10.3'],
       markOnlineOnConnect:false,
       syncFullHistory:false,
       shouldSyncHistoryMessage:()=>false,
@@ -335,21 +335,67 @@ async function getSettings(){
   }
   return s;
 }
+function phoneKey(v){
+  const n = normalizeBR(v);
+  return validBRPhone(n) ? n : '';
+}
+function isAutoContactName(name=''){
+  return /^(SEM NOME|Cliente \d{4}|WhatsApp \d{4})$/i.test(cleanText(name));
+}
 async function findContact(phone){
-  if(!phone) return null;
-  return one('rds10_contacts',`select=*&phone=eq.${encodeURIComponent(phone)}`);
+  const key = phoneKey(phone);
+  if(!key) return null;
+  let c = await one('rds10_contacts',`select=*&phone=eq.${encodeURIComponent(key)}`);
+  if(c) return c;
+  // Compatibilidade com cadastros antigos em formatações diferentes.
+  const rows = await list('rds10_contacts','select=*');
+  return rows.find(x => phoneKey(x.phone) === key) || null;
+}
+async function saveOrMergeContact(data, {preferExisting=true}={}){
+  const phone = phoneKey(data.phone);
+  if(!phone) throw new Error('Telefone inválido.');
+  const existing = await findContact(phone);
+  const name = cleanText(data.name);
+  if(existing){
+    const patchData = { updated_at:nowISO() };
+    if(name && (isAutoContactName(existing.name) || data.force_name)) patchData.name = name;
+    if(data.group_name && (!existing.group_name || existing.group_name==='ENTRADA WHATSAPP' || data.force_group)) patchData.group_name = cleanText(data.group_name);
+    if(data.city) patchData.city = cleanText(data.city);
+    if(data.tags) patchData.tags = cleanText(data.tags);
+    if(data.lid && !existing.lid) patchData.lid = data.lid;
+    if(data.last_seen_at) patchData.last_seen_at = data.last_seen_at;
+    if(data.validated === true) patchData.validated = true;
+    const rows = await patch('rds10_contacts',`id=eq.${existing.id}`,patchData);
+    return {contact:rows?.[0] || {...existing,...patchData}, merged:true};
+  }
+  const rows = await insert('rds10_contacts',{
+    name:name || `Cliente ${phone.slice(-4)}`,
+    phone,
+    lid:data.lid || null,
+    group_name:cleanText(data.group_name)||'NOVOS',
+    city:cleanText(data.city)||null,
+    tags:cleanText(data.tags)||null,
+    status:data.status||'ATIVO',
+    origin:data.origin||'MANUAL',
+    validated:Boolean(data.validated),
+    last_seen_at:data.last_seen_at||null,
+    created_at:nowISO(),updated_at:nowISO()
+  });
+  return {contact:rows?.[0], merged:false};
 }
 async function upsertInboundContact(identity, pushName=''){
-  if(!identity.phone) return null; // NUNCA grava LID como número de telefone.
-  let c = await findContact(identity.phone);
-  if(c){
-    await patch('rds10_contacts',`id=eq.${c.id}`,{last_seen_at:nowISO(),lid:identity.lid || c.lid || null,updated_at:nowISO()});
-    return {...c,lid:identity.lid || c.lid};
-  }
-  const suffix = identity.phone.slice(-4);
-  const name = cleanText(pushName) || `Cliente ${suffix}`;
-  const rows = await insert('rds10_contacts',{name,phone:identity.phone,lid:identity.lid || null,group_name:'ENTRADA WHATSAPP',origin:'WHATSAPP',status:'ATIVO',validated:true,last_seen_at:nowISO(),created_at:nowISO(),updated_at:nowISO()});
-  return rows?.[0] || null;
+  if(!identity.phone) return null; // NUNCA grava LID como número.
+  const r = await saveOrMergeContact({
+    name:cleanText(pushName) || `Cliente ${identity.phone.slice(-4)}`,
+    phone:identity.phone,
+    lid:identity.lid || null,
+    group_name:'ENTRADA WHATSAPP',
+    origin:'WHATSAPP',
+    status:'ATIVO',
+    validated:true,
+    last_seen_at:nowISO()
+  });
+  return r.contact || null;
 }
 async function activeOrder(phone){
   return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);
@@ -388,7 +434,7 @@ async function beginOrder(identity, campaignCode=null){
   const order = await createOrder(identity.phone,campaignCode);
   await replyInbound(identity,'🛒 *PREENCHER PEDIDO*');
   await sleep(350);
-  await replyInbound(identity,`Copie, preencha e envie 👇\n\nQuantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
+  await replyInbound(identity,`Quantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
   await cancelFutureDeliveries(identity.phone,'INTERESSE');
   await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
 }
@@ -403,7 +449,22 @@ async function handleOrderForm(identity, order, text){
     return;
   }
   const total = Number((p.quantity * Number(order.unit_price || 3)).toFixed(2));
-  await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:p.name,contact_phone:p.contact,quantity:p.quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
+  const submittedPhone = phoneKey(p.contact) || identity.phone;
+  // O nome informado pelo comprador passa a ser a referência do CRM, sem criar duplicado.
+  if(identity.phone){
+    const existing = await findContact(identity.phone);
+    if(existing){
+      await patch('rds10_contacts',`id=eq.${existing.id}`,{
+        name:p.name,
+        validated:true,
+        last_seen_at:nowISO(),
+        updated_at:nowISO()
+      });
+    }else{
+      await saveOrMergeContact({name:p.name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()});
+    }
+  }
+  await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:p.name,contact_phone:submittedPhone,quantity:p.quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
   const s = await getSettings();
   const pix = cleanText(s.pix_key || 'PIX NÃO CONFIGURADO');
   const payMsg = `✅ *PEDIDO RECEBIDO*\n\n👤 ${p.name}\n🎟 ${p.quantity} bilhete(s)\n💰 Total: *R$ ${money(total)}*\n🧾 Pedido: ${order.code}\n\n💳 *PAGAMENTO PIX*\nChave: ${pix}\nFavorecido: ${cleanText(s.pix_name || 'REINO DA SORTE')}\nValor: *R$ ${money(total)}*\n\nApós pagar, envie o comprovante aqui 👇`;
@@ -537,7 +598,7 @@ setInterval(()=>{
 }, 120000);
 
 // ---------------- API ----------------
-app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.2.3',connected,lastConnectionAt,lastError}));
+app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.3',connected,lastConnectionAt,lastError}));
 app.get('/api/status',(req,res)=>res.json({ok:true,connected,number:connectedNumber||null,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size}));
 app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/whatsapp/logout',async(req,res)=>{ try{ if(sock) try{await sock.logout();}catch{}; await closeSocket(); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
@@ -545,12 +606,26 @@ app.post('/api/whatsapp/test',async(req,res)=>{ try{ const r=await sendTextPhone
 
 app.get('/api/dashboard',async(req,res)=>{
   try{
-    const [contacts,campaigns,queue,sent,returns,orders,alerts] = await Promise.all([
-      list('rds10_contacts','select=id&status=eq.ATIVO'), list('rds10_campaigns','select=id&status=neq.EXCLUIDA'), list('rds10_deliveries','select=id&status=eq.AGENDADA'), list('rds10_deliveries','select=id&status=eq.ENVIADA'), list('rds10_messages','select=id&direction=eq.IN'), list('rds10_orders','select=id,status,total_amount'), list('rds10_alerts','select=id&is_read=eq.false')
+    const [contacts,campaigns,queue,sent,returns,orders,alerts,failed] = await Promise.all([
+      list('rds10_contacts','select=id&status=eq.ATIVO'),
+      list('rds10_campaigns','select=id,status&status=neq.EXCLUIDA'),
+      list('rds10_deliveries','select=id,scheduled_at&status=eq.AGENDADA'),
+      list('rds10_deliveries','select=id&status=eq.ENVIADA'),
+      list('rds10_messages','select=id&direction=eq.IN'),
+      list('rds10_orders','select=id,status,total_amount'),
+      list('rds10_alerts','select=id&is_read=eq.false'),
+      list('rds10_deliveries','select=id&status=eq.FALHA')
     ]);
     const purchases=orders.filter(x=>x.status==='CONCLUIDO');
     const revenue=purchases.reduce((s,x)=>s+Number(x.total_amount||0),0);
-    res.json({contacts:contacts.length,campaigns:campaigns.length,queue:queue.length,sent:sent.length,returns:returns.length,orders:orders.length,purchases:purchases.length,revenue,alerts:alerts.length,connected,number:connectedNumber});
+    res.json({
+      contacts:contacts.length,campaigns:campaigns.length,queue:queue.length,sent:sent.length,
+      returns:returns.length,orders:orders.length,purchases:purchases.length,revenue,
+      alerts:alerts.length,failed:failed.length,connected,number:connectedNumber,
+      proofReview:orders.filter(x=>x.status==='AGUARDANDO_CONFERENCIA').length,
+      ticketsPending:orders.filter(x=>x.status==='PAGO_AGUARDANDO_BILHETES').length,
+      nextSend:queue.sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at))[0]?.scheduled_at||null
+    });
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -559,7 +634,21 @@ app.post('/api/groups',async(req,res)=>{ try{ const name=cleanText(req.body.name
 
 app.get('/api/contacts',async(req,res)=>{ try{res.json(await list('rds10_contacts','select=*&order=created_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/contacts',async(req,res)=>{
-  try{ const phone=normalizeBR(req.body.phone); if(!validBRPhone(phone)) throw new Error('Telefone inválido.'); const found=connected?await sock.onWhatsApp(`${phone}@s.whatsapp.net`):null; const valid=connected?Boolean(found?.[0]?.exists):false; const rows=await insert('rds10_contacts',{name:cleanText(req.body.name)||`Cliente ${phone.slice(-4)}`,phone,group_name:cleanText(req.body.group_name)||'NOVOS',city:cleanText(req.body.city)||null,tags:cleanText(req.body.tags)||null,status:req.body.status||'ATIVO',origin:'MANUAL',validated:valid,created_at:nowISO(),updated_at:nowISO()}); res.json(rows[0]); }catch(e){res.status(400).json({error:e.message});}
+  try{
+    const phone=phoneKey(req.body.phone);
+    if(!phone) throw new Error('Telefone inválido.');
+    const found=connected?await sock.onWhatsApp(`${phone}@s.whatsapp.net`):null;
+    const valid=connected?Boolean(found?.[0]?.exists):false;
+    const r=await saveOrMergeContact({
+      name:req.body.name,phone,
+      group_name:req.body.group_name||'NOVOS',
+      city:req.body.city,tags:req.body.tags,
+      status:req.body.status||'ATIVO',
+      origin:'MANUAL',validated:valid,
+      force_name:true,force_group:true
+    });
+    res.json({...r.contact,merged:r.merged});
+  }catch(e){res.status(400).json({error:e.message});}
 });
 app.put('/api/contacts/:id',async(req,res)=>{ try{ const row={...req.body,updated_at:nowISO()}; if(row.phone) row.phone=normalizeBR(row.phone); const rows=await patch('rds10_contacts',`id=eq.${req.params.id}`,row); res.json(rows[0]); }catch(e){res.status(400).json({error:e.message});} });
 app.delete('/api/contacts/:id',async(req,res)=>{ try{await del('rds10_contacts',`id=eq.${req.params.id}`);res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
@@ -569,8 +658,10 @@ app.post('/api/contacts/import',async(req,res)=>{
     const items=Array.isArray(req.body.items)?req.body.items:[]; const saved=[],duplicates=[],invalid=[];
     for(const item of items){
       const phone=normalizeBR(item.phone); if(!validBRPhone(phone)){invalid.push(item);continue;}
-      if(await findContact(phone)){duplicates.push(item);continue;}
-      const rows=await insert('rds10_contacts',{name:cleanText(item.name)||`Cliente ${phone.slice(-4)}`,phone,group_name:cleanText(item.group_name)||'IMPORTADOS',origin:'IMPORTACAO',status:'ATIVO',validated:false,created_at:nowISO(),updated_at:nowISO()}); saved.push(rows[0]);
+      const existing=await findContact(phone);
+      if(existing){duplicates.push(item);continue;}
+      const r=await saveOrMergeContact({name:item.name,phone,group_name:item.group_name||'IMPORTADOS',origin:'IMPORTACAO',status:'ATIVO',validated:false});
+      if(r.contact) saved.push(r.contact);
     }
     res.json({saved:saved.length,duplicates:duplicates.length,invalid:invalid.length});
   }catch(e){res.status(400).json({error:e.message});}
@@ -597,8 +688,76 @@ app.post('/api/process-now',async(req,res)=>{ try{await processQueue();res.json(
 app.get('/api/returns',async(req,res)=>{ try{res.json(await list('rds10_messages','select=*&direction=eq.IN&order=created_at.desc&limit=300'));}catch(e){res.status(500).json({error:e.message});} });
 app.get('/api/orders',async(req,res)=>{ try{res.json(await list('rds10_orders','select=*&order=updated_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
-app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); const s=await getSettings(); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,cleanText(s.final_message)||`✅ *COMPRA CONCLUÍDA*\nSeus bilhetes foram enviados. 🍀\nA Reino da Sorte agradece sua compra.\nBoa sorte! 🍀\n\nPedido ${o.code}`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
+  const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`);
+  const s=await getSettings();
+  if(!o) throw new Error('Pedido não encontrado.');
+  await patch('rds10_orders',`id=eq.${o.id}`,{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO()});
+  if(o.phone){
+    const c=await findContact(o.phone);
+    if(c) await patch('rds10_contacts',`id=eq.${c.id}`,{
+      name:cleanText(o.customer_name)||c.name,
+      group_name:'COMPRA REALIZADA',
+      validated:true,
+      last_seen_at:nowISO(),
+      updated_at:nowISO()
+    });
+    else await saveOrMergeContact({name:cleanText(o.customer_name)||`Cliente ${o.phone.slice(-4)}`,phone:o.phone,group_name:'COMPRA REALIZADA',origin:'COMPRA',validated:true,last_seen_at:nowISO()});
+  }
+  await cancelFutureDeliveries(o.phone,'COMPRA_CONCLUIDA');
+  await sendTextPhone(o.phone,cleanText(s.final_message)||`✅ *COMPRA CONCLUÍDA*\nSeus bilhetes foram enviados. 🍀\nA Reino da Sorte agradece sua compra.\nBoa sorte! 🍀\n\nPedido ${o.code}`);
+  res.json({ok:true});
+}catch(e){res.status(400).json({error:e.message});} });
 app.post('/api/orders/:id/cancel',async(req,res)=>{ try{await patch('rds10_orders',`id=eq.${req.params.id}`,{status:'CANCELADO',updated_at:nowISO()});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
+
+
+app.get('/api/contacts/:id/profile',async(req,res)=>{
+  try{
+    const c=await one('rds10_contacts',`select=*&id=eq.${req.params.id}`);
+    if(!c) throw new Error('Contato não encontrado.');
+    const [orders,messages,deliveries]=await Promise.all([
+      list('rds10_orders',`select=*&phone=eq.${encodeURIComponent(c.phone)}&order=updated_at.desc`),
+      list('rds10_messages',`select=*&phone=eq.${encodeURIComponent(c.phone)}&order=created_at.desc&limit=100`),
+      list('rds10_deliveries',`select=*&phone=eq.${encodeURIComponent(c.phone)}&order=scheduled_at.desc&limit=100`)
+    ]);
+    const completed=orders.filter(x=>x.status==='CONCLUIDO');
+    res.json({contact:c,orders,messages,deliveries,metrics:{
+      orders:orders.length,purchases:completed.length,
+      spent:completed.reduce((s,x)=>s+Number(x.total_amount||0),0),
+      inbound:messages.filter(x=>x.direction==='IN').length,
+      campaigns:new Set(deliveries.map(x=>x.campaign_id).filter(Boolean)).size
+    }});
+  }catch(e){res.status(400).json({error:e.message});}
+});
+app.get('/api/automation-center',async(req,res)=>{
+  try{
+    const [queue,failed,alerts,orders,campaigns]=await Promise.all([
+      list('rds10_deliveries','select=*&status=eq.AGENDADA&order=scheduled_at.asc&limit=100'),
+      list('rds10_deliveries','select=*&status=eq.FALHA&order=updated_at.desc&limit=50'),
+      list('rds10_alerts','select=*&is_read=eq.false&order=created_at.desc&limit=50'),
+      list('rds10_orders','select=*&status=not.in.(CONCLUIDO,CANCELADO)&order=updated_at.desc&limit=100'),
+      list('rds10_campaigns','select=*&status=in.(ATIVA,RASCUNHO)&order=updated_at.desc&limit=50')
+    ]);
+    res.json({
+      queue,failed,alerts,orders,campaigns,
+      next:queue[0]||null,
+      stats:{
+        queue:queue.length,failed:failed.length,alerts:alerts.length,
+        awaitingProof:orders.filter(x=>x.status==='AGUARDANDO_PAGAMENTO').length,
+        proofReview:orders.filter(x=>x.status==='AGUARDANDO_CONFERENCIA').length,
+        tickets:orders.filter(x=>x.status==='PAGO_AGUARDANDO_BILHETES').length
+      }
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/deliveries/:id/retry',async(req,res)=>{
+  try{
+    const d=await one('rds10_deliveries',`select=*&id=eq.${req.params.id}`);
+    if(!d) throw new Error('Envio não encontrado.');
+    await patch('rds10_deliveries',`id=eq.${d.id}`,{status:'AGENDADA',scheduled_at:nowISO(),error_text:null,updated_at:nowISO()});
+    res.json({ok:true});
+  }catch(e){res.status(400).json({error:e.message});}
+});
 
 app.get('/api/settings',async(req,res)=>{ try{res.json(await getSettings());}catch(e){res.status(500).json({error:e.message});} });
 app.put('/api/settings',async(req,res)=>{ try{ const rows=await patch('rds10_settings','id=eq.1',{...req.body,id:undefined,updated_at:nowISO()}); res.json(rows[0]);}catch(e){res.status(400).json({error:e.message});} });
@@ -609,11 +768,11 @@ app.post('/api/alerts/read-all',async(req,res)=>{ try{await patch('rds10_alerts'
 app.get('/api/diagnostic',async(req,res)=>{
   const tables=['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_settings','rds10_orders','rds10_alerts','rds10_events','zap_auth'];
   const db={}; for(const t of tables){ try{await list(t,'select=*&limit=1');db[t]='OK';}catch(e){db[t]=e.message;} }
-  res.json({version:'10.2.3',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
+  res.json({version:'10.3',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
 });
 
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 app.listen(PORT,async()=>{
-  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.2.3 — porta ${PORT}`);
+  console.log(`CANAL DE VENDAS RDS V10 FINAL 10.3 — porta ${PORT}`);
   try{ await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
 });
