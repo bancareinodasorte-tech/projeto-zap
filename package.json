@@ -1,17 +1,19 @@
 {
-  "name": "canal-de-vendas-rds-v10-final",
-  "version": "10.3.0",
+  "name": "canal-de-vendas-rds-laboratorio-v7",
+  "version": "7.0.0-lab.1",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js && node --check app.js"
+    "start": "node lab-v7.mjs",
+    "start:legacy": "node server.js",
+    "check": "node --check lab-v7.mjs && node --check server.js && node --check app.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.24",
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
     "express": "^4.21.2",
     "pino": "^9.9.0",
     "qrcode": "^1.5.4"
