@@ -24,12 +24,18 @@ try {
     "async function render(){if(app?.dataset?.rdsPage===page&&app.children.length)return;app.dataset.rdsPage=page;app.innerHTML='<div class=\"card\"><span class=mut>Carregando operação...</span></div>';try{"
   );
 
+  // V10.4.4 — em Compras, o cliente é a identificação principal; código do pedido fica secundário.
+  src = src.replace(
+    "<div><h2 style=\"margin:0\">${esc(o.code)}</h2><p class=mut>${esc(o.customer_name||o.phone)} • ${o.quantity||'—'} bilhete(s) • ${money(o.total_amount)}</p></div>${badge(o.status)}",
+    "<div><h2 style=\"margin:0\">${esc(o.customer_name||o.phone||'Cliente')}</h2><p class=mut>${esc(o.code)} • ${o.quantity||'—'} bilhete(s) • ${money(o.total_amount)}</p></div>${badge(o.status)}"
+  );
+
   src += `\n/* RDS_AUTO_REFRESH_V10_4_2 */\nlet rdsSilentBusy=false;\nasync function rdsSilentRefresh(){\n  if(rdsSilentBusy || document.hidden || document.querySelector('.modal')) return;\n  rdsSilentBusy=true;\n  try{\n    if(page==='contacts'){ const oldSearch=$('#contactSearch')?.value||''; const oldGroup=$('#contactGroup')?.value||''; await loadContacts(); if($('#contactSearch')) $('#contactSearch').value=oldSearch; if($('#contactGroup')) $('#contactGroup').value=oldGroup; if($('#contactsBody')) filterContacts(); }\n    else if(page==='returns'){ await returnsPage(); }\n    else if(page==='orders'){ await orders(); }\n    else if(page==='home'){ await home(); }\n    else if(page==='execution'){ await automation(); }\n    else if(page==='campaigns'){ await campaigns(); }\n  }catch(e){} finally{rdsSilentBusy=false;}\n}\nsetInterval(rdsSilentRefresh,5000);\n`;
 
   fs.writeFileSync(appPath, src, 'utf8');
-  console.log('[V10.4.3] UI automática silenciosa ativa');
+  console.log('[V10.4.4] UI automática silenciosa + cliente em destaque nas compras');
 } catch (err) {
-  console.error('[V10.4.3] falha ao preparar interface:', err?.message || err);
+  console.error('[V10.4.4] falha ao preparar interface:', err?.message || err);
 }
 
 try {
@@ -61,7 +67,7 @@ try {
   }
 
   fs.writeFileSync(serverPath,s,'utf8');
-  console.log('[V10.4.3] backend: deduplicação real de contatos antigos ativada');
-}catch(err){ console.error('[V10.4.3] falha backend:',err?.message||err); }
+  console.log('[V10.4.4] backend: deduplicação de contatos preservada');
+}catch(err){ console.error('[V10.4.4] falha backend:',err?.message||err); }
 
 await import('./bootstrap-v10.3.3-v10.mjs');
