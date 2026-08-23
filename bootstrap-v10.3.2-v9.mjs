@@ -1,10 +1,9 @@
 import Module from 'module'
 import * as Baileys from '@whiskeysockets/baileys'
 
-// CANAL DE VENDAS RDS — V10.3.2 MOTOR V9
-// Mantém a sessão de produção e aplica a mesma estratégia de serialização
-// de autenticação que ficou estável no Laboratório Baileys V7.
-const AUTH_PREFIX = 'prodv7:'
+// CANAL DE VENDAS RDS — V10.3.2 MOTOR V10
+// Sessao de producao isolada e limpa, usando a mesma estrategia do laboratorio V7 estavel.
+const AUTH_PREFIX = 'prodv10stable:'
 const nativeFetch = globalThis.fetch.bind(globalThis)
 const authLocks = new Map()
 
@@ -102,12 +101,11 @@ function stableCacheableSignalKeyStore(keys, logger){
 
 function stableMakeWASocket(options={}){
   const next = {...options}
-  // O laboratório estável funcionou sem forçar versão/retry customizados.
   delete next.version
   delete next.maxMsgRetryCount
   delete next.retryRequestDelayMs
   delete next.msgRetryCounterCache
-  next.browser = ['CANAL DE VENDAS RDS','Chrome','10.3.2-V9']
+  next.browser = ['CANAL DE VENDAS RDS','Chrome','10.3.2-V10']
   next.syncFullHistory = false
   next.shouldSyncHistoryMessage = ()=>false
   next.markOnlineOnConnect = false
@@ -129,6 +127,6 @@ Module._load = function(request,parent,isMain){
   return originalLoad.call(this,request,parent,isMain)
 }
 
-process.env.RDS_MOTOR = 'BAILEYS_V9_PRODUCAO_ESTAVEL'
+process.env.RDS_MOTOR = 'BAILEYS_V10_PRODUCAO_SESSAO_LIMPA'
 process.env.RDS_AUTH_PREFIX = AUTH_PREFIX
 await import('./server.js')
