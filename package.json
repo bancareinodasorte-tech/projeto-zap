@@ -1,12 +1,12 @@
 {
   "name": "canal-de-vendas-rds-v10-final",
-  "version": "10.3.3",
+  "version": "10.3.4",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node bootstrap-v10.3.3-v10.mjs",
+    "start": "node runtime-v10.3.4-live-ui.mjs",
     "start:legacy": "node server.js",
-    "check": "node --check bootstrap-v10.3.3-v10.mjs && node --check server.js && node --check app.js"
+    "check": "node --check runtime-v10.3.4-live-ui.mjs && node --check bootstrap-v10.3.3-v10.mjs && node --check server.js && node --check app.js"
   },
   "engines": {
     "node": ">=20"
