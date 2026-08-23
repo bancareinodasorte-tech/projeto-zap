@@ -45,13 +45,11 @@
 </nav>
 <div id="toast"></div>
 <script src="app.js?v=1038"></script>
-<script src="ui-highflow-v10.4.js?v=1040"></script>
+<script src="ui-highflow-v10.4.js?v=1041"></script>
 <script>
 (()=>{
   const KEY='rds:lastPage';
   const VALID=new Set(['home','contacts','campaigns','execution','returns','orders','settings']);
-  const LIVE=new Set(['home','campaigns','execution','returns','orders']);
-  let busy=false;
 
   const activePage=()=>document.querySelector('#nav button.active[data-page]')?.dataset.page||document.querySelector('#mobileNav button.active[data-page]')?.dataset.page||'home';
 
@@ -62,17 +60,6 @@
 
   window.addEventListener('beforeunload',()=>localStorage.setItem(KEY,activePage()));
 
-  function refresh(){
-    if(busy||document.hidden||document.querySelector('.modal')) return;
-    const p=activePage();
-    if(!LIVE.has(p)) return;
-    busy=true;
-    const y=window.scrollY;
-    const b=document.querySelector(`#nav button[data-page="${p}"]`)||document.querySelector(`#mobileNav button[data-page="${p}"]`);
-    if(b) b.click();
-    setTimeout(()=>{window.scrollTo(0,y);busy=false},700);
-  }
-
   function restore(){
     const saved=localStorage.getItem(KEY);
     if(!saved||!VALID.has(saved)||saved==='home') return;
@@ -81,8 +68,6 @@
   }
 
   setTimeout(restore,900);
-  setInterval(refresh,4000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(refresh,500)});
 })();
 </script>
 </body>
