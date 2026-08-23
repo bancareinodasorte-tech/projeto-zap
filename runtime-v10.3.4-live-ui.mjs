@@ -20,10 +20,17 @@ try {
     if (i >= 0) src = src.slice(0, i).trimEnd() + '\n';
   }
 
+  // Trava anti-pisca: chamadas repetidas de render() na mesma tela viram no-op.
+  // Navegação continua funcionando porque a variável `page` muda.
+  src = src.replace(
+    "async function render(){app.innerHTML='<div class=\"card\"><span class=mut>Carregando operação...</span></div>';try{",
+    "async function render(){if(app?.dataset?.rdsPage===page&&app.children.length)return;app.dataset.rdsPage=page;app.innerHTML='<div class=\"card\"><span class=mut>Carregando operação...</span></div>';try{"
+  );
+
   fs.writeFileSync(appPath, src, 'utf8');
-  console.log('[V10.3.8] interface preparada sem polling duplicado');
+  console.log('[V10.3.9] interface estabilizada: bloqueio de re-render repetido na mesma tela');
 } catch (err) {
-  console.error('[V10.3.8] falha ao preparar interface:', err?.message || err);
+  console.error('[V10.3.9] falha ao preparar interface:', err?.message || err);
 }
 
 await import('./bootstrap-v10.3.3-v10.mjs');
