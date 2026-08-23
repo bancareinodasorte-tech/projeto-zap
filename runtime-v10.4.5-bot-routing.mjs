@@ -10,7 +10,7 @@ try {
 
   const marker = `  const text = inbound.text;\n  let order = identity.phone ? await activeOrder(identity.phone) : null;\n\n  // Comprovante tem prioridade quando há pedido aguardando pagamento.`;
 
-  const replacement = `  const text = inbound.text;\n  let order = identity.phone ? await activeOrder(identity.phone) : null;\n\n  // Comandos globais sempre têm prioridade sobre o estágio do pedido.\n  // Assim ATENDENTE funciona mesmo quando já existe pedido aguardando pagamento.\n  if(isOfficeRoute(text)){\n    const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);\n    await logEvent('ENCAMINHADO_ESCRITORIO',{phone:identity.phone||null,order:order?.code||null,status:order?.status||null});\n    return replyInbound(identity,\`🏢 *ATENDIMENTO HUMANO*\\nFale diretamente com o escritório:\\nhttps://wa.me/\${office}?text=\${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}\`);\n  }\n\n  // Comprovante tem prioridade quando há pedido aguardando pagamento.`;
+  const replacement = `  const text = inbound.text;\n  let order = identity.phone ? await activeOrder(identity.phone) : null;\n\n  // Comandos globais sempre têm prioridade sobre o estágio do pedido.\n  // Assim ATENDENTE funciona mesmo quando já existe pedido aguardando pagamento.\n  if(isOfficeRoute(text)){\n    const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);\n    await logEvent('ENCAMINHADO_ESCRITORIO',{phone:identity.phone||null,order:order?.code||null,status:order?.status||null});\n    return replyInbound(identity,\`🏢 *ESCRITÓRIO*\\nFale diretamente com nosso atendimento:\\nwa.me/\${office}\`);\n  }\n\n  // Comprovante tem prioridade quando há pedido aguardando pagamento.`;
 
   if(!src.includes('Comandos globais sempre têm prioridade sobre o estágio do pedido.')){
     if(!src.includes(marker)) throw new Error('ponto de roteamento do bot não localizado');
@@ -18,7 +18,7 @@ try {
   }
 
   fs.writeFileSync(serverPath, src, 'utf8');
-  console.log('[V10.4.5] roteamento global do bot aplicado: ATENDENTE tem prioridade');
+  console.log('[V10.4.5] roteamento global do bot aplicado: ATENDENTE tem prioridade + mensagem curta');
 } catch (err) {
   console.error('[V10.4.5] falha no patch do bot:', err?.message || err);
   process.exitCode = 1;
