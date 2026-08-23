@@ -44,6 +44,45 @@
   <button data-page="settings">⚙<small>Ajustes</small></button>
 </nav>
 <div id="toast"></div>
-<script src="app.js?v=1037"></script>
+<script src="app.js?v=1038"></script>
+<script>
+(()=>{
+  const KEY='rds:lastPage';
+  const VALID=new Set(['home','contacts','campaigns','execution','returns','orders','settings']);
+  const LIVE=new Set(['home','campaigns','execution','returns','orders']);
+  let busy=false;
+
+  const activePage=()=>document.querySelector('#nav button.active[data-page]')?.dataset.page||document.querySelector('#mobileNav button.active[data-page]')?.dataset.page||'home';
+
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('#nav button[data-page],#mobileNav button[data-page]');
+    if(b&&VALID.has(b.dataset.page)) localStorage.setItem(KEY,b.dataset.page);
+  },true);
+
+  window.addEventListener('beforeunload',()=>localStorage.setItem(KEY,activePage()));
+
+  function refresh(){
+    if(busy||document.hidden||document.querySelector('.modal')) return;
+    const p=activePage();
+    if(!LIVE.has(p)) return;
+    busy=true;
+    const y=window.scrollY;
+    const b=document.querySelector(`#nav button[data-page="${p}"]`)||document.querySelector(`#mobileNav button[data-page="${p}"]`);
+    if(b) b.click();
+    setTimeout(()=>{window.scrollTo(0,y);busy=false},700);
+  }
+
+  function restore(){
+    const saved=localStorage.getItem(KEY);
+    if(!saved||!VALID.has(saved)||saved==='home') return;
+    const b=document.querySelector(`#nav button[data-page="${saved}"]`)||document.querySelector(`#mobileNav button[data-page="${saved}"]`);
+    if(b) b.click();
+  }
+
+  setTimeout(restore,900);
+  setInterval(refresh,4000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(refresh,500)});
+})();
+</script>
 </body>
 </html>
