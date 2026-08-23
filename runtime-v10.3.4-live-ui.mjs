@@ -30,12 +30,22 @@ try {
     "<div><h2 style=\"margin:0\">${esc(o.customer_name||o.phone||'Cliente')}</h2><p class=mut>${esc(o.code)} • ${o.quantity||'—'} bilhete(s) • ${money(o.total_amount)}</p></div>${badge(o.status)}"
   );
 
+  // V10.4.5 — Retornos usa o nome salvo no CRM/agenda como identificação principal.
+  src = src.replace(
+    "async function returnsPage(){const [rs,os]=await Promise.all([api('/api/returns'),api('/api/orders')]);state.returns=rs;const latest=new Map();for(const r of rs){if(r.phone&&!latest.has(r.phone))latest.set(r.phone,r)}",
+    "async function returnsPage(){const [rs,os,cs]=await Promise.all([api('/api/returns'),api('/api/orders'),api('/api/contacts')]);state.returns=rs;const phoneDigits=v=>String(v||'').replace(/\\D/g,'');const aliases=v=>{const n=phoneDigits(v);const a=new Set([n]);if(n.startsWith('55')&&n.length>=12){const p=n.slice(0,4),l=n.slice(4);if(l.length===9&&l[0]==='9')a.add(p+l.slice(1));if(l.length===8)a.add(p+'9'+l)}return [...a]};const samePhone=(a,b)=>{const bb=new Set(aliases(b));return aliases(a).some(x=>bb.has(x))};const contactFor=p=>cs.find(c=>samePhone(c.phone,p));state.contacts=cs;const latest=new Map();for(const r of rs){if(r.phone&&!latest.has(r.phone))latest.set(r.phone,r)}"
+  );
+  src = src.replace(
+    "<div><h2 style=\"margin:0\">${esc(r.phone||'Identidade pendente')}</h2><p class=mut>${dt(r.created_at)}</p></div>${badge(o?.status||'NOVO RETORNO')}",
+    "<div><h2 style=\"margin:0\">${esc(contactFor(r.phone)?.name||r.phone||'Identidade pendente')}</h2><p class=mut>${contactFor(r.phone)?.name?esc(r.phone)+' • ':''}${dt(r.created_at)}</p></div>${badge(o?.status||'NOVO RETORNO')}"
+  );
+
   src += `\n/* RDS_AUTO_REFRESH_V10_4_2 */\nlet rdsSilentBusy=false;\nasync function rdsSilentRefresh(){\n  if(rdsSilentBusy || document.hidden || document.querySelector('.modal')) return;\n  rdsSilentBusy=true;\n  try{\n    if(page==='contacts'){ const oldSearch=$('#contactSearch')?.value||''; const oldGroup=$('#contactGroup')?.value||''; await loadContacts(); if($('#contactSearch')) $('#contactSearch').value=oldSearch; if($('#contactGroup')) $('#contactGroup').value=oldGroup; if($('#contactsBody')) filterContacts(); }\n    else if(page==='returns'){ await returnsPage(); }\n    else if(page==='orders'){ await orders(); }\n    else if(page==='home'){ await home(); }\n    else if(page==='execution'){ await automation(); }\n    else if(page==='campaigns'){ await campaigns(); }\n  }catch(e){} finally{rdsSilentBusy=false;}\n}\nsetInterval(rdsSilentRefresh,5000);\n`;
 
   fs.writeFileSync(appPath, src, 'utf8');
-  console.log('[V10.4.4] UI automática silenciosa + cliente em destaque nas compras');
+  console.log('[V10.4.5] UI automática silenciosa + nomes do CRM em Retornos');
 } catch (err) {
-  console.error('[V10.4.4] falha ao preparar interface:', err?.message || err);
+  console.error('[V10.4.5] falha ao preparar interface:', err?.message || err);
 }
 
 try {
@@ -67,7 +77,7 @@ try {
   }
 
   fs.writeFileSync(serverPath,s,'utf8');
-  console.log('[V10.4.4] backend: deduplicação de contatos preservada');
-}catch(err){ console.error('[V10.4.4] falha backend:',err?.message||err); }
+  console.log('[V10.4.5] backend: deduplicação de contatos preservada');
+}catch(err){ console.error('[V10.4.5] falha backend:',err?.message||err); }
 
 await import('./bootstrap-v10.3.3-v10.mjs');
