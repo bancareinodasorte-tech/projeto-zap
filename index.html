@@ -44,30 +44,18 @@
   <button data-page="settings">⚙<small>Ajustes</small></button>
 </nav>
 <div id="toast"></div>
-<script src="app.js?v=10102"></script>
-<script src="ui-highflow-v10.4.js?v=10102"></script>
-<script src="ui-crm360-v10.10.1.js?v=10102"></script>
+<script src="app.js?v=10110"></script>
+<script src="ui-highflow-v10.4.js?v=10110"></script>
+<script src="ui-crm360-v10.10.1.js?v=10110"></script>
+<script src="ui-followup-v10.11.js?v=10110"></script>
 <script>
 (()=>{
   const KEY='rds:lastPage';
   const VALID=new Set(['home','contacts','campaigns','execution','returns','orders','settings']);
-
   const activePage=()=>document.querySelector('#nav button.active[data-page]')?.dataset.page||document.querySelector('#mobileNav button.active[data-page]')?.dataset.page||'home';
-
-  document.addEventListener('click',e=>{
-    const b=e.target.closest('#nav button[data-page],#mobileNav button[data-page]');
-    if(b&&VALID.has(b.dataset.page)) localStorage.setItem(KEY,b.dataset.page);
-  },true);
-
+  document.addEventListener('click',e=>{const b=e.target.closest('#nav button[data-page],#mobileNav button[data-page]');if(b&&VALID.has(b.dataset.page)) localStorage.setItem(KEY,b.dataset.page);},true);
   window.addEventListener('beforeunload',()=>localStorage.setItem(KEY,activePage()));
-
-  function restore(){
-    const saved=localStorage.getItem(KEY);
-    if(!saved||!VALID.has(saved)||saved==='home') return;
-    const b=document.querySelector(`#nav button[data-page="${saved}"]`)||document.querySelector(`#mobileNav button[data-page="${saved}"]`);
-    if(b) b.click();
-  }
-
+  function restore(){const saved=localStorage.getItem(KEY);if(!saved||!VALID.has(saved)||saved==='home') return;const b=document.querySelector(`#nav button[data-page="${saved}"]`)||document.querySelector(`#mobileNav button[data-page="${saved}"]`);if(b) b.click();}
   setTimeout(restore,900);
 })();
 </script>
