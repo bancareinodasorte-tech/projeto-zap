@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname=path.dirname(fileURLToPath(import.meta.url));
+const serverPath=path.join(__dirname,'server.js');
+
+try{
+  let s=fs.readFileSync(serverPath,'utf8');
+  if(!s.includes('RDS_POSTPAY_V10_12')){
+    const marker="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+    const pos=s.indexOf(marker);
+    if(pos<0) throw new Error('ponto de inserção V10.12 não localizado');
+    const block=`// RDS_POSTPAY_V10_12\nasync function rds1012Order(id){return one('rds10_orders',\`select=*&id=eq.\${id}\`);}\nasync function rds1012OrderEvent(kind,order,payload={}){await logEvent(kind,{order_id:order.id,order:order.code,phone:order.phone,...payload});}\n\napp.get('/api/v1012/postpay/summary',async(req,res)=>{\n try{\n  const rows=await list('rds10_orders','select=id,status,updated_at,created_at&status=in.(AGUARDANDO_CONFERENCIA,PAGO_AGUARDANDO_BILHETES)&limit=2000');\n  const now=Date.now(),age=o=>(now-new Date(o.updated_at||o.created_at||0).getTime())/60000;\n  res.json({ok:true,review:rows.filter(o=>o.status==='AGUARDANDO_CONFERENCIA').length,tickets:rows.filter(o=>o.status==='PAGO_AGUARDANDO_BILHETES').length,reviewDelayed:rows.filter(o=>o.status==='AGUARDANDO_CONFERENCIA'&&age(o)>=30).length,ticketsDelayed:rows.filter(o=>o.status==='PAGO_AGUARDANDO_BILHETES'&&age(o)>=30).length});\n }catch(e){res.status(500).json({ok:false,error:e.message});}\n});\n\napp.post('/api/v1012/orders/:id/confirm-payment',async(req,res)=>{\n try{\n  const o=await rds1012Order(req.params.id);if(!o)throw new Error('Pedido não encontrado.');\n  if(o.status==='PAGO_AGUARDANDO_BILHETES'||o.status==='CONCLUIDO')return res.json({ok:true,already:true,status:o.status});\n  if(o.status!=='AGUARDANDO_CONFERENCIA')throw new Error('Este pedido não está aguardando conferência de pagamento.');\n  const at=nowISO();\n  await patch('rds10_orders',\`id=eq.\${o.id}\`,{status:'PAGO_AGUARDANDO_BILHETES',updated_at:at});\n  await rds1012OrderEvent('PAGAMENTO_CONFIRMADO_OPERADOR',o,{at});\n  try{await sendTextPhone(o.phone,\`✅ *PAGAMENTO CONFIRMADO*\\nPedido *\${o.code}*.\\nSeus bilhetes serão emitidos e enviados em seguida.\`);}catch(e){await addAlert('ERRO_AVISO_PAGAMENTO',\`Pagamento confirmado, mas falhou aviso ao cliente — \${o.code}\`,{order:o.code,error:e.message});}\n  res.json({ok:true,status:'PAGO_AGUARDANDO_BILHETES'});\n }catch(e){res.status(400).json({ok:false,error:e.message});}\n});\n\napp.post('/api/v1012/orders/:id/complete',async(req,res)=>{\n try{\n  const o=await rds1012Order(req.params.id);if(!o)throw new Error('Pedido não encontrado.');\n  if(o.status==='CONCLUIDO')return res.json({ok:true,already:true,status:o.status});\n  if(o.status!=='PAGO_AGUARDANDO_BILHETES')throw new Error('Confirme o pagamento antes de concluir a compra.');\n  const at=nowISO();\n  await patch('rds10_orders',\`id=eq.\${o.id}\`,{status:'CONCLUIDO',updated_at:at});\n  await rds1012OrderEvent('COMPRA_CONCLUIDA_OPERADOR',o,{at,quantity:o.quantity,total_amount:o.total_amount});\n  try{await sendTextPhone(o.phone,\`✅ *COMPRA CONCLUÍDA*\\nSeus bilhetes foram enviados. 🍀\\nPedido *\${o.code}*.\\nA Reino da Sorte agradece sua compra. Boa sorte! 🍀\`);}catch(e){await addAlert('ERRO_MENSAGEM_FINAL',\`Compra concluída, mas falhou mensagem final — \${o.code}\`,{order:o.code,error:e.message});}\n  res.json({ok:true,status:'CONCLUIDO'});\n }catch(e){res.status(400).json({ok:false,error:e.message});}\n});\n\napp.get('/api/v1012/orders/:id/history',async(req,res)=>{\n try{\n  const o=await rds1012Order(req.params.id);if(!o)throw new Error('Pedido não encontrado.');\n  const events=await list('rds10_events',\`select=id,kind,payload,created_at&order=created_at.desc&limit=200\`);\n  const related=events.filter(e=>String(e?.payload?.order_id||'')===String(o.id)||String(e?.payload?.order||'')===String(o.code)).slice(0,30);\n  res.json({ok:true,order:o,events:related});\n }catch(e){res.status(400).json({ok:false,error:e.message});}\n});\n\n`;
+    s=s.slice(0,pos)+block+s.slice(pos);
+    fs.writeFileSync(serverPath,s,'utf8');
+    console.log('[V10.12] fechamento pós-pagamento seguro aplicado');
+  }
+}catch(e){console.error('[V10.12] backend:',e.message);process.exitCode=1;}
+
+await import('./runtime-v10.11-followup.mjs');
