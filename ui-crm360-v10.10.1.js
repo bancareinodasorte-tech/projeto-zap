@@ -53,12 +53,38 @@
 
   window.setReturnsPage=function(n){pageNo=n;renderSlice();scrollTo(0,0)};
 
+  function orderRow(o){
+    return `<div class="priority"><div><strong>${esc(o.code||'Pedido')}</strong><small>${Number(o.quantity||0)} bilhete(s) • ${money(o.total_amount)} • ${dt(o.created_at)}</small></div>${badge(o.status)}</div>`;
+  }
+  function campaignRow(c){
+    return `<div class="priority"><div><strong>${esc(c.name||c.code||'Campanha')}</strong><small>${esc(c.code||'')} ${c.status?'• '+esc(c.status):''}</small></div></div>`;
+  }
+  function timelineRow(x){
+    const names={MENSAGEM_RECEBIDA:'Mensagem recebida',MENSAGEM_ENVIADA:'Mensagem enviada',PEDIDO:'Pedido',CAMPANHA_ENVIADA:'Campanha enviada',FALHA_ENVIO:'Falha de envio'};
+    return `<div class="priority"><div><strong>${esc(names[x.kind]||x.kind||'Atividade')}</strong><small>${dt(x.at)} • ${esc(String(x.text||'').slice(0,220))}</small></div>${x.status?badge(x.status):''}</div>`;
+  }
+
   window.rds10101History=async function(phone){
     try{
       const p=await api('/api/v1010/customer/'+encodeURIComponent(phone));
-      const c=p.contact||{},m=p.metrics||{};
-      const timeline=(p.timeline||[]).slice(0,40).map(x=>`<div class="priority"><div><strong>${esc(({MENSAGEM_RECEBIDA:'Mensagem recebida',MENSAGEM_ENVIADA:'Mensagem enviada',PEDIDO:'Pedido',CAMPANHA_ENVIADA:'Campanha enviada',FALHA_ENVIO:'Falha de envio'})[x.kind]||x.kind)}</strong><small>${dt(x.at)} • ${esc(String(x.text||'').slice(0,180))}</small></div>${x.status?badge(x.status):''}</div>`).join('');
-      modal(`<span class=eyebrow>CRM 360°</span><h2>${esc(c.name||c.phone||phone)}</h2><p class=mut>${esc(c.phone||phone)}${c.group_name?' • '+esc(c.group_name):''}${c.city?' • '+esc(c.city):''}</p><div class=grid>${[['Campanhas',m.campaigns],['Pedidos',m.orders],['Compras',m.purchases],['Total comprado',money(m.spent)],['Mensagens',m.messages],['Retornos',m.returns]].map(x=>`<div class=card><span class=eyebrow>${x[0]}</span><div class=metric>${x[1]??0}</div></div>`).join('')}</div><h3>Pedidos recentes</h3>${(p.orders||[]).slice(0,10).map(o=>`<div class=priority><div><strong>${esc(o.code||'Pedido')}</strong><small>${Number(o.quantity||0)} bilhete(s) • ${money(o.total_amount)} • ${dt(o.created_at)}</small></div>${badge(o.status)}</div>`).join('')||'<p class=mut>Nenhum pedido.</p>'}<h3>Histórico recente</h3>${timeline||'<p class=mut>Nenhuma atividade registrada.</p>'}`);
+      const c=p.contact||{},m=p.metrics||{},orders=Array.isArray(p.orders)?p.orders:[],campaigns=Array.isArray(p.campaigns)?p.campaigns:[],timeline=Array.isArray(p.timeline)?p.timeline:[];
+      const purchases=orders.filter(o=>o.status==='CONCLUIDO');
+      const pending=orders.filter(o=>o.status!=='CONCLUIDO');
+      const received=timeline.filter(x=>x.kind==='MENSAGEM_RECEBIDA');
+      const sent=timeline.filter(x=>x.kind==='MENSAGEM_ENVIADA');
+
+      modal(`<span class=eyebrow>CRM 360° • ficha individual</span>
+        <h2>${esc(c.name||c.phone||phone)}</h2>
+        <p class=mut>${esc(c.phone||phone)}${c.group_name?' • '+esc(c.group_name):''}${c.city?' • '+esc(c.city):''}</p>
+        <div class="card"><span class=eyebrow>Dados do cliente</span><p><b>Nome:</b> ${esc(c.name||'Não informado')}<br><b>WhatsApp:</b> ${esc(c.phone||phone)}<br><b>Grupo:</b> ${esc(c.group_name||'Sem grupo')}<br><b>Cidade:</b> ${esc(c.city||'Não informada')}<br><b>Tags:</b> ${esc(c.tags||'Nenhuma')}</p></div>
+        <div class=grid>${[['Campanhas',m.campaigns],['Pedidos',m.orders],['Compras',m.purchases],['Total comprado',money(m.spent)],['Mensagens',m.messages],['Retornos',m.returns]].map(x=>`<div class=card><span class=eyebrow>${x[0]}</span><div class=metric>${x[1]??0}</div></div>`).join('')}</div>
+        <div class=row><button class="btn primary" onclick="window.open('https://wa.me/${esc(String(c.phone||phone).replace(/\D/g,''))}','_blank')">Abrir WhatsApp</button></div>
+        <h3>Compras concluídas deste cliente</h3>${purchases.length?purchases.map(orderRow).join(''):'<p class=mut>Nenhuma compra concluída.</p>'}
+        <h3>Outros pedidos deste cliente</h3>${pending.length?pending.map(orderRow).join(''):'<p class=mut>Nenhum outro pedido.</p>'}
+        <h3>Campanhas deste cliente</h3>${campaigns.length?campaigns.map(campaignRow).join(''):'<p class=mut>Nenhuma campanha vinculada.</p>'}
+        <h3>Retornos recebidos deste cliente</h3>${received.length?received.slice(0,30).map(timelineRow).join(''):'<p class=mut>Nenhum retorno registrado.</p>'}
+        <h3>Mensagens enviadas para este cliente</h3>${sent.length?sent.slice(0,30).map(timelineRow).join(''):'<p class=mut>Nenhuma mensagem enviada registrada.</p>'}
+        <h3>Linha do tempo individual</h3>${timeline.length?timeline.slice(0,60).map(timelineRow).join(''):'<p class=mut>Nenhuma atividade registrada.</p>'}`);
     }catch(e){toast(e.message)}
   };
 })();
