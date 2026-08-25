@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname=path.dirname(fileURLToPath(import.meta.url));
+const serverPath=path.join(__dirname,'server.js');
+try{
+ let s=fs.readFileSync(serverPath,'utf8');
+ const marker="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+ if(s.includes(marker)&&!s.includes('/api/v1021/consistency')){
+ const routes=`\n// ---------------- V10.21 consistencia operacional ----------------\nasync function v1021Snapshot(){\n const [orders,deliveries,messages,contacts]=await Promise.all([list('rds10_orders','select=*&order=updated_at.desc&limit=5000').catch(()=>[]),list('rds10_deliveries','select=phone,status,sent_at,created_at&order=created_at.desc&limit=5000').catch(()=>[]),list('rds10_messages','select=phone,direction,created_at&order=created_at.desc&limit=5000').catch(()=>[]),list('rds10_contacts','select=phone,status&limit=5000').catch(()=>[])]);\n const concluded=orders.filter(o=>String(o.status)==='CONCLUIDO'), active=orders.filter(o=>!['CONCLUIDO','CANCELADO'].includes(String(o.status||'')));\n const latestSent=new Map();for(const d of deliveries.filter(x=>String(x.status)==='ENVIADA')){const p=phoneKey(d.phone);if(p&&!latestSent.has(p))latestSent.set(p,d)}\n const responded=new Set();for(const m of messages.filter(x=>String(x.direction)==='IN')){const p=phoneKey(m.phone),d=latestSent.get(p);if(p&&d&&new Date(m.created_at)>new Date(d.sent_at||d.created_at))responded.add(p)}\n const bought=new Set(concluded.map(o=>phoneKey(o.phone)).filter(Boolean));\n const inOrder=new Set(active.map(o=>phoneKey(o.phone)).filter(Boolean));\n const ignored=[...latestSent.keys()].filter(p=>!responded.has(p)&&!bought.has(p)&&!inOrder.has(p));\n return {orders,active,concluded,latestSent,responded,bought,inOrder,ignored,contacts};\n}\napp.get('/api/v1021/consistency',async(req,res)=>{try{const x=await v1021Snapshot();const revenue=Number(x.concluded.reduce((a,o)=>a+Number(o.total_amount||0),0).toFixed(2));const by={};for(const o of x.active)by[o.status]=(by[o.status]||0)+1;res.json({ok:true,contacts:x.contacts.filter(c=>String(c.status||'ATIVO')==='ATIVO').length,sent:x.latestSent.size,responded:x.responded.size,ignored:x.ignored.length,in_order:x.inOrder.size,bought:x.bought.size,active_orders:x.active.length,concluded:x.concluded.length,revenue,collecting:by.COLETANDO_DADOS||0,payment:(by.AGUARDANDO_PAGAMENTO||0)+(by.AGUARDANDO_COMPROVANTE||0),proof:by.AGUARDANDO_CONFERENCIA||0,tickets:by.PAGO_AGUARDANDO_BILHETES||0});}catch(e){res.status(500).json({error:e.message})}});\n`;
+ s=s.replace(marker,routes+marker);fs.writeFileSync(serverPath,s,'utf8');
+ }
+}catch(e){console.error('[V10.21]',e.message);process.exitCode=1}
+await import('./runtime-v10.20-production-final.mjs');
