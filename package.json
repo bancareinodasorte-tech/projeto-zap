@@ -1,16 +1,14 @@
 {
   "name": "canal-de-vendas-rds-v10-final",
-  "version": "10.12.2",
+  "version": "10.16.0",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node runtime-v10.12.2-root-stability.mjs",
+    "start": "node runtime-v10.16-core-media.mjs",
     "start:legacy": "node server.js",
-    "check": "node --check runtime-v10.12.2-root-stability.mjs && node --check runtime-v10.12-postpayment.mjs && node --check runtime-v10.11-followup.mjs && node --check runtime-v10.10-crm-360.mjs && node --check runtime-v10.9.4-native-home-readiness.mjs && node --check runtime-v10.9.3-initial-home-readiness.mjs && node --check runtime-v10.9.2-stable-readiness-api.mjs && node --check runtime-v10.9.1-stable-reports-ui.mjs && node --check runtime-v10.9-reports-readiness.mjs && node --check runtime-v10.8.1-stable-automation-ui.mjs && node --check runtime-v10.8-action-center.mjs && node --check runtime-v10.7-production-reminders.mjs && node --check runtime-v10.6.0-commercial-status.mjs && node --check runtime-v10.5.5-editable-timeouts.mjs && node --check runtime-v10.5.4-order-lifecycle.mjs && node --check runtime-v10.5.3-scale-operations.mjs && node --check runtime-v10.5.2-dashboard-period.mjs && node --check runtime-v10.5-campaign-premium.mjs && node --check runtime-v10.4.6-bot-control.mjs && node --check runtime-v10.4.5-bot-routing.mjs && node --check runtime-v10.4.1-crm-phone-fix.mjs && node --check runtime-v10.3.4-live-ui.mjs && node --check bootstrap-v10.3.3-v10.mjs && node --check server.js && node --check app.js"
+    "check": "node --check runtime-v10.16-core-media.mjs && node --check runtime-v10.12.2-root-stability.mjs && node --check runtime-v10.12-postpayment.mjs && node --check runtime-v10.11-followup.mjs && node --check runtime-v10.10-crm-360.mjs && node --check runtime-v10.9.4-native-home-readiness.mjs && node --check runtime-v10.9.3-initial-home-readiness.mjs && node --check runtime-v10.9.2-stable-readiness-api.mjs && node --check runtime-v10.9.1-stable-reports-ui.mjs && node --check runtime-v10.9-reports-readiness.mjs && node --check runtime-v10.8.1-stable-automation-ui.mjs && node --check runtime-v10.8-action-center.mjs && node --check runtime-v10.7-production-reminders.mjs && node --check runtime-v10.6.0-commercial-status.mjs && node --check runtime-v10.5.5-editable-timeouts.mjs && node --check runtime-v10.5.4-order-lifecycle.mjs && node --check runtime-v10.5.3-scale-operations.mjs && node --check runtime-v10.5.2-dashboard-period.mjs && node --check runtime-v10.5-campaign-premium.mjs && node --check runtime-v10.4.6-bot-control.mjs && node --check runtime-v10.4.5-bot-routing.mjs && node --check runtime-v10.4.1-crm-phone-fix.mjs && node --check runtime-v10.3.4-live-ui.mjs && node --check bootstrap-v10.3.3-v10.mjs && node --check server.js && node --check app.js"
   },
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": {"node": ">=20"},
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "7.0.0-rc14",
