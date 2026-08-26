@@ -3,6 +3,8 @@
  const CPF_KEY='rds:operatorCpf';
  const rawFetch=window.fetch.bind(window);
  let authResolved=false;
+ let appOpened=false;
+ let sessionExpiredShown=false;
  window.fetch=async(input,init={})=>{
    const url=typeof input==='string'?input:(input?.url||'');
    const headers=new Headers(init.headers||{});
@@ -11,7 +13,10 @@
    const r=await rawFetch(input,{...init,headers});
    if(r.status===401&&url.startsWith('/api/')&&!url.includes('/v1026/auth/')){
      localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(CPF_KEY);
-     if(authResolved) showLogin(true,'Sua sessão expirou. Entre novamente.');
+     if(appOpened&&!sessionExpiredShown){
+       sessionExpiredShown=true;
+       showLogin(true,'Sua sessão expirou. Entre novamente.');
+     }
    }
    return r;
  };
@@ -19,16 +24,16 @@
  document.head.insertAdjacentHTML('beforeend',css);
  function gate(html){let g=document.querySelector('#rdsAuthGate');if(!g){g=document.createElement('div');g.id='rdsAuthGate';document.body.appendChild(g)}g.innerHTML=html;document.querySelector('.app-shell')?.style.setProperty('visibility','hidden');document.querySelector('#mobileNav')?.style.setProperty('visibility','hidden');}
  function loadingGate(){gate(`<div class="rds-auth-card"><div class="rds-auth-brand"><div class="rds-auth-mark">RDS</div><div><h1>Canal de Vendas</h1><div class="rds-auth-sub">Verificando acesso...</div></div></div></div>`)}
- function openApp(cpf){document.querySelector('#rdsAuthGate')?.remove();document.querySelector('.app-shell')?.style.removeProperty('visibility');document.querySelector('#mobileNav')?.style.removeProperty('visibility');const top=document.querySelector('.top-actions');if(top&&!document.querySelector('#rdsLogout'))top.insertAdjacentHTML('beforeend',`<button id="rdsLogout" class="rds-logout" title="Sair">Sair</button>`);document.querySelector('#rdsLogout')?.addEventListener('click',logout);localStorage.setItem(CPF_KEY,cpf||'');authResolved=true;}
+ function openApp(cpf){document.querySelector('#rdsAuthGate')?.remove();document.querySelector('.app-shell')?.style.removeProperty('visibility');document.querySelector('#mobileNav')?.style.removeProperty('visibility');const top=document.querySelector('.top-actions');if(top&&!document.querySelector('#rdsLogout'))top.insertAdjacentHTML('beforeend',`<button id="rdsLogout" class="rds-logout" title="Sair">Sair</button>`);document.querySelector('#rdsLogout')?.addEventListener('click',logout);localStorage.setItem(CPF_KEY,cpf||'');authResolved=true;appOpened=true;sessionExpiredShown=false;}
  async function json(url,opt={}){const r=await rawFetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha');return d}
  async function status(){const token=localStorage.getItem(TOKEN_KEY)||'';return json('/api/v1026/auth/status',{headers:token?{Authorization:'Bearer '+token}:{}})}
  function cpfMask(v){const d=String(v||'').replace(/\D/g,'').slice(0,11);return d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2')}
  function commonCard(title,text,buttonLabel){return `<div class="rds-auth-card"><div class="rds-auth-brand"><div class="rds-auth-mark">RDS</div><div><h1>Canal de Vendas</h1><div class="rds-auth-sub">Acesso do operador</div></div></div><h2 style="margin:0;color:#12335c">${title}</h2><p>${text}</p><label>CPF</label><input id="rdsCpf" inputmode="numeric" autocomplete="username" placeholder="000.000.000-00"><label>Senha</label><input id="rdsPass" type="password" autocomplete="current-password" placeholder="Mínimo 8 caracteres"><button id="rdsEnter">${buttonLabel}</button><div id="rdsAuthMsg" class="rds-auth-msg"></div>`}
- function showLogin(configured=true,msg=''){gate(commonCard('Entrar','Entre com seu CPF e senha.','Entrar')+`<button id="rdsRegister" class="rds-auth-link">Cadastro</button></div>`);const cpf=document.querySelector('#rdsCpf');cpf.addEventListener('input',()=>cpf.value=cpfMask(cpf.value));document.querySelector('#rdsEnter').onclick=login;document.querySelector('#rdsRegister').onclick=showRegister;document.querySelector('#rdsPass').addEventListener('keydown',e=>{if(e.key==='Enter')login()});if(msg)document.querySelector('#rdsAuthMsg').textContent=msg;}
- function showRegister(){gate(commonCard('Cadastro','Cadastre seu CPF e uma senha para acessar o aplicativo. O CPF será seu usuário único.','Cadastrar')+`<button id="rdsBack" class="rds-auth-link">Voltar para entrar</button></div>`);const cpf=document.querySelector('#rdsCpf');cpf.addEventListener('input',()=>cpf.value=cpfMask(cpf.value));document.querySelector('#rdsEnter').onclick=register;document.querySelector('#rdsBack').onclick=()=>showLogin(true);}
+ function showLogin(configured=true,msg=''){appOpened=false;sessionExpiredShown=false;gate(commonCard('Entrar','Entre com seu CPF e senha.','Entrar')+`<button id="rdsRegister" class="rds-auth-link">Cadastro</button></div>`);const cpf=document.querySelector('#rdsCpf');cpf.addEventListener('input',()=>cpf.value=cpfMask(cpf.value));document.querySelector('#rdsEnter').onclick=login;document.querySelector('#rdsRegister').onclick=showRegister;document.querySelector('#rdsPass').addEventListener('keydown',e=>{if(e.key==='Enter')login()});if(msg)document.querySelector('#rdsAuthMsg').textContent=msg;}
+ function showRegister(){appOpened=false;sessionExpiredShown=false;gate(commonCard('Cadastro','Cadastre seu CPF e uma senha para acessar o aplicativo. O CPF será seu usuário único.','Cadastrar')+`<button id="rdsBack" class="rds-auth-link">Voltar para entrar</button></div>`);const cpf=document.querySelector('#rdsCpf');cpf.addEventListener('input',()=>cpf.value=cpfMask(cpf.value));document.querySelector('#rdsEnter').onclick=register;document.querySelector('#rdsBack').onclick=()=>showLogin(true);document.querySelector('#rdsPass').addEventListener('keydown',e=>{if(e.key==='Enter')register()});}
  async function register(){try{const cpf=document.querySelector('#rdsCpf').value.replace(/\D/g,''),password=document.querySelector('#rdsPass').value;const d=await json('/api/v1026/auth/register',{method:'POST',body:JSON.stringify({cpf,password})});localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem(CPF_KEY,d.cpf||cpf);location.reload()}catch(e){document.querySelector('#rdsAuthMsg').textContent=e.message}}
  async function login(){try{const cpf=document.querySelector('#rdsCpf').value.replace(/\D/g,''),password=document.querySelector('#rdsPass').value;const d=await json('/api/v1026/auth/login',{method:'POST',body:JSON.stringify({cpf,password})});localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem(CPF_KEY,d.cpf||cpf);location.reload()}catch(e){document.querySelector('#rdsAuthMsg').textContent=e.message}}
- async function logout(){try{await fetch('/api/v1026/auth/logout',{method:'POST'})}catch{}localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(CPF_KEY);showLogin(true)}
+ async function logout(){try{await fetch('/api/v1026/auth/logout',{method:'POST'})}catch{}localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(CPF_KEY);appOpened=false;showLogin(true)}
  async function boot(){loadingGate();try{const s=await status();authResolved=true;if(s.authenticated)openApp(s.cpf);else if(s.configured)showLogin(true);else showRegister()}catch(e){authResolved=true;showLogin(true,'Não foi possível validar a sessão. Tente novamente.')}}
  loadingGate();
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
