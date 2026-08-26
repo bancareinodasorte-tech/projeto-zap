@@ -1,0 +1,28 @@
+(()=>{
+ const TOKEN_KEY='rds:operatorToken';
+ const USER_KEY='rds:operatorUser';
+ const rawFetch=window.fetch.bind(window);
+ window.fetch=async(input,init={})=>{
+   const url=typeof input==='string'?input:(input?.url||'');
+   const headers=new Headers(init.headers||{});
+   const token=localStorage.getItem(TOKEN_KEY)||'';
+   if(token&&url.startsWith('/api/'))headers.set('Authorization','Bearer '+token);
+   const r=await rawFetch(input,{...init,headers});
+   if(r.status===401&&url.startsWith('/api/')&&!url.includes('/v1026/auth/')){
+     localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(USER_KEY);setTimeout(()=>location.reload(),100);
+   }
+   return r;
+ };
+ const css=`<style id="authStyle">#rdsAuthGate{position:fixed;inset:0;z-index:9999;background:linear-gradient(145deg,#061d3f,#0c4f9c);display:grid;place-items:center;padding:18px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.rds-auth-card{width:min(430px,94vw);background:#fff;border-radius:24px;padding:28px;box-shadow:0 28px 90px #00152f66}.rds-auth-brand{display:flex;align-items:center;gap:13px;margin-bottom:20px}.rds-auth-mark{width:54px;height:54px;border-radius:16px;background:linear-gradient(145deg,#0a4082,#1674d1);color:white;display:grid;place-items:center;font-weight:900}.rds-auth-card h1{margin:0;color:#12335c;font-size:25px}.rds-auth-card p{color:#6f7e94;line-height:1.45}.rds-auth-card label{display:block;font-size:12px;font-weight:800;color:#42566e;margin:12px 0 6px}.rds-auth-card input{width:100%;border:1px solid #ccd8e7;border-radius:12px;padding:12px;font:inherit}.rds-auth-card button{width:100%;border:0;border-radius:12px;padding:12px 14px;background:linear-gradient(135deg,#0d55a5,#1674d1);color:#fff;font-weight:900;margin-top:14px;font:inherit}.rds-auth-msg{margin-top:10px;color:#a32933;font-size:13px}.rds-auth-sub{font-size:12px;color:#7b889a}.rds-logout{margin-left:8px;border:1px solid #ccd8e7;background:#fff;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800;color:#31506f}</style>`;
+ document.head.insertAdjacentHTML('beforeend',css);
+ function gate(html){let g=document.querySelector('#rdsAuthGate');if(!g){g=document.createElement('div');g.id='rdsAuthGate';document.body.appendChild(g)}g.innerHTML=html;document.querySelector('.app-shell')?.style.setProperty('visibility','hidden');document.querySelector('#mobileNav')?.style.setProperty('visibility','hidden');}
+ function openApp(user){document.querySelector('#rdsAuthGate')?.remove();document.querySelector('.app-shell')?.style.removeProperty('visibility');document.querySelector('#mobileNav')?.style.removeProperty('visibility');const top=document.querySelector('.top-actions');if(top&&!document.querySelector('#rdsLogout'))top.insertAdjacentHTML('beforeend',`<button id="rdsLogout" class="rds-logout" title="Sair">Sair</button>`);document.querySelector('#rdsLogout')?.addEventListener('click',logout);localStorage.setItem(USER_KEY,user||'');}
+ async function json(url,opt={}){const r=await rawFetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha');return d}
+ async function status(){const token=localStorage.getItem(TOKEN_KEY)||'';return json('/api/v1026/auth/status',{headers:token?{Authorization:'Bearer '+token}:{}})}
+ function loginScreen(configured){gate(`<div class="rds-auth-card"><div class="rds-auth-brand"><div class="rds-auth-mark">RDS</div><div><h1>Canal de Vendas</h1><div class="rds-auth-sub">Acesso do operador</div></div></div><p>${configured?'Entre com seu usuário e senha.':'Primeiro acesso: crie o administrador principal do aplicativo.'}</p><label>Usuário</label><input id="rdsUser" autocomplete="username" placeholder="Seu usuário"><label>Senha</label><input id="rdsPass" type="password" autocomplete="${configured?'current-password':'new-password'}" placeholder="Mínimo 8 caracteres"><button id="rdsEnter">${configured?'Entrar':'Criar acesso administrador'}</button><div id="rdsAuthMsg" class="rds-auth-msg"></div></div>`);document.querySelector('#rdsEnter').onclick=()=>configured?login():setup();document.querySelector('#rdsPass').addEventListener('keydown',e=>{if(e.key==='Enter')document.querySelector('#rdsEnter').click()});}
+ async function setup(){try{const user=document.querySelector('#rdsUser').value.trim(),password=document.querySelector('#rdsPass').value;await json('/api/v1026/auth/setup',{method:'POST',body:JSON.stringify({user,password})});await login()}catch(e){document.querySelector('#rdsAuthMsg').textContent=e.message}}
+ async function login(){try{const user=document.querySelector('#rdsUser').value.trim(),password=document.querySelector('#rdsPass').value;const d=await json('/api/v1026/auth/login',{method:'POST',body:JSON.stringify({user,password})});localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem(USER_KEY,d.user||user);location.reload()}catch(e){document.querySelector('#rdsAuthMsg').textContent=e.message}}
+ async function logout(){try{await fetch('/api/v1026/auth/logout',{method:'POST'})}catch{}localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(USER_KEY);location.reload()}
+ async function boot(){try{const s=await status();if(s.configured&&s.authenticated)openApp(s.user);else loginScreen(s.configured)}catch{loginScreen(true)}}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
