@@ -13,7 +13,7 @@ try{
     s=s.replace(oldBlock,newBlock);
     fs.writeFileSync(serverPath,s,'utf8');
     console.log('[V10.29] proteção do nome principal do CRM ativada');
-  }else if(s.includes('V10.29: o telefone é a identidade única do CRM.')){
+  }else if(s.includes('V10.29: o telefone é a identidade única do CRM.')||s.includes('V10.28: telefone é a identidade única do CRM.')){
     console.log('[V10.29] proteção do CRM já aplicada');
   }else{
     console.warn('[V10.29] bloco legado do CRM não localizado; servidor mantido sem alteração');
@@ -23,4 +23,4 @@ try{
   process.exitCode=1;
 }
 
-await import('./runtime-v10.26-security.mjs');
+await import('./runtime-v10.28-crm-identity.mjs');
