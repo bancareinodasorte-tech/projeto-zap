@@ -1,7 +1,6 @@
 (()=>{
   const oldRender=render;
   const oldReturns=returnsPage;
-  const oldOrders=orders;
 
   const style=document.createElement('style');
   style.textContent=`
@@ -48,13 +47,8 @@
     try{await navigator.clipboard.writeText(t);toast('PIX copiado.')}catch{const el=document.querySelector('#rdsPixCode');el.select();document.execCommand('copy');toast('PIX copiado.')}
   };
 
-  window.returnsPage=async function(){
-    const [rs,contactsList]=await Promise.all([api('/api/returns'),api('/api/contacts').catch(()=>[])]);
-    state.returns=rs;
-    const names=new Map(contactsList.map(c=>[c.phone,c.name]));
-    const latest=new Map();for(const r of rs){if(r.phone&&!latest.has(r.phone))latest.set(r.phone,r)}
-    app.innerHTML=`<div class=page-title><div><span class=eyebrow>Atendimento</span><h1>Retornos</h1><p class=mut>Somente mensagens recebidas e contatos que responderam.</p></div></div>${[...latest.values()].map(r=>`<div class=card><div class=row style="justify-content:space-between"><div><h2 style="margin:0">${esc(names.get(r.phone)||r.phone||'Contato')}</h2><p class=mut>${esc(r.phone||'')} • ${dt(r.created_at)}</p></div>${badge('NOVO RETORNO')}</div><p>${esc(r.body||`[${r.message_type||'mídia'} recebida]`)}</p><div class=row><a target=_blank href="https://wa.me/${esc(r.phone||'')}">${btn('Responder no WhatsApp','btn')}</a></div></div>`).join('')||'<div class="card empty-state">Nenhum retorno.</div>'}`;
-  };
+  // Retornos permanece com o CRM 360 completo já aprovado anteriormente.
+  window.returnsPage=oldReturns;
 
   window.orders=async function(){
     state.orders=await api('/api/orders');
