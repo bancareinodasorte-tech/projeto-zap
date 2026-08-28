@@ -47,7 +47,18 @@
   }
 
   const oldOrders=window.orders, oldPayments=window.paymentsPage, oldReturns=window.returnsPage, oldContacts=window.contacts, oldSettings=window.settings;
-  window.orders=async()=>{await oldOrders();compactSections()};
+  window.orders=async()=>{
+    await oldOrders(); compactSections();
+    const sys=current(WEB_KEY,localStorage.getItem(SYS_KEY)||''), appUrl=current(ANDROID_KEY,'');
+    document.querySelectorAll('#app .rds-order').forEach(card=>{
+      if(card.dataset.v37Access)return; card.dataset.v37Access='1';
+      const buttons=card.querySelector('.rds-buttons'); if(!buttons)return;
+      const box=document.createElement('div'); box.className='rds-v37-issue-access'; box.innerHTML='<span>Emissão</span>';
+      if(appUrl)box.insertAdjacentHTML('beforeend',`<a target="_blank" href="${esc(appUrl)}">${btn('Abrir app Android','')}</a>`);
+      if(sys)box.insertAdjacentHTML('beforeend',`<a target="_blank" href="${esc(sys)}">${btn('Abrir sistema (PC/iPhone)','')}</a>`);
+      buttons.before(box);
+    });
+  };
   window.paymentsPage=async()=>{await oldPayments();compactSections()};
   window.contacts=async()=>{await oldContacts();compactSections()};
   window.returnsPage=async()=>{await oldReturns();compactReturns()};
@@ -66,7 +77,7 @@
   render=async function(){await oldRender(); if(page==='settings')compactSettings(); else if(page==='returns')compactReturns(); else compactSections()};
 
   const css=document.createElement('style'); css.textContent=`
-    .rds-v37-toggle{font-size:12px;padding:7px 11px;white-space:nowrap}.rds-v37-table-head,.rds-v37-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.rds-v37-table-head strong{font-size:16px}.rds-v37-settings-body{margin-top:8px}.rds-v37-access-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.rds-v37-access-grid>div{border:1px solid #dbe5f0;border-radius:16px;padding:14px;background:#fff}.rds-v37-access-grid strong{display:block;font-size:16px;color:#183b69}.rds-v37-access-grid small{display:block;color:#6c7d94;line-height:1.4;margin:5px 0 10px}.rds-v37-access-grid label{display:block;font-size:12px;font-weight:800;color:#52657b;margin:8px 0 5px}.rds-v37-access-grid input{width:100%;box-sizing:border-box;border:1px solid #ccd8e7;border-radius:11px;padding:10px}.rds-v37-access-grid .row{margin-top:10px}
+    .rds-v37-toggle{font-size:12px;padding:7px 11px;white-space:nowrap}.rds-v37-table-head,.rds-v37-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.rds-v37-table-head strong{font-size:16px}.rds-v37-settings-body{margin-top:8px}.rds-v37-access-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.rds-v37-access-grid>div{border:1px solid #dbe5f0;border-radius:16px;padding:14px;background:#fff}.rds-v37-access-grid strong{display:block;font-size:16px;color:#183b69}.rds-v37-access-grid small{display:block;color:#6c7d94;line-height:1.4;margin:5px 0 10px}.rds-v37-access-grid label{display:block;font-size:12px;font-weight:800;color:#52657b;margin:8px 0 5px}.rds-v37-access-grid input{width:100%;box-sizing:border-box;border:1px solid #ccd8e7;border-radius:11px;padding:10px}.rds-v37-access-grid .row{margin-top:10px}.rds-v37-issue-access{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid #e4ebf3}.rds-v37-issue-access>span{font-size:11px;font-weight:900;color:#61728a;text-transform:uppercase}.rds-v37-issue-access a{text-decoration:none}
     @media(max-width:700px){.rds-v37-access-grid{grid-template-columns:1fr}.rds-v37-card-head{align-items:flex-start}.rds-v37-card-head h2,.rds-v37-card-head h3{margin:0}}
   `; document.head.appendChild(css);
 })();
