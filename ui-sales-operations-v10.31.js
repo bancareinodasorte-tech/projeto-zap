@@ -33,10 +33,23 @@
   window.rdsCreatePix=async function(id,send){
     try{
       const o=state.orders.find(x=>x.id===id)||{};
-      const r=await post(send?`/api/pagbank/orders/${id}/send-pix`:`/api/pagbank/orders/${id}/pix`);
+      const currentCpf=String(o.customer_tax_id||o.tax_id||o.cpf||'').replace(/\D/g,'');
+      const currentEmail=String(o.customer_email||o.email||'');
+      modal(`<span class=eyebrow>PIX PagBank — PRODUÇÃO</span><h2>Dados do pagador</h2><p>O PagBank exige <b>CPF/CNPJ e e-mail reais do pagador</b> para criar a cobrança.</p><label>CPF/CNPJ</label><input id=rdsPagCpf inputmode=numeric value="${esc(currentCpf)}" placeholder="CPF ou CNPJ"><label>E-mail</label><input id=rdsPagEmail type=email value="${esc(currentEmail)}" placeholder="cliente@email.com"><div class=row>${btn('Continuar',`rdsCreatePixConfirm('${id}',${send})`,'btn primary')}${btn('Cancelar',"this.closest('.modal').remove()")}</div>`);
+    }catch(e){toast(e.message)}
+  };
+
+  window.rdsCreatePixConfirm=async function(id,send){
+    try{
+      const cpf=String(document.querySelector('#rdsPagCpf')?.value||'').replace(/\D/g,'');
+      const email=String(document.querySelector('#rdsPagEmail')?.value||'').trim();
+      if(!cpf || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('Informe CPF/CNPJ e um e-mail válido.');
+      document.querySelector('.modal')?.remove();
+      const o=state.orders.find(x=>x.id===id)||{};
+      const r=await post(send?`/api/pagbank/orders/${id}/send-pix`:`/api/pagbank/orders/${id}/pix`,{customer_tax_id:cpf,customer_email:email});
       const code=r?.qr?.text||'';
       const img=r?.qr?.png||r?.qr?.base64||'';
-      modal(`<span class=eyebrow>PIX PagBank</span><h2>${send?'PIX enviado ao cliente':'PIX gerado'}</h2><p><b>${esc(o.customer_name||o.phone||'Cliente')}</b><br>${esc(o.code||'')} • ${money(o.total_amount)}</p><div class=ops-note>${send?'A cobrança foi enviada pelo WhatsApp e continua aguardando a confirmação automática.':'Copie o código ou use o QR Code abaixo.'}</div>${img?`<img class=pix-qr src="${esc(img)}" alt="QR Code PIX">`:''}<label>PIX Copia e Cola</label><textarea id=rdsPixCode class=pix-code readonly>${esc(code)}</textarea><div class=row>${btn('Copiar PIX','rdsCopyPix()','btn primary')}${btn('Fechar',"this.closest('.modal').remove()")}</div>`);
+      modal(`<span class=eyebrow>PIX PagBank — PRODUÇÃO</span><h2>${send?'PIX enviado ao cliente':'PIX gerado'}</h2><p><b>${esc(o.customer_name||o.phone||'Cliente')}</b><br>${esc(o.code||'')} • ${money(o.total_amount)}</p><div class=ops-note>${send?'A cobrança foi enviada pelo WhatsApp e continua aguardando a confirmação automática.':'Copie o código ou use o QR Code abaixo.'}</div>${img?`<img class=pix-qr src="${esc(img)}" alt="QR Code PIX">`:''}<label>PIX Copia e Cola</label><textarea id=rdsPixCode class=pix-code readonly>${esc(code)}</textarea><div class=row>${btn('Copiar PIX','rdsCopyPix()','btn primary')}${btn('Fechar',"this.closest('.modal').remove()")}</div>`);
       toast(send?'PIX gerado e enviado no WhatsApp.':'PIX gerado com sucesso.');
     }catch(e){toast(e.message)}
   };
@@ -47,7 +60,6 @@
     try{await navigator.clipboard.writeText(t);toast('PIX copiado.')}catch{const el=document.querySelector('#rdsPixCode');el.select();document.execCommand('copy');toast('PIX copiado.')}
   };
 
-  // Retornos permanece com o CRM 360 completo já aprovado anteriormente.
   window.returnsPage=oldReturns;
 
   window.orders=async function(){
