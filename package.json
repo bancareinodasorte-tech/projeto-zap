@@ -1,12 +1,12 @@
 {
   "name": "canal-de-vendas-rds-v10-final",
-  "version": "10.46.0",
+  "version": "10.48.0",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node runtime-v10.46-flow-closure.mjs",
+    "start": "node runtime-v10.48-auth-fix.mjs",
     "start:legacy": "node server.js",
-    "check": "node --check runtime-v10.46-flow-closure.mjs && node --check runtime-v10.43-whatsapp-session-fix.mjs && node --check runtime-v10.41-customer-pix-flow.mjs && node --check runtime-v10.40-pagbank-customer-fix.mjs && node --check server.js"
+    "check": "node --check runtime-v10.48-auth-fix.mjs && node --check runtime-v10.46-flow-closure.mjs && node --check runtime-v10.43-whatsapp-session-fix.mjs && node --check runtime-v10.41-customer-pix-flow.mjs && node --check runtime-v10.40-pagbank-customer-fix.mjs && node --check server.js"
   },
   "engines": {"node": "20.x"},
   "dependencies": {
