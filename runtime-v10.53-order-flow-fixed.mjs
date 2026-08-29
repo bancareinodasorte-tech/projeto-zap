@@ -9,6 +9,26 @@ let runtimeSource = fs.readFileSync(basePath, 'utf8');
 const marker = "fs.writeFileSync(serverPath,source,'utf8');";
 if(!runtimeSource.includes(marker)) throw new Error('V10.53 base marker not found');
 
+// PagBank: na API Order, o CPF/CNPJ (tax_id) é explicitamente obrigatório;
+// o e-mail do customer não é marcado como obrigatório no objeto Order. Portanto,
+// o fluxo do cliente fica somente com CPF para reduzir dados solicitados.
+runtimeSource = runtimeSource.replace(/Quantidade:\\nNome:\\nCPF:\\nE-mail:\\nContato:/g,'Quantidade:\\nNome:\\nCPF:\\nContato:');
+
+const formPattern53=/function parseOrderForm\\(text\\)\\{[\\s\\S]*?\\n\\}/;
+const formFn53='function parseOrderForm(text){\\n  const t=cleanText(text);\\n  const get=label=>{ const re=new RegExp(label+\'\\\\s*[:\\\\-]\\\\s*([^\\\\r\\\\n]+)\',\'i\'); return cleanText(t.match(re)?.[1]||\'\'); };\\n  const quantity=Number((get(\'quantidade\').match(/\\\\d+/)||[])[0]||0);\\n  const name=get(\'nome\');\\n  const cpf=digits(get(\'cpf\'));\\n  const contact=phoneKey(get(\'contato\'));\\n  return {quantity,name,cpf,contact};\\n}';
+if(!formPattern53.test(runtimeSource)) throw new Error('parseOrderForm marker not found');
+runtimeSource=runtimeSource.replace(formPattern53,formFn53);
+
+const orderFormPattern53=/async function handleOrderForm\\(identity,order,text\\)\\{[\\s\\S]*?\\n\\}\\nasync function handleProof/;
+const orderFormFn53='async function handleOrderForm(identity,order,text){\\n  const p=parseOrderForm(text);\\n  const missing=[];\\n  if(!p.quantity||p.quantity<1) missing.push(\'Quantidade\');\\n  if(!p.name) missing.push(\'Nome\');\\n  if(!validCPF(p.cpf)) missing.push(\'CPF\');\\n  if(!p.contact||!validBRPhone(p.contact)) missing.push(\'Contato\');\\n  if(missing.length){ await replyInbound(identity,\'Falta preencher ou corrigir: *\'+missing.join(\', \')+\'*.\\nEnvie novamente o formulário completo no mesmo formato.\'); return; }\\n  const total=Number((p.quantity*Number(order.unit_price||3)).toFixed(2));\\n  if(identity.phone){ const existing=await findContact(identity.phone); if(existing) await patch(\'rds10_contacts\',\'id=eq.\'+existing.id,{validated:true,last_seen_at:nowISO(),updated_at:nowISO()}); else await saveOrMergeContact({name:p.name,phone:identity.phone,group_name:\'INTERESSADOS\',origin:\'PEDIDO\',validated:true,last_seen_at:nowISO()}); }\\n  await patch(\'rds10_orders\',\'id=eq.\'+order.id,{customer_name:p.name,contact_phone:p.contact,quantity:p.quantity,total_amount:total,status:\'AGUARDANDO_PAGAMENTO\',updated_at:nowISO()});\\n  await logEvent(\'PEDIDO_DADOS_COMPLETOS\',{phone:identity.phone,order:order.code,quantity:p.quantity,total,cpf:p.cpf,name:p.name,contact:p.contact});\\n  await cancelFutureDeliveries(identity.phone,\'PEDIDO_ATIVO\');\\n  await replyInbound(identity,\'✅ *PEDIDO RECEBIDO*\\n\\n👤 \'+p.name+\'\\n🎟 \'+p.quantity+\' bilhete(s)\\n💰 Total: *R$ \'+money(total)+\'*\\n🧾 Pedido: \'+order.code+\'\\n\\n💳 *PAGAMENTO PIX*\\nO PIX será gerado automaticamente pelo PagBank após a confirmação dos dados.\\n\\nSe o PagBank estiver em produção, você receberá aqui o QR Code/Pix Copia e Cola.\');\\n}';
+if(!orderFormPattern53.test(runtimeSource)) throw new Error('handleOrderForm marker not found');
+runtimeSource=runtimeSource.replace(orderFormPattern53,orderFormFn53+'\\nasync function handleProof');
+
+// PagBank: retirar a exigência artificial de e-mail criada no fechamento anterior
+// e omitir o campo quando não fornecido.
+runtimeSource=runtimeSource.replace("if(String(p.cpf||'').replace(/\\\\D/g,'').length!==11||!p.email) throw new Error('CPF e e-mail do pagador são obrigatórios para gerar o PIX.');","if(String(p.cpf||'').replace(/\\\\D/g,'').length!==11) throw new Error('CPF do pagador é obrigatório para gerar o PIX.');");
+runtimeSource=runtimeSource.replace("customer:{name:o.customer_name,email:String(p.email).trim().toLowerCase(),tax_id:String(p.cpf).replace(/\\\\D/g,''),phones:","customer:{name:o.customer_name,tax_id:String(p.cpf).replace(/\\\\D/g,''),phones:");
+
 const patch = String.raw`
 // ---------------- V10.53 FECHAMENTO — fluxo de pedido/cancelamento ----------------
 function validCPF(v){
@@ -52,4 +72,3 @@ runtimeSource = runtimeSource.replace(marker, patch + marker);
 // (ex.: ./server.js), que precisam ser resolvidos como arquivo ESM.
 fs.writeFileSync(generatedPath,runtimeSource,'utf8');
 await import(pathToFileURL(generatedPath).href+'?v=1053');
-`;
