@@ -6,21 +6,21 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const serverPath = path.join(dir, 'server.js');
 let source = fs.readFileSync(serverPath, 'utf8');
 
-const oldBlock = `  if(o && /^(COMPRAR|BILHETE|BILHETES|CPF)$/i.test(cleanText(t)) && o.status!=='COLETANDO_DADOS')return replyInbound(i,\`Pedido *\${o.code}* em andamento.\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.\`);`;
-const newBlock = `  if(o && /^(COMPRAR|BILHETE|BILHETES|CPF)$/i.test(cleanText(t)) && o.status!=='COLETANDO_DADOS')return replyInbound(i,\`Pedido *\${o.code}* em andamento.\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.\`);`;
+// V10.51: active order is still visible, but customer commands can control it.
+// A pending payment must never trap the customer in an endless reminder loop.
+const activePattern = /async function activeOrder\(phone\)\{[\s\S]*?\n\}/;
+source = source.replace(activePattern, `async function activeOrder(phone){\n  return one('rds10_orders',\`select=*&phone=eq.\${encodeURIComponent(phone)}&status=in.(COLETANDO_DADOS,AGUARDANDO_PAGAMENTO,AGUARDANDO_CONFERENCIA,PAGO_AGUARDANDO_BILHETES)&order=created_at.desc\`);\n}`);
 
-if (source.includes(oldBlock)) {
-  source = source.replace(oldBlock, newBlock);
-}
+// Remove the purchase-name overwrite of the CRM's canonical contact name.
+source = source.replace(/await patch\('rds10_contacts',`id=eq\.\$\{existing\.id\}`,\{\s*name:p\.name,\s*validated:true,/g,
+`await patch('rds10_contacts',\`id=eq.\${existing.id}\`,{ validated:true,`);
 
-// V10.51: pedidos abandonados não podem bloquear uma nova compra.
-// COMPRAR sempre abre uma nova intenção quando o pedido anterior está parado aguardando pagamento/conferência.
-const oldBuy = `  if(isOfficeRoute(t))return replyInbound(i,'🏢 *OUTRO ASSUNTO*\\nFale diretamente com o escritório:\\nhttps://wa.me/'+normalizeBR(s.office_whatsapp||OFFICE_WA_DEFAULT));if(isBuyRoute(t))return beginOrder(i,(t.match(/RDS[-_:]?([A-Z0-9]{6,12})/i)||[])[1]||null);return replyInbound(i,routerMessage(s))}`;
-const newBuy = `  if(isOfficeRoute(t))return replyInbound(i,'🏢 *OUTRO ASSUNTO*\\nFale diretamente com o escritório:\\nhttps://wa.me/'+normalizeBR(s.office_whatsapp||OFFICE_WA_DEFAULT));if(isBuyRoute(t)){if(o && ['AGUARDANDO_PAGAMENTO','AGUARDANDO_CONFERENCIA'].includes(o.status)){await patch('rds10_orders',\`id=eq.\${o.id}\`,{status:'CANCELADO',cancel_reason:'NOVA_COMPRA',updated_at:nowISO()});await cancelFutureDeliveries(i.phone,'NOVA_COMPRA');}return beginOrder(i,(t.match(/RDS[-_:]?([A-Z0-9]{6,12})/i)||[])[1]||null)}return replyInbound(i,routerMessage(s))}`;
+// Inject the definitive customer controls immediately before the existing order-state block.
+const anchor = `  if(order){\n    if(order.status === 'COLETANDO_DADOS'){`;
+const controls = `  const cmd = cleanText(text).toUpperCase();\n  const cancelCmd = /^(CANCELAR|CANCELA|DESISTIR|NÃO QUERO|NAO QUERO|ENCERRAR|PARAR|SAIR)$/.test(cmd);\n  const restartCmd = /^(RECOMEÇAR|RECOMECAR|NOVA COMPRA|NOVO PEDIDO)$/.test(cmd);\n  const menu = order ? \`Pedido *\${order.code}* em andamento. O que deseja fazer?\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.\` : '';\n\n  if(order && (cancelCmd || restartCmd || cmd === '4' || cmd === '3')){\n    await patch('rds10_orders',\`id=eq.\${order.id}\`,{status:'CANCELADO',cancel_reason:restartCmd || cmd === '3' ? 'RECOMECO' : 'CLIENTE',cancelled_at:nowISO(),updated_at:nowISO()});\n    await cancelFutureDeliveries(identity.phone,restartCmd || cmd === '3' ? 'RECOMECO' : 'PEDIDO_CANCELADO');\n    if(restartCmd || cmd === '3') return beginOrder(identity);\n    return replyInbound(identity,'✅ Pedido encerrado. Nenhuma nova cobrança será enviada. Para uma nova compra, envie *COMPRAR*.');\n  }\n  if(order && cmd === '5'){\n    const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);\n    await patch('rds10_orders',\`id=eq.\${order.id}\`,{status:'CANCELADO',cancel_reason:'ESCRITORIO',updated_at:nowISO()});\n    await cancelFutureDeliveries(identity.phone,'ESCRITORIO');\n    return replyInbound(identity,\`🏢 *ATENDIMENTO HUMANO*\\nFale diretamente com o escritório:\\nhttps://wa.me/\${office}?text=\${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}\`);\n  }\n  if(order && cmd === '2'){\n    if(order.status !== 'COLETANDO_DADOS') await patch('rds10_orders',\`id=eq.\${order.id}\`,{status:'COLETANDO_DADOS',updated_at:nowISO()});\n    return replyInbound(identity,\`✏️ *CORRIGIR PEDIDO*\\n\\nQuantidade:\\nNome:\\nContato:\\n\\nPedido: \${order.code}\`);\n  }\n  if(order && (isBuyRoute(text) || (cmd && !inbound.media)) && order.status !== 'COLETANDO_DADOS'){\n    if(inbound.media && order.status === 'AGUARDANDO_PAGAMENTO') return handleProof(identity,order,inbound);\n    return replyInbound(identity,menu);\n  }\n\n  if(order){\n    if(order.status === 'COLETANDO_DADOS'){`;
+if(source.includes(anchor)) source = source.replace(anchor, controls);
 
-if (source.includes(oldBuy)) source = source.replace(oldBuy, newBuy);
-
-// Cancelamento explícito continua tendo prioridade e interrompe entregas agendadas.
+if(!source.includes('// V10.51_FLOW_FIX_INSTALLED')) source = `// V10.51_FLOW_FIX_INSTALLED\n${source}`;
 fs.writeFileSync(serverPath, source, 'utf8');
-console.log('[V10.51] fluxo de pedido pendente corrigido');
+console.log('[V10.51] fluxo comercial corrigido');
 await import('./server.js');
