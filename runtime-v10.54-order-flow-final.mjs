@@ -17,7 +17,7 @@ function replaceBlock(source, startText, endText, replacement) {
   return source.slice(0, start) + replacement + source.slice(end);
 }
 
-// V10.54: o telefone do pedido é o telefone real da conversa. Não pedir novamente ao cliente.
+// V10.54: formulário mínimo. O WhatsApp que iniciou a conversa vira automaticamente o contato do pedido.
 runtimeSource = runtimeSource.replace(/Quantidade:\\nNome:\\nCPF:\\nE-mail:\\nContato:/g, 'Quantidade:\\nNome:\\nCPF:');
 
 const parseOrderForm = `function parseOrderForm(text){
@@ -50,9 +50,38 @@ const handleOrderForm = `async function handleOrderForm(identity,order,text){
   await cancelFutureDeliveries(identity.phone,'PEDIDO_ATIVO');
   await replyInbound(identity,'✅ *PEDIDO RECEBIDO*\\n\\n👤 '+p.name+'\\n🎟 '+p.quantity+' bilhete(s)\\n💰 Total: *R$ '+money(total)+'*\\n🧾 Pedido: '+order.code+'\\n\\n💳 *PAGAMENTO PIX*\\nO PIX será gerado automaticamente pelo PagBank após a confirmação dos dados.\\n\\nSe o PagBank estiver em produção, você receberá aqui o QR Code/Pix Copia e Cola.');
 }`;
-runtimeSource = replaceBlock(runtimeSource, 'async function handleOrderForm(identity,order,text){', '\nasync function handleProof', handleOrderForm + '\nasync function handleProof');
+runtimeSource = replaceBlock(runtimeSource, 'async function handleOrderForm(identity, order, text){', '\nasync function handleProof', handleOrderForm + '\nasync function handleProof');
 
-// V10.54: substitui o fluxo de entrada inteiro sem regex frágil.
+const helpers = `
+// ---------------- V10.54 FECHAMENTO — helpers do fluxo ----------------
+function validCPF(v){
+  const cpf=digits(v);
+  if(!/^\\d{11}$/.test(cpf) || /^([0-9])\\1{10}$/.test(cpf)) return false;
+  let sum=0; for(let i=0;i<9;i++) sum+=Number(cpf[i])*(10-i);
+  let d1=(sum*10)%11; if(d1===10) d1=0; if(d1!==Number(cpf[9])) return false;
+  sum=0; for(let i=0;i<10;i++) sum+=Number(cpf[i])*(11-i);
+  let d2=(sum*10)%11; if(d2===10) d2=0; return d2===Number(cpf[10]);
+}
+function orderMenu(order){
+  return 'Pedido *'+order.code+'* em andamento. O que deseja fazer?\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.';
+}
+async function cancelOrderReal(order,reason){
+  if(!order?.id) return;
+  const why=reason||'CLIENTE_CANCELAMENTO';
+  await patch('rds10_orders','id='+order.id,{status:'CANCELADO',cancel_reason:why,updated_at:nowISO()});
+  await cancelFutureDeliveries(order.phone,why);
+  await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason:why});
+}
+async function askOrderForm(identity,order,prefix){
+  await replyInbound(identity,prefix||'📝 *PREENCHER PEDIDO*');
+  await sleep(250);
+  return replyInbound(identity,'Quantidade:\\nNome:\\nCPF:');
+}
+`;
+const inboundStart = runtimeSource.indexOf('async function handleInbound(m){');
+if(inboundStart < 0) throw new Error('handleInbound não encontrado');
+runtimeSource = runtimeSource.slice(0,inboundStart) + helpers + '\n' + runtimeSource.slice(inboundStart);
+
 const handleInbound = `async function handleInbound(m){
   const identity=resolveInboundIdentity(m);
   const inbound=extractInbound(m);
@@ -87,40 +116,7 @@ const handleInbound = `async function handleInbound(m){
 }`;
 runtimeSource = replaceBlock(runtimeSource, 'async function handleInbound(m){', '\n\n// ---------------- Campanhas / fila', handleInbound + '\n\n// ---------------- Campanhas / fila');
 
-// Cancelamento real e menu do fechamento anterior.
-const validCPF = `function validCPF(v){
-  const cpf=digits(v);
-  if(!/^\\d{11}$/.test(cpf) || /^([0-9])\\1{10}$/.test(cpf)) return false;
-  let sum=0; for(let i=0;i<9;i++) sum+=Number(cpf[i])*(10-i);
-  let d1=(sum*10)%11; if(d1===10) d1=0; if(d1!==Number(cpf[9])) return false;
-  sum=0; for(let i=0;i<10;i++) sum+=Number(cpf[i])*(11-i);
-  let d2=(sum*10)%11; if(d2===10) d2=0; return d2===Number(cpf[10]);
-}`;
-const orderMenu = `function orderMenu(order){
-  return 'Pedido *'+order.code+'* em andamento. O que deseja fazer?\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.';
-}`;
-const cancelOrderReal = `async function cancelOrderReal(order,reason){
-  if(!order?.id) return;
-  const why=reason||'CLIENTE_CANCELAMENTO';
-  await patch('rds10_orders','id='+order.id,{status:'CANCELADO',cancel_reason:why,updated_at:nowISO()});
-  await cancelFutureDeliveries(order.phone,why);
-  await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason:why});
-}`;
-const askOrderForm = `async function askOrderForm(identity,order,prefix){
-  await replyInbound(identity,prefix||'📝 *PREENCHER PEDIDO*');
-  await sleep(250);
-  return replyInbound(identity,'Quantidade:\\nNome:\\nCPF:');
-}`;
-for (const [start,end,repl] of [
-  ['function validCPF(v){','\nfunction orderMenu',validCPF+'\n'],
-  ['function orderMenu(order){','\nasync function cancelOrderReal',orderMenu+'\n'],
-  ['async function cancelOrderReal(order,reason){','\nasync function askOrderForm',cancelOrderReal+'\n'],
-  ['async function askOrderForm(identity,order,prefix){','\nconst inboundPattern53',askOrderForm+'\n']
-]) {
-  if(runtimeSource.includes(start)) runtimeSource=replaceBlock(runtimeSource,start,end,repl+end);
-}
-
-// A criação do PIX continua exigindo somente CPF no payload do PagBank.
+// PagBank: CPF é obrigatório; e-mail não é solicitado nem enviado quando ausente.
 runtimeSource=runtimeSource.replace("if(String(p.cpf||'').replace(/\\\\D/g,'').length!==11||!p.email) throw new Error('CPF e e-mail do pagador são obrigatórios para gerar o PIX.');", "if(String(p.cpf||'').replace(/\\\\D/g,'').length!==11) throw new Error('CPF do pagador é obrigatório para gerar o PIX.');");
 runtimeSource=runtimeSource.replace("customer:{name:o.customer_name,email:String(p.email).trim().toLowerCase(),tax_id:String(p.cpf).replace(/\\\\D/g,''),phones:", "customer:{name:o.customer_name,tax_id:String(p.cpf).replace(/\\\\D/g,''),phones:");
 
