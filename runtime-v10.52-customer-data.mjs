@@ -3,94 +3,61 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const serverPath = path.join(dir, 'server.js');
-let source = fs.readFileSync(serverPath, 'utf8');
+const basePath = path.join(dir, 'runtime-v10.52-customer-data-base.mjs');
+let runtimeSource = fs.readFileSync(basePath, 'utf8');
+const marker = "fs.writeFileSync(serverPath,source,'utf8');";
+if(!runtimeSource.includes(marker)) throw new Error('V10.52 marker not found');
+runtimeSource = runtimeSource.replace(/await import\('\.\/server\.js'\);\s*$/,'');
 
-// V10.52: pedido completo para PIX automático (CPF + e-mail) sem alterar o schema.
-const formPattern = /function parseOrderForm\(text\)\{[\s\S]*?\n\}/;
-const formFn = `function parseOrderForm(text){
-  const t=cleanText(text);
-  const get=label=>{ const re=new RegExp(label+'\\\\s*[:\\\\-]\\\\s*([^\\\\r\\\\n]+)','i'); return cleanText(t.match(re)?.[1]||''); };
-  const quantity=Number((get('quantidade').match(/\\d+/)||[])[0]||0);
-  const name=get('nome');
-  const cpf=digits(get('cpf'));
-  const email=get('e-?mail').toLowerCase();
-  const contact=phoneKey(get('contato'));
-  return {quantity,name,cpf,email,contact};
-}`;
-source=source.replace(formPattern,formFn);
-
-// Solicita os dados necessários ao PagBank já no início do pedido.
-source=source.replace(/Quantidade:\\nNome:\\nContato:/g,'Quantidade:\\nNome:\\nCPF:\\nE-mail:\\nContato:');
-source=source.replace(/Quantidade:\\nNome:\\nContato:/g,'Quantidade:\\nNome:\\nCPF:\\nE-mail:\\nContato:');
-
-// Validação e persistência dos dados do comprador via rds10_events, sem depender de novas colunas.
-const orderFormPattern=/async function handleOrderForm\(identity, order, text\)\{[\s\S]*?\n\}\nasync function handleProof/;
-const orderFormFn=`async function handleOrderForm(identity,order,text){
-  const p=parseOrderForm(text);
-  const missing=[];
-  if(!p.quantity||p.quantity<1) missing.push('Quantidade');
-  if(!p.name) missing.push('Nome');
-  if(p.cpf.length!==11) missing.push('CPF');
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(p.email)) missing.push('E-mail');
-  if(!p.contact) missing.push('Contato');
-  if(missing.length){ await replyInbound(identity,\`Falta preencher ou corrigir: *\${missing.join(', ')}*.\\nEnvie novamente o formulário completo.\`); return; }
-  const total=Number((p.quantity*Number(order.unit_price||3)).toFixed(2));
-  if(identity.phone){
-    const existing=await findContact(identity.phone);
-    if(existing) await patch('rds10_contacts',\`id=eq.\${existing.id}\`,{validated:true,last_seen_at:nowISO(),updated_at:nowISO()});
-    else await saveOrMergeContact({name:p.name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()});
-  }
-  await patch('rds10_orders',\`id=eq.\${order.id}\`,{customer_name:p.name,contact_phone:p.contact,quantity:p.quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
-  await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity:p.quantity,total,cpf:p.cpf,email:p.email,name:p.name,contact:p.contact});
-  const s=await getSettings();
-  const pix=cleanText(s.pix_key||'PIX NÃO CONFIGURADO');
-  await replyInbound(identity,\`✅ *PEDIDO RECEBIDO*\\n\\n👤 \${p.name}\\n🎟 \${p.quantity} bilhete(s)\\n💰 Total: *R$ \${money(total)}*\\n🧾 Pedido: \${order.code}\\n\\n💳 *PAGAMENTO PIX*\\nO PIX será gerado automaticamente pelo PagBank após a confirmação dos dados.\\n\\nSe o PagBank estiver em produção, você receberá aqui o QR Code/Pix Copia e Cola.\`);
-}`;
-if(!orderFormPattern.test(source)) throw new Error('handleOrderForm marker not found');
-source=source.replace(orderFormPattern,orderFormFn+'\nasync function handleProof');
-
-if(!source.includes("/api/pagbank/status")){
-  const anchor="app.get('/api/settings',async(req,res)=>";
-  const routes=`
-// ---------------- PagBank PIX V10.52 ----------------
-const PAGBANK_TOKEN=String(process.env.PAGBANK_ACCESS_TOKEN||'').trim();
-const PAGBANK_BASE=String(process.env.PAGBANK_BASE_URL||'https://api.pagseguro.com').replace(/\\/+$/,'');
-function splitBRPhone(phone){const n=digits(phone).replace(/^55/,'');return {area:n.slice(0,2),number:n.slice(2)};}
-async function pagbankFetch(pathname,opt={}){
-  if(!PAGBANK_TOKEN) throw new Error('PagBank não configurado: defina PAGBANK_ACCESS_TOKEN no Render.');
-  const r=await fetch(PAGBANK_BASE+pathname,{...opt,headers:{Authorization:'Bearer '+PAGBANK_TOKEN,Accept:'application/json','Content-Type':'application/json',...(opt.headers||{})}});
-  const txt=await r.text(); let data=null; try{data=txt?JSON.parse(txt):null}catch{data=txt}
-  if(!r.ok) throw new Error(data?.message||data?.error_description||\`PagBank HTTP \${r.status}\`);
-  return data;
+const patch = String.raw`
+// ---------------- V10.53 FECHAMENTO — fluxo de pedido/cancelamento ----------------
+function validCPF(v){
+  const cpf=digits(v);
+  if(!/^\\d{11}$/.test(cpf) || /^([0-9])\\1{10}$/.test(cpf)) return false;
+  let sum=0; for(let i=0;i<9;i++) sum+=Number(cpf[i])*(10-i);
+  let d1=(sum*10)%11; if(d1===10) d1=0; if(d1!==Number(cpf[9])) return false;
+  sum=0; for(let i=0;i<10;i++) sum+=Number(cpf[i])*(11-i);
+  let d2=(sum*10)%11; if(d2===10) d2=0; return d2===Number(cpf[10]);
 }
-app.get('/api/pagbank/status',async(req,res)=>res.json({configured:Boolean(PAGBANK_TOKEN),environment:PAGBANK_BASE.includes('sandbox')?'sandbox':'production'}));
-app.post('/api/pagbank/orders/:id/create',async(req,res)=>{try{
-  const o=await one('rds10_orders',\`select=*&id=eq.\${req.params.id}\`); if(!o) throw new Error('Pedido não encontrado.');
-  const events=await list('rds10_events','select=*&order=created_at.desc&limit=200');
-  const ev=events.find(e=>e.kind==='PEDIDO_DADOS_COMPLETOS'&&e.payload?.order===o.code);
-  const p=ev?.payload||{}; if(String(p.cpf||'').replace(/\\D/g,'').length!==11||!p.email) throw new Error('CPF e e-mail do pagador são obrigatórios para gerar o PIX.');
-  const phone=splitBRPhone(o.contact_phone||o.phone);
-  const expires=new Date(Date.now()+30*60000).toISOString();
-  const body={reference_id:o.code,customer:{name:o.customer_name,email:String(p.email).trim().toLowerCase(),tax_id:String(p.cpf).replace(/\\D/g,''),phones:[{country:'55',area:phone.area,number:phone.number,type:'MOBILE'}]},items:[{reference_id:o.code,name:'Bilhetes Reino da Sorte',quantity:Number(o.quantity||1),unit_amount:Math.round(Number(o.unit_price||3)*100)}],charges:[{reference_id:o.code,description:'Pedido '+o.code,amount:{value:Math.round(Number(o.total_amount||0)*100),currency:'BRL'},payment_method:{type:'PIX',pix:{expiration_date:expires}}}],notification_urls:[(PUBLIC_URL||'').replace(/\\/+$/,'')+'/api/pagbank/webhook']};
-  const data=await pagbankFetch('/orders',{method:'POST',body:JSON.stringify(body)});
-  const charge=data?.charges?.[0];
-  await logEvent('PAGBANK_PIX_CRIADO',{order:o.code,pagbank_order_id:data?.id,charge_id:charge?.id,status:charge?.status,qr_code:charge?.qr_code?.text});
-  res.json({ok:true,pagbankOrderId:data?.id,status:charge?.status||'WAITING',pixCopyPaste:charge?.qr_code?.text||null,qrCodeId:charge?.qr_code?.id||null,links:charge?.links||[]});
-}catch(e){res.status(400).json({error:e.message})}});
-app.post('/api/pagbank/orders/:id/reconcile',async(req,res)=>{try{
-  const o=await one('rds10_orders',\`select=*&id=eq.\${req.params.id}\`); if(!o) throw new Error('Pedido não encontrado.');
-  const events=await list('rds10_events','select=*&order=created_at.desc&limit=200'); const ev=events.find(e=>e.kind==='PAGBANK_PIX_CRIADO'&&e.payload?.order===o.code); if(!ev?.payload?.pagbank_order_id) throw new Error('PIX PagBank ainda não foi criado para este pedido.');
-  const data=await pagbankFetch('/orders/'+encodeURIComponent(ev.payload.pagbank_order_id)); const status=data?.charges?.[0]?.status||'UNKNOWN'; const paid=status==='PAID';
-  if(paid&&o.status!=='PAGO_AGUARDANDO_BILHETES'){await patch('rds10_orders',\`id=eq.\${o.id}\`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); try{await sendTextPhone(o.phone,\`✅ *PAGAMENTO CONFIRMADO*\\nPedido \${o.code}.\\nSeus bilhetes serão emitidos e enviados em seguida.\`)}catch{}}
-  res.json({ok:true,paid,status,pagbankOrderId:ev.payload.pagbank_order_id});
-}catch(e){res.status(400).json({error:e.message})}});
-app.post('/api/pagbank/webhook',async(req,res)=>{try{await logEvent('PAGBANK_WEBHOOK',req.body||{});res.sendStatus(200)}catch{res.sendStatus(200)}});
+function orderMenu(order){
+  return 'Pedido *'+order.code+'* em andamento. O que deseja fazer?\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.';
+}
+async function cancelOrderReal(order,reason){
+  if(!order?.id) return;
+  const why=reason||'CLIENTE_CANCELAMENTO';
+  await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:why,updated_at:nowISO()});
+  await cancelFutureDeliveries(order.phone,why);
+  await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason:why});
+}
+async function askOrderForm(identity,order,prefix){
+  await replyInbound(identity,prefix||'📝 *PREENCHER PEDIDO*');
+  await sleep(250);
+  return replyInbound(identity,'Quantidade:\\nNome:\\nCPF:\\nE-mail:\\nContato:\\n\\nPedido: '+order.code);
+}
+
+const formPattern53=/function parseOrderForm\\(text\\)\\{[\\s\\S]*?\\n\\}/;
+const formFn53='function parseOrderForm(text){\\n  const t=cleanText(text);\\n  const get=label=>{ const re=new RegExp(label+\'\\\\\\\\s*[:\\\\\\\\-]\\\\\\\\s*([^\\\\\\\\r\\\\\\\\n]+)\',\'i\'); return cleanText(t.match(re)?.[1]||\'\'); };\\n  const quantity=Number((get(\'quantidade\').replace(/\\\\\\\\s/g,\'\').match(/^\\\\\\\\d+/)||[])[0]||0);\\n  const name=get(\'nome\');\\n  const cpf=digits(get(\'cpf\'));\\n  const email=get(\'e-?mail\').toLowerCase();\\n  const contact=phoneKey(get(\'contato\'));\\n  return {quantity,name,cpf,email,contact};\\n}';
+if(!formPattern53.test(source)) throw new Error('parseOrderForm marker not found');
+source=source.replace(formPattern53,formFn53);
+
+const orderFormPattern53=/async function handleOrderForm\\(identity,order,text\\)\\{[\\s\\S]*?\\n\\}\\nasync function handleProof/;
+const orderFormFn53='async function handleOrderForm(identity,order,text){\\n  const p=parseOrderForm(text);\\n  const missing=[];\\n  if(!p.quantity||p.quantity<1) missing.push(\'Quantidade\');\\n  if(!p.name) missing.push(\'Nome\');\\n  if(!validCPF(p.cpf)) missing.push(\'CPF\');\\n  if(!/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/.test(p.email)) missing.push(\'E-mail\');\\n  if(!p.contact||!validBRPhone(p.contact)) missing.push(\'Contato\');\\n  if(missing.length){ await replyInbound(identity,\'Falta preencher ou corrigir: *\'+missing.join(\', \')+\'*.\\nEnvie novamente o formulário completo no mesmo formato.\'); return; }\\n  const total=Number((p.quantity*Number(order.unit_price||3)).toFixed(2));\\n  if(identity.phone){ const existing=await findContact(identity.phone); if(existing) await patch(\'rds10_contacts\',\'id=eq.\'+existing.id,{validated:true,last_seen_at:nowISO(),updated_at:nowISO()}); else await saveOrMergeContact({name:p.name,phone:identity.phone,group_name:\'INTERESSADOS\',origin:\'PEDIDO\',validated:true,last_seen_at:nowISO()}); }\\n  await patch(\'rds10_orders\',\'id=eq.\'+order.id,{customer_name:p.name,contact_phone:p.contact,quantity:p.quantity,total_amount:total,status:\'AGUARDANDO_PAGAMENTO\',updated_at:nowISO()});\\n  await logEvent(\'PEDIDO_DADOS_COMPLETOS\',{phone:identity.phone,order:order.code,quantity:p.quantity,total,cpf:p.cpf,email:p.email,name:p.name,contact:p.contact});\\n  await cancelFutureDeliveries(identity.phone,\'PEDIDO_ATIVO\');\\n  await replyInbound(identity,\'✅ *PEDIDO RECEBIDO*\\n\\n👤 \'+p.name+\'\\n🎟 \'+p.quantity+\' bilhete(s)\\n💰 Total: *R$ \'+money(total)+\'*\\n🧾 Pedido: \'+order.code+\'\\n\\n💳 *PAGAMENTO PIX*\\nO PIX será gerado automaticamente pelo PagBank após a confirmação dos dados.\\n\\nSe o PagBank estiver em produção, você receberá aqui o QR Code/Pix Copia e Cola.\');\\n}';
+if(!orderFormPattern53.test(source)) throw new Error('handleOrderForm marker not found');
+source=source.replace(orderFormPattern53,orderFormFn53+'\\nasync function handleProof');
+
+const inboundPattern53=/async function handleInbound\\(m\\)\\{[\\s\\S]*?\\n\\}\\n\\n\\/\\/ ---------------- Campanhas \/ fila/;
+const inboundFn53='async function handleInbound(m){\\n  const identity=resolveInboundIdentity(m);\\n  const inbound=extractInbound(m);\\n  const pushName=cleanText(m?.pushName||\'\');\\n  await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:\'IN\',type:inbound.type,body:inbound.text||null,status:\'RECEBIDA\',waId:m?.key?.id,raw:{remoteJid:identity.remoteJid,remoteJidAlt:m?.key?.remoteJidAlt||null,senderPn:m?.key?.senderPn||null,pushName,rawKeys:inbound.rawKeys}});\\n  if(!identity.phone&&identity.lid) await addAlert(\'LID_SEM_PN\',\'Mensagem recebida com LID sem número real; contato não foi criado.\',{lid:identity.lid,pushName,text:inbound.text});\\n  await upsertInboundContact(identity,pushName);\\n  const settings=await getSettings(); if(!settings.bot_enabled) return;\\n  const text=cleanText(inbound.text); const order=identity.phone?await activeOrder(identity.phone):null; const cmd=text.toLowerCase().replace(/[.]/g,\'\').trim();\\n  const is1=/^(1|continuar|continuo)$/.test(cmd), is2=/^(2|corrigir|corrijo)$/.test(cmd), is3=/^(3|recomeçar|recomecar|novo|nova compra)$/.test(cmd), is4=/^(4|encerrar|encerrar pedido|cancelar|cancele|desistir|não quero|nao quero)$/.test(cmd), is5=/^(5|escritório|escritorio|atendente|outro assunto)$/.test(cmd);\\n  if(order&&inbound.media&&[\'AGUARDANDO_PAGAMENTO\',\'AGUARDANDO_COMPROVANTE\'].includes(order.status)) return handleProof(identity,order,inbound);\\n  if(order){\\n    if(is4){ await cancelOrderReal(order,\'CLIENTE_ENCERRAMENTO\'); return replyInbound(identity,\'Pedido *\'+order.code+\'* encerrado. Nenhuma nova cobrança será enviada.\\n\\nQuando quiser comprar novamente, envie *QUERO COMPRAR*.\'); }\\n    if(is5){ await cancelOrderReal(order,\'ENCAMINHADO_ESCRITORIO\'); const office=normalizeBR(settings.office_whatsapp||OFFICE_WA_DEFAULT); return replyInbound(identity,\'🏢 Atendimento do escritório:\\nhttps://wa.me/\'+office+\'?text=\'+encodeURIComponent(\'Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.\')); }\\n    if(is3){ const old=order.code; await cancelOrderReal(order,\'CLIENTE_RECOMECAR\'); await replyInbound(identity,\'Pedido *\'+old+\'* encerrado. Vamos começar um novo pedido.\'); await sleep(250); return beginOrder(identity,null); }\\n    if(order.status===\'COLETANDO_DADOS\'){ if(is1||is2) return askOrderForm(identity,order,is2?\'📝 *CORRIGIR PEDIDO*\':\'🛒 *PREENCHER PEDIDO*\'); if(looksLikeForm(text)) return handleOrderForm(identity,order,text); return replyInbound(identity,orderMenu(order)); }\\n    if(order.status===\'AGUARDANDO_PAGAMENTO\'){ if(is1) return replyInbound(identity,\'Pedido *\'+order.code+\'*: aguardando pagamento de *R$ \'+money(order.total_amount)+\'*.\\n\\nVocê pode enviar o comprovante aqui após pagar.\'); if(is2){ await patch(\'rds10_orders\',\'id=eq.\'+order.id,{status:\'COLETANDO_DADOS\',updated_at:nowISO()}); return askOrderForm(identity,order,\'📝 *CORRIGIR PEDIDO*\'); } return replyInbound(identity,orderMenu(order)); }\\n    if(order.status===\'AGUARDANDO_CONFERENCIA\'){ if(is1) return replyInbound(identity,\'Comprovante do pedido *\'+order.code+\'* já recebido e aguardando conferência.\'); return replyInbound(identity,orderMenu(order)); }\\n    if(order.status===\'PAGO_AGUARDANDO_BILHETES\'){ if(is1) return replyInbound(identity,\'Pagamento do pedido *\'+order.code+\'* confirmado ✅\\nOs bilhetes aguardam emissão/envio pelo operador.\'); return replyInbound(identity,orderMenu(order)); }\\n  }\\n  if(isOfficeRoute(text)){ const office=normalizeBR(settings.office_whatsapp||OFFICE_WA_DEFAULT); await logEvent(\'ENCAMINHADO_ESCRITORIO\',{phone:identity.phone||null}); return replyInbound(identity,\'🏢 *OUTRO ASSUNTO*\\nFale diretamente com o escritório:\\nhttps://wa.me/\'+office+\'?text=\'+encodeURIComponent(\'Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.\')); }\\n  if(isBuyRoute(text)) return beginOrder(identity,(text.match(/RDS[-_:]?([A-Z0-9]{6,12})/i)||[])[1]||null);\\n  return replyInbound(identity,routerMessage(settings));\\n}\\n\\n// ---------------- Campanhas / fila';
+if(!inboundPattern53.test(source)) throw new Error('handleInbound marker not found');
+source=source.replace(inboundPattern53,inboundFn53);
+
+// Estado do pedido para teste/diagnóstico, sem criar nova página.
+const ordersAnchor53="app.get('/api/orders',async(req,res)=>";
+const stateRoute53="app.get('/api/orders/:id/state',async(req,res)=>{try{const o=await one('rds10_orders','select=*&id=eq.'+req.params.id);if(!o)throw new Error('Pedido não encontrado.');res.json({ok:true,order:o});}catch(e){res.status(404).json({error:e.message})}});\\n";
+if(!source.includes(ordersAnchor53)) throw new Error('orders anchor not found');
+source=source.replace(ordersAnchor53,stateRoute53+ordersAnchor53);
 
 `;
-  if(source.includes(anchor)) source=source.replace(anchor,routes+anchor); else throw new Error('settings anchor not found');
-}
-source=source.replace(/CANAL DE VENDAS RDS V10 FINAL 10\.3/g,'CANAL DE VENDAS RDS V10 FINAL 10.52');
-fs.writeFileSync(serverPath,source,'utf8');
-console.log('[V10.52] CPF/e-mail + PagBank PIX preparado');
-await import('./server.js');
+runtimeSource = runtimeSource.replace(marker, patch + marker);
+runtimeSource = runtimeSource.replace(/await import\('\.\/server\.js'\);\s*$/,"await import(new URL('./server.js', import.meta.url).href);\n");
+const dataUrl='data:text/javascript;charset=utf-8,'+encodeURIComponent(runtimeSource);
+await import(dataUrl);
