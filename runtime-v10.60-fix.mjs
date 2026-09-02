@@ -18,5 +18,9 @@ source = source.split('if(!/^' + bs + bs + 'd{11}$/.test(cpf)||/^([0-9])' + bs +
 source = source.split('replace(/' + bs + bs + 'D/g,\'\')').join("replace(/[^0-9]/g,'')");
 source = source.split('.replace(/' + bs + bs + '/+$/,\'\')').join('');
 
+const customerReturn="return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};";
+const customerReturnWithEmail="const email=String(process.env.PAGBANK_CUSTOMER_EMAIL||process.env.PAGBANK_MERCHANT_EMAIL||process.env.PAGBANK_EMAIL||'').trim();if(!email)throw new Error('PagBank exige customer.email. Configure PAGBANK_CUSTOMER_EMAIL no Render.');return {name,tax_id:tax,email,...(phone?{phones:[phone]}:{})};";
+source = source.split(customerReturn).join(customerReturnWithEmail);
+
 fs.writeFileSync(fixedPath, source, 'utf8');
-await import(pathToFileURL(fixedPath).href + '?v=1060fixed4');
+await import(pathToFileURL(fixedPath).href + '?v=1060fixed5');
