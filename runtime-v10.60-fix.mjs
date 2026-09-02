@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const sourcePath = path.join(dir, 'runtime-v10.60-pagbank.mjs');
-const fixedPath = path.join(dir, 'runtime-v10.60-pagbank-fixed.mjs');
+const fixedPath = path.join(dir, 'runtime-v10.60-pagbank-fixed.cjs');
 
 let source = fs.readFileSync(sourcePath, 'utf8');
 const bs = String.fromCharCode(92);
@@ -16,4 +16,4 @@ source = source.split('replace(/' + bs + bs + 'D/g,\'\')').join("replace(/[^0-9]
 source = source.split('.replace(/' + bs + bs + '/+$/,\'\')').join('');
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-await import(pathToFileURL(fixedPath).href + '?v=1060fixed2');
+await import(pathToFileURL(fixedPath).href + '?v=1060fixed3');
