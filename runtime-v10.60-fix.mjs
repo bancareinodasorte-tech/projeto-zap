@@ -22,5 +22,37 @@ const customerReturn="return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};";
 const customerReturnWithEmail="const email=String(process.env.PAGBANK_CUSTOMER_EMAIL||process.env.PAGBANK_MERCHANT_EMAIL||process.env.PAGBANK_EMAIL||'').trim();if(!email)throw new Error('PagBank exige customer.email. Configure PAGBANK_CUSTOMER_EMAIL no Render.');return {name,tax_id:tax,email,...(phone?{phones:[phone]}:{})};";
 source = source.split(customerReturn).join(customerReturnWithEmail);
 
+// Corrige as mensagens que estavam chegando no WhatsApp com o texto literal "\\n".
+// O runtime robusto usa String.raw, então a fonte gerada precisa conter apenas uma barra antes de n.
+source = source.split('\\\\n').join('\\n');
+
+const marker = "app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const autoMarker = "app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const autoBlock = String.raw`// RDS_PAGBANK_AUTO_RECONCILE_V10_61
+const RDS_PAGBANK_AUTO_RECONCILE_MS=Math.max(15000,Number(process.env.PAGBANK_AUTO_RECONCILE_MS||30000));
+let rdsPagBankAutoBusy=false;
+async function rdsPagBankAutoReconcile(){
+  if(rdsPagBankAutoBusy||!rdsPagBankConfigured())return;
+  rdsPagBankAutoBusy=true;
+  try{
+    const orders=await list('rds10_orders','select=*&status=eq.AGUARDANDO_PAGAMENTO&pagbank_order_id=not.is.null&order=created_at.asc&limit=20');
+    for(const order of orders){
+      try{
+        const data=await rdsPagBankRequest('/orders/'+encodeURIComponent(order.pagbank_order_id));
+        await rdsApplyPagBankResult(order,data,'auto_reconcile');
+      }catch(e){
+        await patch('rds10_orders','id=eq.'+order.id,{payment_last_error:String(e?.message||e),payment_updated_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+      }
+    }
+  }finally{rdsPagBankAutoBusy=false;}
+}
+setTimeout(()=>rdsPagBankAutoReconcile().catch(()=>{}),5000);
+setInterval(()=>rdsPagBankAutoReconcile().catch(()=>{}),RDS_PAGBANK_AUTO_RECONCILE_MS);
+`;
+if(source.includes('RDS_PAGBANK_V10_60')&&!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
+  if(source.includes(autoMarker))source=source.replace(autoMarker,autoBlock+autoMarker);
+  else throw new Error('Ponto de inserção da reconciliação automática não localizado');
+}
+
 fs.writeFileSync(fixedPath, source, 'utf8');
-await import(pathToFileURL(fixedPath).href + '?v=1060fixed5');
+await import(pathToFileURL(fixedPath).href + '?v=1061auto1');
