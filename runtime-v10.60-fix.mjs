@@ -8,6 +8,7 @@ const fixedPath = path.join(dir, 'runtime-v10.60-pagbank-fixed.mjs');
 
 let source = fs.readFileSync(sourcePath, 'utf8');
 const bs = String.fromCharCode(92);
+const marker = "app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 
 source = source.split("const fs=require('node:fs');").join("import fs from 'node:fs';");
 source = source.split("const path=require('node:path');").join("import path from 'node:path';");
