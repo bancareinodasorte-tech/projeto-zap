@@ -1,6 +1,6 @@
 {
   "name":"canal-de-vendas-rds-v10-final",
-  "version":"10.74.0",
+  "version":"10.71.0",
   "private":true,
   "main":"server.js",
   "scripts":{"start":"node runtime-v10.71-stable.mjs","start:legacy":"node server.js"},
