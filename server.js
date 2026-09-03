@@ -419,13 +419,7 @@ function parseOrderForm(text){
 function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\s*COMPRAR|COMPRE\s*AGORA/i.test(text); }
 function isOfficeRoute(text){ return /OUTRO\s*ASSUNTO|ATENDENTE|ESCRIT[ÓO]RIO/i.test(text); }
 function looksLikeForm(text){ return /quantidade\s*[:\-]/i.test(text) || (/nome\s*[:\-]/i.test(text) && /contato\s*[:\-]/i.test(text)); }
-function routerMessage(settings){
-  const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
-  const buyText = encodeURIComponent('QUERO COMPRAR RDS-COMPRAR');
-  const officeText = encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.');
-  const channel = connectedNumber || '';
-  return `Olá! 👋 Você está no *CANAL DE VENDAS RDS*.\nEste canal é exclusivo para compras.\n\n🛒 *COMPRE AGORA*\nhttps://wa.me/${channel}?text=${buyText}\n\n🏢 *OUTRO ASSUNTO*\nhttps://wa.me/${office}?text=${officeText}`;
-}
+function routerMessage(settings){ return `🍀 *CANAL DE VENDAS RDS*\n\n1️⃣ *Comprar bilhetes*\n2️⃣ *Consultar meu pedido*\n3️⃣ *Falar com atendente*\n4️⃣ *Ver este menu novamente*\n\nDigite apenas o número da opção.`; }
 async function beginOrder(identity, campaignCode=null){
   if(!identity.phone){
     await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente *QUERO COMPRAR* ou use o link da campanha.');
@@ -492,6 +486,7 @@ async function handleInbound(m){
 
   const text = inbound.text;
   let order = identity.phone ? await activeOrder(identity.phone) : null;
+  const menuText=cleanText(text); if(["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings)); if(menuText==="1") return beginOrder(identity,null); if(menuText==="3"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,"🏢 *ATENDIMENTO*\n"+(office||"ATENDIMENTO")); } if(menuText==="2"){ if(!order) return replyInbound(identity,"🔎 *CONSULTAR PEDIDO*\n\nEnvie o código do pedido."); return replyInbound(identity,"🔎 *STATUS DO PEDIDO*\n\nPedido: *"+order.code+"*\nStatus: *"+order.status+"*"); }
 
   // Comprovante tem prioridade quando há pedido aguardando pagamento.
   if(order && inbound.media && ['AGUARDANDO_PAGAMENTO','AGUARDANDO_COMPROVANTE'].includes(order.status)){
