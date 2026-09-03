@@ -20,13 +20,26 @@ function rdsOrderIsExpired(order){
   const created=Date.parse(order.created_at);
   return Number.isFinite(created)&&(Date.now()-created)>=RDS_ORDER_EXPIRATION_MS;
 }
+function rdsPurchaseLink(){
+  const bot=digits(connectedNumber||process.env.WHATSAPP_NUMBER||process.env.BOT_WHATSAPP||'');
+  return bot?'https://wa.me/'+bot+'?text='+encodeURIComponent('QUERO COMPRAR'):'';
+}
+function rdsOfficeLink(){
+  const office=digits(OFFICE_WA_DEFAULT||process.env.OFFICE_WHATSAPP||'');
+  return office?'https://wa.me/'+office:'';
+}
+function rdsNewPurchaseOptions(){
+  const buy=rdsPurchaseLink();
+  const office=rdsOfficeLink();
+  return 'Escolha uma opção para continuar:'+(buy?'\\n\\n🛒 *QUERO COMPRAR*\\n'+buy:'')+(office?'\\n\\n🏢 *OUTRO ASSUNTO*\\n'+office:'');
+}
 async function rdsExpireOrderIfNeeded(order,identity,allowNewPurchase=false){
   if(!rdsOrderIsExpired(order))return false;
   await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'PEDIDO_EXPIRADO',payment_last_error:null,updated_at:nowISO()});
   await cancelFutureDeliveries(order.phone,'PEDIDO_EXPIRADO');
   await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,created_at:order.created_at,expiration_hours:RDS_ORDER_EXPIRATION_HOURS});
   if(!allowNewPurchase){
-    await replyInbound(identity,'⏰ *PEDIDO EXPIRADO*\\n\\nO pedido *'+order.code+'* ultrapassou o prazo de validade e foi encerrado automaticamente.\\n\\nPara fazer uma nova compra, envie *QUERO COMPRAR*.');
+    await replyInbound(identity,'⏰ *PEDIDO EXPIRADO*\\n\\nO pedido *'+order.code+'* ultrapassou o prazo de validade e foi encerrado automaticamente.\\n\\n'+rdsNewPurchaseOptions());
   }
   return true;
 }
@@ -43,20 +56,21 @@ source=source.replace("function orderMenu(order){return 'Pedido *'+order.code+'*
 const rdsOriginalHandleNeedle='async function handleInbound(m){';
 if(source.includes(rdsOriginalHandleNeedle))source=source.replace(rdsOriginalHandleNeedle,'async function handleInboundV1069Base(m){');
 if(!source.includes('async function handleInboundV1069Base(m){'))throw new Error('Base handleInbound V10.69 não localizada.');
-const rdsWrapper=String.raw`async function handleInbound(m){
-  const identity=resolveInboundIdentity(m);
-  const inbound=extractInbound(m);
-  const text=cleanText(inbound.text);
-  const order=identity.phone?await activeOrder(identity.phone):null;
-  if(order&&rdsOrderIsExpired(order)){
-    const wantsNew=isBuyRoute(text);
-    const expired=await rdsExpireOrderIfNeeded(order,identity,wantsNew);
-    if(expired&&!wantsNew)return;
-  }
-  return handleInboundV1069Base(m);
-}
-`;
-source += '\n'+rdsWrapper;
+const rdsWrapper=[
+  'async function handleInbound(m){',
+  '  const identity=resolveInboundIdentity(m);',
+  '  const inbound=extractInbound(m);',
+  '  const text=cleanText(inbound.text);',
+  '  const order=identity.phone?await activeOrder(identity.phone):null;',
+  '  if(order&&rdsOrderIsExpired(order)){',
+  '    const wantsNew=isBuyRoute(text);',
+  '    const expired=await rdsExpireOrderIfNeeded(order,identity,wantsNew);',
+  '    if(expired&&!wantsNew)return;',
+  '  }',
+  '  return handleInboundV1069Base(m);',
+  '}'
+].join('\\n');
+source += '\\n'+rdsWrapper;
 `;
 if(!inner.includes(marker))throw new Error('Marcador do Fechamento 2 não localizado no runtime interno.');
 inner=inner.replace(marker,flowPatch+'\n'+marker);
@@ -70,5 +84,5 @@ fix=fix.replace(oldSource,"const sourcePath = path.join(dir, 'runtime-v10.69-pag
 fix=fix.replace(oldFixed,"const fixedPath = path.join(dir, 'runtime-v10.69-pagbank-fixed.mjs');");
 fix=fix.replace("'?v=1068'","'?v=1069'");
 fs.writeFileSync(fixPatchedPath,fix,'utf8');
-console.log('[V10.69] ciclo de vida e menu profissional preparados; preservando deduplicação e PagBank da V10.68');
+console.log('[V10.69] ciclo de vida, expiracao e retomada por links preparados; preservando deduplicacao e PagBank da V10.68');
 await import(pathToFileURL(fixPatchedPath).href+'?v=1069');
