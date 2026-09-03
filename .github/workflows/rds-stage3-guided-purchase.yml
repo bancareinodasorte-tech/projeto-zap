@@ -10,123 +10,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Patch guided purchase flow
-        shell: bash
+      - name: Apply stage 3
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('server.js')
-          s=p.read_text()
-          old="""async function beginOrder(identity, campaignCode=null){
-  if(!identity.phone){
-    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente *QUERO COMPRAR* ou use o link da campanha.');
-    return;
-  }
-  const order = await createOrder(identity.phone,campaignCode);
-  await replyInbound(identity,'🛒 *PREENCHER PEDIDO*');
-  await sleep(350);
-  await replyInbound(identity,`Quantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
-  await cancelFutureDeliveries(identity.phone,'INTERESSE');
-  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
-}"""
-          new="""async function beginOrder(identity, campaignCode=null){
-  if(!identity.phone){
-    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente pelo WhatsApp.');
-    return;
-  }
-  const order = await createOrder(identity.phone,campaignCode);
-  await replyInbound(identity,`🛒 *NOVO PEDIDO RDS*\\n\\nPedido: *${order.code}*\\n\\nInforme apenas a *quantidade de bilhetes* que deseja comprar.\\nExemplo: 5`);
-  await cancelFutureDeliveries(identity.phone,'INTERESSE');
-  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
-}"""
-          if old not in s: raise SystemExit('beginOrder target not found')
-          s=s.replace(old,new,1)
-          old2="""  const text = inbound.text;
-  let order = identity.phone ? await activeOrder(identity.phone) : null;
-  const menuText=cleanText(text); if([\"0\",\"4\",\"MENU\",\"INICIO\",\"OI\",\"OLA\"].includes(menuText)) return replyInbound(identity,routerMessage(settings)); if(menuText===\"1\") return beginOrder(identity,null); if(menuText===\"3\"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,\"🏢 *ATENDIMENTO*\\n\"+(office||\"ATENDIMENTO\")); } if(menuText===\"2\"){ if(!order) return replyInbound(identity,\"🔎 *CONSULTAR PEDIDO*\\n\\nEnvie o código do pedido.\"); return replyInbound(identity,\"🔎 *STATUS DO PEDIDO*\\n\\nPedido: *\"+order.code+\"*\\nStatus: *\"+order.status+\"*\"); }
-"""
-          new2="""  const text = inbound.text;
-  let order = identity.phone ? await activeOrder(identity.phone) : null;
-  const menuText=cleanText(text).toUpperCase();
-  if(['0','4','MENU','INICIO','OI','OLA'].includes(menuText)) return replyInbound(identity,routerMessage(settings));
-  // Opções numéricas do menu só são interpretadas como menu quando não existe pedido ativo.
-  // Durante a compra, números são dados do pedido (principalmente a quantidade).
-  if(!order && menuText==='1') return beginOrder(identity,null);
-  if(!order && menuText==='3'){
-    const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
-    return replyInbound(identity,`🏢 *ATENDIMENTO*\\nFale diretamente com o escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
-  }
-  if(menuText==='CONSULTAR PEDIDO' || menuText==='STATUS' || menuText==='MEU PEDIDO'){
-    if(!order) return replyInbound(identity,'🔎 *CONSULTAR PEDIDO*\\n\\nEnvie o código do pedido.');
-    return replyInbound(identity,`🔎 *STATUS DO PEDIDO*\\n\\nPedido: *${order.code}*\\nStatus: *${order.status}*`);
-  }
-  if(menuText==='CANCELAR' || menuText==='SAIR' || menuText==='REINICIAR'){
-    if(order){
-      await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
-      await logEvent('PEDIDO_CANCELADO',{phone:identity.phone,order:order.code,source:'WHATSAPP'});
-    }
-    return replyInbound(identity,`Pedido cancelado.\\n\\n${routerMessage(settings)}`);
-  }
-"""
-          if old2 not in s: raise SystemExit('menu target not found')
-          s=s.replace(old2,new2,1)
-          old3="""    if(order.status === 'COLETANDO_DADOS'){
-      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
-      if(isOfficeRoute(text)){
-        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
-        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
-        return replyInbound(identity,`🏢 Atendimento do escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
-      }
-      return replyInbound(identity,'Seu pedido já foi iniciado. Copie e envie o formulário com *Quantidade, Nome e Contato*.');
-    }
-"""
-          new3="""    if(order.status === 'COLETANDO_DADOS'){
-      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
-      if(isOfficeRoute(text)){
-        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
-        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
-        return replyInbound(identity,`🏢 Atendimento do escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
-      }
-      const value = cleanText(text);
-      if(!order.quantity){
-        const q = Number((value.match(/\\d+/)||[])[0] || 0);
-        if(!q || q < 1 || q > 999){
-          return replyInbound(identity,'Informe somente a *quantidade de bilhetes*.\\nExemplo: 5\\n\\nDigite *CANCELAR* para sair.');
-        }
-        await patch('rds10_orders',`id=eq.${order.id}`,{quantity:q,updated_at:nowISO()});
-        return replyInbound(identity,`Quantidade registrada: *${q} bilhete(s)*.\\n\\nAgora informe seu *nome completo*.`);
-      }
-      if(!order.customer_name){
-        const name = cleanText(value.replace(/^(nome|nome completo)\\s*[:\\-]?\\s*/i,''));
-        if(!name || name.length < 2){
-          return replyInbound(identity,'Informe seu *nome completo*.');
-        }
-        const total = Number((Number(order.quantity) * Number(order.unit_price || 3)).toFixed(2));
-        if(identity.phone){
-          const existing = await findContact(identity.phone);
-          if(existing) await patch('rds10_contacts',`id=eq.${existing.id}`,{name,validated:true,last_seen_at:nowISO(),updated_at:nowISO()});
-          else await saveOrMergeContact({name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()});
-        }
-        await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:name,contact_phone:identity.phone,quantity:Number(order.quantity),total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
-        const pix = cleanText(settings.pix_key || 'PIX NÃO CONFIGURADO');
-        const payMsg = `✅ *PEDIDO RECEBIDO*\\n\\n👤 ${name}\\n🎟 ${order.quantity} bilhete(s)\\n💰 Total: *R$ ${money(total)}*\\n🧾 Pedido: ${order.code}\\n\\n💳 *PAGAMENTO PIX*\\nChave: ${pix}\\nFavorecido: ${cleanText(settings.pix_name || 'REINO DA SORTE')}\\nValor: *R$ ${money(total)}*\\n\\nApós pagar, envie o comprovante aqui 👇`;
-        await replyInbound(identity,payMsg);
-        await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity:Number(order.quantity),total});
-        return;
-      }
-    }
-"""
-          if old3 not in s: raise SystemExit('collecting target not found')
-          s=s.replace(old3,new3,1)
-          p.write_text(s)
-          PY
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnA9UGF0aCgnc2VydmVyLmpzJykKcz1wLnJlYWRfdGV4dCgpCm9sZD0iIiJhc3luYyBmdW5jdGlvbiBiZWdpbk9yZGVyKGlkZW50aXR5LCBjYW1wYWlnbkNvZGU9bnVsbCl7CiAgaWYoIWlkZW50aXR5LnBob25lKXsKICAgIGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSwnUmVjZWJpIHN1YSBtZW5zYWdlbSwgbWFzIG8gV2hhdHNBcHAgYWluZGEgbsOjbyBpbmZvcm1vdSBzZXUgbsO6bWVybyByZWFsIGFvIHNpc3RlbWEuIEVudmllIG5vdmFtZW50ZSAqUVVFUk8gQ09NUFJBUiogb3UgdXNlIG8gbGluayBkYSBjYW1wYW5oYS4nKTsKICAgIHJldHVybjsKICB9CiAgY29uc3Qgb3JkZXIgPSBhd2FpdCBjcmVhdGVPcmRlcihpZGVudGl0eS5waG9uZSxjYW1wYWlnbkNvZGUpOwogIGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSwn8J+bkiAqUFJFRU5DSEVSIFBFRElETyonKTsKICBhd2FpdCBzbGVlcCgzNTApOwogIGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSxgUXVhbnRpZGFkZTpcbk5vbWU6XG5Db250YXRvOlxuXG5QZWRpZG86ICR7b3JkZXIuY29kZX1gKTsKICBhd2FpdCBjYW5jZWxGdXR1cmVEZWxpdmVyaWVzKGlkZW50aXR5LnBob25lLCdJTlRFUkVTU0UnKTsKICBhd2FpdCBsb2dFdmVudCgnSU5URVJFU1NFJyx7cGhvbmU6aWRlbnRpdHkucGhvbmUsb3JkZXI6b3JkZXIuY29kZSxjYW1wYWlnbkNvZGV9KTsKfSIiIgpuZXc9IiIiYXN5bmMgZnVuY3Rpb24gYmVnaW5PcmRlcihpZGVudGl0eSwgY2FtcGFpZ25Db2RlPW51bGwpewogIGlmKCFpZGVudGl0eS5waG9uZSl7CiAgICBhd2FpdCByZXBseUluYm91bmQoaWRlbnRpdHksJ1JlY2ViaSBzdWEgbWVuc2FnZW0sIG1hcyBvIFdoYXRzQXBwIGFpbmRhIG7Do28gaW5mb3Jtb3Ugc2V1IG7Dum1lcm8gcmVhbCBhbyBzaXN0ZW1hLiBFbnZpZSBub3ZhbWVudGUgcGVsbyBXaGF0c0FwcC4nKTsKICAgIHJldHVybjsKICB9CiAgY29uc3Qgb3JkZXIgPSBhd2FpdCBjcmVhdGVPcmRlcihpZGVudGl0eS5waG9uZSxjYW1wYWlnbkNvZGUpOwogIGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSxg8J+bkiAqTk9WTyBQRURJRE8gUkRTKlxcblxcblBlZGlkbzogKiR7b3JkZXIuY29kZX0qXFxuXFxuSW5mb3JtZSBhcGVuYXMgYSAqcXVhbnRpZGFkZSBkZSBiaWxoZXRlcyogcXVlIGRlc2VqYSBjb21wcmFyLlxcbkV4ZW1wbG86IDVcXG5cXG5EaWdpdGUgKkNBTkNFTEFSKiBwYXJhIHNhaXIuYCk7CiAgYXdhaXQgY2FuY2VsRnV0dXJlRGVsaXZlcmllcyhpZGVudGl0eS5waG9uZSwnSU5URVJFU1NFJyk7CiAgYXdhaXQgbG9nRXZlbnQoJ0lOVEVSRVNTRScse3Bob25lOmlkZW50aXR5LnBob25lLG9yZGVyOm9yZGVyLmNvZGUsY2FtcGFpZ25Db2RlfSk7Cn0iIiIKYXNzZXJ0IG9sZCBpbiBzCnM9cy5yZXBsYWNlKG9sZCxuZXcsMSkKb2xkMj0nJycgIGNvbnN0IHRleHQgPSBpbmJvdW5kLnRleHQ7CiAgbGV0IG9yZGVyID0gaWRlbnRpdHkucGhvbmUgPyBhd2FpdCBhY3RpdmVPcmRlcihpZGVudGl0eS5waG9uZSkgOiBudWxsOwogIGNvbnN0IG1lbnVUZXh0PWNsZWFuVGV4dCh0ZXh0KTsgaWYoWyIwIiwiNCIsIk1FTlUiLCJJTklDSU8iLCJPSSIsIk9MQSJdLmluY2x1ZGVzKG1lbnVUZXh0KSkgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSxyb3V0ZXJNZXNzYWdlKHNldHRpbmdzKSk7IGlmKG1lbnVUZXh0PT09IjEiKSByZXR1cm4gYmVnaW5PcmRlcihpZGVudGl0eSxudWxsKTsgaWYobWVudVRleHQ9PT0iMyIpeyBjb25zdCBvZmZpY2U9bm9ybWFsaXplQlIoc2V0dGluZ3Mub2ZmaWNlX3doYXRzYXBwIHx8IE9GRklDRV9XQV9ERUZBVUxUKTsgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSwi8J+PoiAqQVRFTkRJTUVOVE8qXFxuIisob2ZmaWNlfHwiQVRFTkRJTUVOVE8iKSk7IH0gaWYobWVudVRleHQ9PT0iMiIpeyBpZighb3JkZXIpIHJldHVybiByZXBseUluYm91bmQoaWRlbnRpdHksIvCflI4gKkNPTlNVTFRBUiBQRURJRE8qXFxuXFxuRW52aWUgbyBjw7NkaWdvIGRvIHBlZGlkby4iKTsgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSwi8J+UjiAqU1RBVFVTIERPIFBFRElETypcXG5cXG5QZWRpZG86ICoiK29yZGVyLmNvZGUrIipcXG5TdGF0dXM6ICoiK29yZGVyLnN0YXR1cysiKiIpOyB9CicnJwpuZXcyPScnJyAgY29uc3QgdGV4dCA9IGluYm91bmQudGV4dDsKICBsZXQgb3JkZXIgPSBhd2FpdCBhY3RpdmVPcmRlcihpZGVudGl0eS5waG9uZSkgOiBudWxsOwogIGNvbnN0IG1lbnVUZXh0PWNsZWFuVGV4dCh0ZXh0KS50b1VwcGVyQ2FzZSgpOwogIGlmKFsiMCIsIjQiLCJNRU5VIiwiSU5JQ0lPIiwiT0kiLCJPTEEiXS5pbmNsdWRlcyhtZW51VGV4dCkpIHJldHVybiByZXBseUluYm91bmQoaWRlbnRpdHkscm91dGVyTWVzc2FnZShzZXR0aW5ncykpOwogIGlmKCFvcmRlciAmJiBtZW51VGV4dD09PSIxIikgcmV0dXJuIGJlZ2luT3JkZXIoaWRlbnRpdHksbnVsbCk7CiAgaWYoIW9yZGVyICYmIG1lbnVUZXh0PT09IjMiKXsKICAgIGNvbnN0IG9mZmljZT1ub3JtYWxpemVCUihzZXR0aW5ncy5vZmZpY2Vfd2hhdHNhcHAgfHwgT0ZGSUNFX1dBX0RFRkFVTFQpOwogICAgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSxg8J+PoiAqQVRFTkRJTUVOVE8qXFxuRmFsZSBkaXJldGFtZW50ZSBjb20gbyBlc2NyaXTDs3JpbzpcXG5odHRwczovL3dhLm1lLyR7b2ZmaWNlfT90ZXh0PSR7ZW5jb2RlVVJJQ29tcG9uZW50KCdPbcO6LCB2aW0gcGVsbyBDQU5BTCBERSBWRU5EQVMgUkRTIGUgcHJlY2lzbyBkZSBhdGVuZGltZW50by4nKX1gKTsKICB9CiAgaWYobWVudVRleHQ9PT0iQ09OU1VMVEFSIFBFSURPIiB8fCBtZW51VGV4dD09PSJTVEFUVVMiIHx8IG1lbnVUZXh0PT09Ik1FVSBQRURJRE8iKXsKICAgIGlmKCFvcmRlcikgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSwi8J+UjiAqQ09OU1VMVEFSIFBFRElETypcXG5cXG5FbnZpZSBvIGNvw7NkaWdvIGRvIHBlZGlkby4iKTsKICAgIHJldHVybiByZXBseUluYm91bmQoaWRlbnRpdHksYGA8gU1RBVFVTIERPIFBFRElETypcXG5cXG5QZWRpZG86ICoke29yZGVyLmNvZGV9KlxcblN0YXR1czogKiR7b3JkZXIuc3RhdHVzfSpgKTsKICB9CiAgaWYobWVudVRleHQ9PT0iQ0FOQ0VMQVIiIHx8IG1lbnVUZXh0PT09IlNBSVIiIHx8IG1lbnVUZXh0PT09IlJFSU5JQ0lBUiIpewogICAgaWYob3JkZXIpewogICAgICBhd2FpdCBwYXRjaCgncmRzMTBfb3JkZXJzJyxgaWQ9ZXEuJHtvcmRlci5pZH1gLHtzdGF0dXM6J0NBTkNFTEFETycsdXBkYXRlZF9hdDpub3dJU08oKX0pOwogICAgICBhd2FpdCBsb2dFdmVudCgnUEVESURPX0NBTkNFTEFETycse3Bob25lOmlkZW50aXR5LnBob25lLG9yZGVyOm9yZGVyLmNvZGUsdGF0dXNlOidXSEFUU0FQUCd9KTsKICAgIH0KICAgIHJldHVybiByZXBseUluYm91bmQoaWRlbnRpdHksYFBlZGlkbyBjYW5jZWxhZG8uXFxuXFxuJHtyb3V0ZXJNZXNzYWdlKHNldHRpbmdzKX1gKTsKICB9CicnJwphc3NlcnQgb2xkMiBpbiBzCnM9cy5yZXBsYWNlKG9sZDIsbmV3MiwxKQpvbGQzPScnJyAgICBpZihvcmRlci5zdGF0dXMgPT09ICdDT0xFVEFORE9fREFET1MnKXsKICAgICAgaWYobG9va3NMaWtlRm9ybSh0ZXh0KSkgcmV0dXJuIGhhbmRsZU9yZGVyRm9ybShpZGVudGl0eSxvcmRlcix0ZXh0KTsKICAgICAgaWYoaXNPZmZpY2VSb3V0ZSh0ZXh0KSl7CiAgICAgICAgY29uc3Qgb2ZmaWNlID0gbm9ybWFsaXplQlIoc2V0dGluZ3Mub2ZmaWNlX3doYXRzYXBwIHx8IE9GRklDRV9XQV9ERUZBVUxUKTsKICAgICAgICBhd2FpdCBwYXRjaCgncmRzMTBfb3JkZXJzJyxgaWQ9ZXEuJHtvcmRlci5pZH1gLHtzdGF0dXM6J0NBTkNFTEFETycsdXBkYXRlZF9hdDpub3dJU08oKX0pOwogICAgICAgIHJldHVybiByZXBseUluYm91bmQoaWRlbnRpdHksYPCfj6IgQXRlbmRpbWVudG8gZG8gZXNjcml0w7NyaW86XFxuaHR0cHM6Ly93YS5tZS8ke29mZmljZX0/dGV4dD0ke2VuY29kZVVSSUNvbXBvbmVudCgnT2zDoSwgdmltIHBlbG8gQ0FOQUwgREUgVkVOREFTIFJEUyBlIHByZWNpc28gZGUgYXRlbmRpbWVudG8uJyl9YCk7CiAgICAgIH0KICAgICAgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSwnU2V1IHBlZGlkbyBqw6EgZm9pIGluaWNpYWRvLiBDb3BpZSBlIGVudmllIG8gZm9ybXVsYXJpbyBjb20gKlF1YW50aWRhZGUsIE5vbWUgZSBDb250YXRvKi4nKTsKICAgIH0KJycnbmV3Mz0nJycgICAgIGlmKG9yZGVyLnN0YXR1cyA9PT0gJ0NPTEVUQU5ET19EQURPUycpIHsKICAgICAgICAgIGlmKGxvb2tzTGlrZUZvcm0odGV4dCkpIHJldHVybiBoYW5kbGVPcmRlckZvcm0oaWRlbnRpdHksb3JkZXIsdGV4dCk7CiAgICAgICAgICBpZihpc09mZmljZVJvdXRlKHRleHQpKXsKICAgICAgICAgICAgY29uc3Qgb2ZmaWNlID0gbm9ybWFsaXplQlIoc2V0dGluZ3Mub2ZmaWNlX3doYXRzYXBwIHx8IE9GRklDRV9XQV9ERUZBVUxUKTsKICAgICAgICAgICAgYXdhaXQgcGF0Y2goJ3JkczEwX29yZGVycycsYGlkPWVxLiR7b3JkZXIuaWR9YCx7c3RhdHVzOidDQU5DRUxBRE8nLHVwZGF0ZWRfYXQ6bm93SVNPKCl9KTsKICAgICAgICAgICAgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSxg8J+PoiBBdGVuZGltZW50byBkbyBlc2NyaXTDs3JpbzpcXG5odHRwczovL3dhLm1lLyR7b2ZmaWNlfT90ZXh0PSR7ZW5jb2RlVVJJQ29tcG9uZW50KCdPbcO6LCB2aW0gcGVsbyBDQU5BTCBERSBWRU5EQVMgUkRTIGUgcHJlY2lzbyBkZSBhdGVuZGltZW50by4nKX1gKTsKICAgICAgICAgIH0KICAgICAgICAgIGNvbnN0IHZhbHVlID0gY2xlYW5UZXh0KHRleHQpOwogICAgICAgICAgaWYoIW9yZGVyLnF1YW50aXR5KXsKICAgICAgICAgICAgY29uc3QgcSA9IE51bWJlcigodmFsdWUubWF0Y2goL1xcZCsvKXx8W10pWzBdIHx8IDApOwogICAgICAgICAgICBpZighcSB8fCBxIDwgMSB8fCBxID4gOTk5KSByZXR1cm4gcmVwbHlJbmJvdW5kKGlkZW50aXR5LCdJbmZvcm1lIHNvbWVudGUgYSpxdWFudGlkYWRlIGRlIGJpbGhldGVzKi5cXG5FeGVtcGxvOiA1XFxuXFxuRGlnaXRlICpDQU5DRUxBUiogcGFyYSBzYWlyLicpOwogICAgICAgICAgICBhd2FpdCBwYXRjaCgncmRzMTBfb3JkZXJzJyxgaWQ9ZXEuJHtvcmRlci5pZH1gLHtxdWFudGl0eTpxLHVwZGF0ZWRfYXQ6bm93SVNPKCl9KTsKICAgICAgICAgICAgcmV0dXJuIHJlcGx5SW5ib3VuZChpZGVudGl0eSxgUXVhbnRpZGFkZSByZWdpc3RyYWRhOiAqJHtxfSBiaWxoZXRlKHMpKi5cXG5cXG5BZ29yYSBpbmZvcm1lIHNldSAqbm9tZSBjb21wbGV0byouYCk7CiAgICAgICAgICB9CiAgICAgICAgICBpZighb3JkZXIuY3VzdG9tZXJfbmFtZSl7CiAgICAgICAgICAgIGNvbnN0IG5hbWUgPSBjbGVhblRleHQodmFsdWUucmVwbGFjZSgvXihub21lfG5vbWUgY29tcGxldG8pXFxzKlv6LX1cXHMqL2ksJycpKTsKICAgICAgICAgICAgaWYoIW5hbWUgfHwgbmFtZS5sZW5ndGggPCAyKSByZXR1cm4gcmVwbHlJbmJvdW5kKGlkZW50aXR5LCdJbmZvcm1lIHNldSAqbm9tZSBjb21wbGV0byouJyk7CiAgICAgICAgICAgIGNvbnN0IHRvdGFsID0gTnVtYmVyKChOdW1iZXIob3JkZXIucXVhbnRpdHkpICogTnVtYmVyKG9yZGVyLnVuaXRfcHJpY2UgfHwgMykpLnRvRml4ZWQoMikpOwogICAgICAgICAgICBpZihpZGVudGl0eS5waG9uZSl7CiAgICAgICAgICAgICAgY29uc3QgZXhpc3RpbmcgPSBhd2FpdCBmaW5kQ29udGFjdChpZGVudGl0eS5waG9uZSk7CiAgICAgICAgICAgICAgaWYoZXhpc3RpbmcpIGF3YWl0IHBhdGNoKCdyZHMxMF9jb250YWN0cycsYGlkPWVxLiR7ZXhpc3RpbmcuaWR9Yyx7bmFtZSx2YWxpZGF0ZWQ6dHJ1ZSxsYXN0X3NlZW5fYXQ6bm93SVNPKCksdXBkYXRlZF9hdDpub3dJU08oKX0pOwogICAgICAgICAgICAgIGVsc2UgYXdhaXQgc2F2ZU9yTWVyZ2VDb250YWN0KHtuYW1lLHBob25lOmlkZW50aXR5LnBob25lLGdyb3VwX25hbWU6J0lOVEVSRVNTRURPUycsb3JpZ2luOidQRURJRE8nLHZhbGlkYXRlZDp0cnVlLGxhc3Rfc2Vlbl9hdDpub3dJU08oKX0pOwogICAgICAgICAgICB9CiAgICAgICAgICAgIGF3YWl0IHBhdGNoKCdyZHMxMF9vcmRlcnMnLGBpZD1lcS4ke29yZGVyLmlkfWAse2N1c3RvbWVyX25hbWU6bmFtZSxjb250YWN0X3Bob25lOmlkZW50aXR5LnBob25lLHF1YW50aXR5Ok51bWJlcihvcmRlci5xdWFudGl0eSksdG90YWxfYW1vdW50OnRvdGFsLHN0YXR1czonQUdVQVJEQU5ET19QQUdBTUVOVE8nLHVwZGF0ZWRfYXQ6bm93SVNPKCl9KTsKICAgICAgICAgICAgY29uc3QgcGl4ID0gY2xlYW5UZXh0KHNldHRpbmdzLnBpeF9rZXkgfHwgJ1BJWCDDk8OQIENPTkZJR1VSQURPJyk7CiAgICAgICAgICAgIGNvbnN0IHBheU1zZyA9IGDinIUgKlBFRElETyBSRUNFQklETypcXG5cXG7wn5GkICR7bmFtZX1cXG7wn46fICR7b3JkZXIucXVhbnRpdHl9IGJpbGhldGUocylcXG7wn5KwIFRvdGFsOiAqUiQgJHttb25leSh0b3RhbCl9KlxcbvCfp74gUGVkaWRvOiAke29yZGVyLmNvZGV9XFxuXFxu8J+SsyAqUEFHQU1FTlRPIFBJWCpcXG5DaGF2ZTogJHtwaXh9XFxuRmF2b3JlY2lkbzogJHtjbGVhblRleHQoc2V0dGluZ3MucGl4X25hbWUgfHwgJ1JFSU5PIERBIFNPUlRFJyl9XFxuVmFsb3I6ICpSJCAke21vbmV5KHRvdGFsKX0qXFxuXFxuQXDDs3MgcGFnYXIsIGVudmllIG8gY29tcHJvdmFudGUgYXF1aSDwn5GHYDsKICAgICAgICAgICAgYXdhaXQgcmVwbHlJbmJvdW5kKGlkZW50aXR5LHBheU1zZyk7CiAgICAgICAgICAgIGF3YWl0IGxvZ0V2ZW50KCdQRURJRE9fREFET1NfQ09NUExFVE9TJyx7cGhvbmU6aWRlbnRpdHkucGhvbmUsb3JkZXI6b3JkZXIuY29kZSxxdWFudGl0eTpOdW1iZXIob3JkZXIucXVhbnRpdHkpLHRvdGFsLHRvdGFsfSk7CiAgICAgICAgICAgIHJldHVybjsKICAgICAgICAgIH0KICAgICAgICB9CiAgICAgICAgfQ==
+' | base64 -d > /tmp/patch.py
+          python3 /tmp/patch.py
+          node --check server.js
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add server.js
           git commit -m 'bot: guided customer purchase flow' || exit 0
           git push
       - name: Remove temporary workflow
-        if: success()
         run: |
           git rm .github/workflows/rds-stage3-guided-purchase.yml
           git commit -m 'chore: remove temporary stage 3 workflow'
