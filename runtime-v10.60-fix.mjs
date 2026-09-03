@@ -26,15 +26,13 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// Evita que o mesmo evento de entrada do Baileys seja processado duas vezes.
-const inboundDedupePatch = [
-  "const inboundProcessedIds=new Map();",
-  "source=source.replace('const lidToPn = new Map();','const lidToPn = new Map();\\n'+inboundDedupePatch);",
-  "const inboundLoopOld='for(const m of messages || []){\\n        rememberMessage(m);';",
-  "const inboundLoopNew='for(const m of messages || []){\\n        const inboundId=String(m?.key?.id||\\'\\');\\n        if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}\\n        rememberMessage(m);';",
-  "source=source.replace(inboundLoopOld,inboundLoopNew);"
-].join('\n');
-source += '\n' + inboundDedupePatch + '\n';
+// Evita processamento duplicado do mesmo evento de entrada do Baileys.
+const inboundProcessedDeclaration = 'const inboundProcessedIds=new Map();';
+const inboundLoopOld = 'for(const m of messages || []){\\n        rememberMessage(m);';
+const inboundLoopNew = 'for(const m of messages || []){\\n        const inboundId=String(m?.key?.id||\\'\\');\\n        if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}\\n        rememberMessage(m);';
+source += '\n' + inboundProcessedDeclaration + '\n';
+source += "source=source.replace('const lidToPn = new Map();','const lidToPn = new Map();\\n'+inboundProcessedDeclaration);\n";
+source += "source=source.replace(" + JSON.stringify(inboundLoopOld) + "," + JSON.stringify(inboundLoopNew) + ");\n";
 
 // Reconciliacao automatica: o bloco e inserido no server.js gerado,
 // imediatamente antes do catch-all, usando o marker que ja existe no runtime.
