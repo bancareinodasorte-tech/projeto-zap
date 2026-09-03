@@ -1,0 +1,133 @@
+name: rds-stage3-guided-purchase
+on:
+  push:
+    paths:
+      - '.github/workflows/rds-stage3-guided-purchase.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch guided purchase flow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server.js')
+          s=p.read_text()
+          old="""async function beginOrder(identity, campaignCode=null){
+  if(!identity.phone){
+    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente *QUERO COMPRAR* ou use o link da campanha.');
+    return;
+  }
+  const order = await createOrder(identity.phone,campaignCode);
+  await replyInbound(identity,'🛒 *PREENCHER PEDIDO*');
+  await sleep(350);
+  await replyInbound(identity,`Quantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
+  await cancelFutureDeliveries(identity.phone,'INTERESSE');
+  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
+}"""
+          new="""async function beginOrder(identity, campaignCode=null){
+  if(!identity.phone){
+    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente pelo WhatsApp.');
+    return;
+  }
+  const order = await createOrder(identity.phone,campaignCode);
+  await replyInbound(identity,`🛒 *NOVO PEDIDO RDS*\\n\\nPedido: *${order.code}*\\n\\nInforme apenas a *quantidade de bilhetes* que deseja comprar.\\nExemplo: 5`);
+  await cancelFutureDeliveries(identity.phone,'INTERESSE');
+  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
+}"""
+          if old not in s: raise SystemExit('beginOrder target not found')
+          s=s.replace(old,new,1)
+          old2="""  const text = inbound.text;
+  let order = identity.phone ? await activeOrder(identity.phone) : null;
+  const menuText=cleanText(text); if([\"0\",\"4\",\"MENU\",\"INICIO\",\"OI\",\"OLA\"].includes(menuText)) return replyInbound(identity,routerMessage(settings)); if(menuText===\"1\") return beginOrder(identity,null); if(menuText===\"3\"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,\"🏢 *ATENDIMENTO*\\n\"+(office||\"ATENDIMENTO\")); } if(menuText===\"2\"){ if(!order) return replyInbound(identity,\"🔎 *CONSULTAR PEDIDO*\\n\\nEnvie o código do pedido.\"); return replyInbound(identity,\"🔎 *STATUS DO PEDIDO*\\n\\nPedido: *\"+order.code+\"*\\nStatus: *\"+order.status+\"*\"); }
+"""
+          new2="""  const text = inbound.text;
+  let order = identity.phone ? await activeOrder(identity.phone) : null;
+  const menuText=cleanText(text).toUpperCase();
+  if(['0','4','MENU','INICIO','OI','OLA'].includes(menuText)) return replyInbound(identity,routerMessage(settings));
+  // Opções numéricas do menu só são interpretadas como menu quando não existe pedido ativo.
+  // Durante a compra, números são dados do pedido (principalmente a quantidade).
+  if(!order && menuText==='1') return beginOrder(identity,null);
+  if(!order && menuText==='3'){
+    const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+    return replyInbound(identity,`🏢 *ATENDIMENTO*\\nFale diretamente com o escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
+  }
+  if(menuText==='CONSULTAR PEDIDO' || menuText==='STATUS' || menuText==='MEU PEDIDO'){
+    if(!order) return replyInbound(identity,'🔎 *CONSULTAR PEDIDO*\\n\\nEnvie o código do pedido.');
+    return replyInbound(identity,`🔎 *STATUS DO PEDIDO*\\n\\nPedido: *${order.code}*\\nStatus: *${order.status}*`);
+  }
+  if(menuText==='CANCELAR' || menuText==='SAIR' || menuText==='REINICIAR'){
+    if(order){
+      await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
+      await logEvent('PEDIDO_CANCELADO',{phone:identity.phone,order:order.code,source:'WHATSAPP'});
+    }
+    return replyInbound(identity,`Pedido cancelado.\\n\\n${routerMessage(settings)}`);
+  }
+"""
+          if old2 not in s: raise SystemExit('menu target not found')
+          s=s.replace(old2,new2,1)
+          old3="""    if(order.status === 'COLETANDO_DADOS'){
+      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
+      if(isOfficeRoute(text)){
+        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
+        return replyInbound(identity,`🏢 Atendimento do escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
+      }
+      return replyInbound(identity,'Seu pedido já foi iniciado. Copie e envie o formulário com *Quantidade, Nome e Contato*.');
+    }
+"""
+          new3="""    if(order.status === 'COLETANDO_DADOS'){
+      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
+      if(isOfficeRoute(text)){
+        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
+        return replyInbound(identity,`🏢 Atendimento do escritório:\\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
+      }
+      const value = cleanText(text);
+      if(!order.quantity){
+        const q = Number((value.match(/\\d+/)||[])[0] || 0);
+        if(!q || q < 1 || q > 999){
+          return replyInbound(identity,'Informe somente a *quantidade de bilhetes*.\\nExemplo: 5\\n\\nDigite *CANCELAR* para sair.');
+        }
+        await patch('rds10_orders',`id=eq.${order.id}`,{quantity:q,updated_at:nowISO()});
+        return replyInbound(identity,`Quantidade registrada: *${q} bilhete(s)*.\\n\\nAgora informe seu *nome completo*.`);
+      }
+      if(!order.customer_name){
+        const name = cleanText(value.replace(/^(nome|nome completo)\\s*[:\\-]?\\s*/i,''));
+        if(!name || name.length < 2){
+          return replyInbound(identity,'Informe seu *nome completo*.');
+        }
+        const total = Number((Number(order.quantity) * Number(order.unit_price || 3)).toFixed(2));
+        if(identity.phone){
+          const existing = await findContact(identity.phone);
+          if(existing) await patch('rds10_contacts',`id=eq.${existing.id}`,{name,validated:true,last_seen_at:nowISO(),updated_at:nowISO()});
+          else await saveOrMergeContact({name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()});
+        }
+        await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:name,contact_phone:identity.phone,quantity:Number(order.quantity),total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
+        const pix = cleanText(settings.pix_key || 'PIX NÃO CONFIGURADO');
+        const payMsg = `✅ *PEDIDO RECEBIDO*\\n\\n👤 ${name}\\n🎟 ${order.quantity} bilhete(s)\\n💰 Total: *R$ ${money(total)}*\\n🧾 Pedido: ${order.code}\\n\\n💳 *PAGAMENTO PIX*\\nChave: ${pix}\\nFavorecido: ${cleanText(settings.pix_name || 'REINO DA SORTE')}\\nValor: *R$ ${money(total)}*\\n\\nApós pagar, envie o comprovante aqui 👇`;
+        await replyInbound(identity,payMsg);
+        await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity:Number(order.quantity),total});
+        return;
+      }
+    }
+"""
+          if old3 not in s: raise SystemExit('collecting target not found')
+          s=s.replace(old3,new3,1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server.js
+          git commit -m 'bot: guided customer purchase flow' || exit 0
+          git push
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          git rm .github/workflows/rds-stage3-guided-purchase.yml
+          git commit -m 'chore: remove temporary stage 3 workflow'
+          git push
