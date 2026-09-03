@@ -1,0 +1,37 @@
+name: Fix Stage 3
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch
+        env:
+          BLOCKS_B64: "ENCODED_BLOCKS"
+        run: |
+          python3 - <<'PY'
+          import os,base64,re
+          from pathlib import Path
+          s=Path('server.js').read_text()
+          b=base64.b64decode(os.environ['BLOCKS_B64']).decode().split('\n===FORM===\n')
+          begin=b[0].replace('BEGIN\n','',1)
+          rest=b[1].split('\n===BLOCK===\n')
+          form=rest[0]
+          block=rest[1]
+          s,n=re.subn(r'async function beginOrder\(identity, campaignCode=null\)\{.*?\n\}\nasync function handleOrderForm',begin+'\nasync function handleOrderForm',s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('beginOrder não encontrado')
+          s,n=re.subn(r'async function handleOrderForm\(identity, order, text\)\{.*?\n\}\nasync function handleProof',form+'\nasync function handleProof',s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('handleOrderForm não encontrado')
+          s,n=re.subn(r"    if\(order\.status === 'COLETANDO_DADOS'\)\{.*?\n    \}",block,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('bloco COLETANDO_DADOS não encontrado')
+          Path('server.js').write_text(s)
+          PY
+          node --check server.js
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server.js
+          git commit -m 'fix: guided purchase flow'
+          git push
