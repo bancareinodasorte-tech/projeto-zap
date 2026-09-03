@@ -1,8 +1,37 @@
-name: test2
+name: Fix Stage 3
 on:
   workflow_dispatch:
 jobs:
-  test:
+  patch:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - run: echo ok
+      - uses: actions/checkout@v4
+      - name: Patch
+        env:
+          BLOCKS_B64: "QkVHSU4KYXN5bmMgZnVuY3Rpb24gYmVnaW5PcmRlcihpZGVudGl0eSwgY2FtcGFpZ25Db2RlPW51bGwpewogIGlmKCFpZGVudGl0eS5waG9uZSl7IGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSwnTsOjbyBjb25zZWd1aSBpZGVudGlmaWNhciBzZXUgbsO6bWVybyBkZSBXaGF0c0FwcC4gRW52aWUgYSBtZW5zYWdlbSBub3ZhbWVudGUuJyk7IHJldHVybjsgfQogIGNvbnN0IG9yZGVyPWF3YWl0IGNyZWF0ZU9yZGVyKGlkZW50aXR5LnBob25lLGNhbXBhaWduQ29kZSk7CiAgYXdhaXQgY2FuY2VsRnV0dXJlRGeliZXJpZXMoaWRlbnRpdHkucGhvbmUsJ0lOVEVSRVNTRScpOwogIGF3YWl0IGxvZ0V2ZW50KCdJTlRFUkVTU0UnLHtw aG9uZTppZGVudGl0eS5waG9uZSxvcmRlcjpvcmRlci5jb2RlLGNhbXBhaWduQ29kZX0pOwogIGF3YWl0IHJlcGx5SW5ib3VuZChpZGVudGl0eSxg8J+agCAqQ09NUFJBIERFIEJJTEhFVEVTKlxuXG5QZWRpZG86ICoke29yZGVyLmNvZGV9KlxuXG5JbmZvcm1lIGFwZW5hcyBhICpxdWFudGlkYWRlKiBkZSBiaWxoZXRlcy5cblN4ZW1wbG86ICo1KlxuXG5EaWdpdGUgKkNBTkNFTEFSKiBwYXJhIHNhaXIuYCk7Cn0KPT09Rk9STT09PQphc3luYyBmdW5jdGlvbiBoYW5kbGVPcmRlckZvcm0oaWRlbnRpdHksIG9yZGVyLCB0ZXh0KXsKICBjb25zdCB0PWNsZWFuVGV4dCh0ZXh0KTsKICBpZihvcmRlci5zdGF0dXMhPT0nQ09MRVRBTkRPIERBRE9TJykgcmV0dXJuOwogIGlmKCFvcmRlci5xdWFudGl0eSl7CiAgICBjb25zdCBtPXQubWF0Y2goL14oXFxkezF9XFxkezF9KSQkkey8pJyk7CiAgfQp9Cg=="
+        run: |
+          python3 - <<'PY'
+          import os,base64,re
+          from pathlib import Path
+          s=Path('server.js').read_text()
+          raw=base64.b64decode(os.environ['BLOCKS_B64']).decode()
+          parts=raw.split('\n===FORM===\n')
+          begin=parts[0].replace('BEGIN\n','',1)
+          rest=parts[1].split('\n===BLOCK===\n')
+          form=rest[0]; block=rest[1]
+          s,n=re.subn(r'async function beginOrder\(identity, campaignCode=null\)\{.*?\n\}\nasync function handleOrderForm',begin+'\nasync function handleOrderForm',s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('beginOrder não encontrado')
+          s,n=re.subn(r'async function handleOrderForm\(identity, order, text\)\{.*?\n\}\nasync function handleProof',form+'\nasync function handleProof',s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('handleOrderForm não encontrado')
+          s,n=re.subn(r"    if\(order\.status === 'COLETANDO_DADOS'\)\{.*?\n    \}",block,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('bloco COLETANDO_DADOS não encontrado')
+          Path('server.js').write_text(s)
+          PY
+          node --check server.js
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server.js
+          git commit -m 'fix: guided purchase flow'
+          git push
