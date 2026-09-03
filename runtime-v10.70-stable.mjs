@@ -18,11 +18,11 @@ const expirationBlock=[
   "const RDS_ORDER_EXPIRATION_MS=RDS_ORDER_EXPIRATION_HOURS*60*60*1000;",
   "const rdsPendingExpiredNotice=new Map();",
   "function rdsOrderIsExpiredV1070(order){if(!order||!['COLETANDO_DADOS','AGUARDANDO_PAGAMENTO'].includes(String(order.status||''))||!order.created_at)return false;const created=Date.parse(order.created_at);return Number.isFinite(created)&&(Date.now()-created)>=RDS_ORDER_EXPIRATION_MS;}",
-  "async function rdsExpireOrderV1070(order){if(!rdsOrderIsExpiredV1070(order))return false;await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'PEDIDO_EXPIRADO',payment_last_error:null,updated_at:nowISO()});await cancelFutureDeliveries(order.phone,'PEDIDO_EXPIRADO');await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,created_at:order.created_at,expiration_hours:RDS_ORDER_EXPIRATION_HOURS});rdsPendingExpiredNotice.set(order.phone,{code:order.code});return true;}",
+  "async function rdsExpireOrderV1070(order){if(!rdsOrderIsExpiredV1070(order))return false;await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',payment_last_error:null,updated_at:nowISO()});await cancelFutureDeliveries(order.phone,'PEDIDO_EXPIRADO');await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,created_at:order.created_at,expiration_hours:RDS_ORDER_EXPIRATION_HOURS});rdsPendingExpiredNotice.set(order.phone,{code:order.code});return true;}",
   "// RDS_ORDER_EXPIRATION_V1070"
 ].join('\n');
-const activeOld="async function activeOrder(phone){\n  return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);\n}";
 if(!server.includes('// RDS_ORDER_EXPIRATION_V1070')){
+  const activeOld="async function activeOrder(phone){\n  return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);\n}";
   if(!server.includes(activeOld))throw new Error('activeOrder base não localizado para V10.70.');
   server=server.replace(activeOld,expirationBlock+"\n"+"async function activeOrder(phone){\n  const order=await one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);\n  if(order&&await rdsExpireOrderV1070(order))return null;\n  return order;\n}");
 }
@@ -38,6 +38,8 @@ const pagGeneratedOld="const generatedPath=path.join(dir,'runtime-v10.60-generat
 if(!pag.includes(pagServerOld)||!pag.includes(pagGeneratedOld))throw new Error('Runtime PagBank base incompatível.');
 pag=pag.replace(pagServerOld,"const serverPath=path.join(dir,'runtime-v10.70-server.js');");
 pag=pag.replace(pagGeneratedOld,"const generatedPath=path.join(dir,'runtime-v10.70-generated.cjs');");
+// A tabela rds10_orders não possui cancel_reason. Remover somente esse campo dos cancelamentos, sem alterar o restante do fluxo.
+pag=pag.replace("cancel_reason:why,","");
 fs.writeFileSync(pagbankPatchedPath,pag,'utf8');
 
 let fix=fs.readFileSync(fixPath,'utf8');
