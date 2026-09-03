@@ -25,8 +25,8 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// Injeta o reconciliador no SERVER GERADO, depois que o runtime original
-// já tiver inserido o bloco PagBank. Não altera o código do patcher original.
+// O runtime original já possui o ponto exato que insere o bloco PagBank
+// no server.js. Inserimos o reconciliador imediatamente depois desse ponto.
 const injectLine = "source=source.slice(0,pos)+block+source.slice(pos);";
 const autoBlockCode = [
   '// RDS_PAGBANK_AUTO_RECONCILE_V10_61',
@@ -49,12 +49,14 @@ const autoBlockCode = [
   '}',
   'setTimeout(()=>rdsPagBankAutoReconcile().catch(()=>{}),5000);',
   'setInterval(()=>rdsPagBankAutoReconcile().catch(()=>{}),RDS_PAGBANK_AUTO_RECONCILE_MS);'
-].join('\\n');
-const injectCode = "source=" + "source.replace(injectLine,injectLine+'\\n'+autoBlockCode);";
+].join('\n');
+
 if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
   if(!source.includes(injectLine))throw new Error('Ponto de inserção da reconciliação automática não localizado');
-  source += '\\n' + injectCode + '\\n';
+  const autoBlockLiteral=JSON.stringify(autoBlockCode);
+  const injectCode="const autoBlockCode="+autoBlockLiteral+";source=source.replace(injectLine,injectLine+'\\n'+autoBlockCode);";
+  source += '\n' + injectCode + '\n';
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-await import(pathToFileURL(fixedPath).href + '?v=1061auto3');
+await import(pathToFileURL(fixedPath).href + '?v=1061auto4');
