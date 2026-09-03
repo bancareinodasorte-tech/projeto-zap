@@ -431,7 +431,7 @@ async function handleOrderForm(identity, order, text){
   const t=cleanText(text);
   if(order.status!=='COLETANDO_DADOS') return;
   if(!order.quantity){
-    const m=t.match(/^(\d{1,4})$/), qty=m?Number(m[1]):0;
+    const m=t.match(/^(?:QUERO\s*)?(\d{1,4})(?:\s*BILHETES?)?$/i), qty=m?Number(m[1]):0;
     if(!qty||qty<1){ await replyInbound(identity,'Informe somente a quantidade de bilhetes usando números.\nExemplo: *5*'); return; }
     await patch('rds10_orders',`id=eq.${order.id}`,{quantity:qty,updated_at:nowISO()}); order.quantity=qty;
     await replyInbound(identity,`Quantidade: *${qty}* bilhete(s).\n\nAgora informe seu *nome completo*.\n\nDigite *CANCELAR* para sair.`); return;
@@ -466,7 +466,13 @@ async function handleInbound(m){
 
   const text = inbound.text;
   let order = identity.phone ? await activeOrder(identity.phone) : null;
-  const menuText=cleanText(text); if(["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings)); if(menuText==="1") return beginOrder(identity,null); if(menuText==="3"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,"🏢 *ATENDIMENTO*\n"+(office||"ATENDIMENTO")); } if(menuText==="2"){ if(!order) return replyInbound(identity,"🔎 *CONSULTAR PEDIDO*\n\nEnvie o código do pedido."); return replyInbound(identity,"🔎 *STATUS DO PEDIDO*\n\nPedido: *"+order.code+"*\nStatus: *"+order.status+"*"); }
+  const menuText=cleanText(text);
+  if(["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings));
+  if(!order){
+    if(menuText==="1") return beginOrder(identity,null);
+    if(menuText==="3"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,"🏢 *ATENDIMENTO*\n"+(office||"ATENDIMENTO")); }
+    if(menuText==="2") return replyInbound(identity,"🔎 *CONSULTAR PEDIDO*\n\nEnvie o código do pedido.");
+  }
 
   // Comprovante tem prioridade quando há pedido aguardando pagamento.
   if(order && inbound.media && ['AGUARDANDO_PAGAMENTO','AGUARDANDO_COMPROVANTE'].includes(order.status)){
