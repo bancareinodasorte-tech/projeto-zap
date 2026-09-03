@@ -11,6 +11,7 @@ const bs = String.fromCharCode(92);
 
 source = source.split("const fs=require('node:fs');").join("import fs from 'node:fs';");
 source = source.split("const path=require('node:path');").join("import path from 'node:path';");
+source = source.split("const {fileURLToPath,pathToFilePath}=require('node:url');").join("import { fileURLToPath, pathToFileURL } from 'node:url';");
 source = source.split("const {fileURLToPath,pathToFileURL}=require('node:url');").join("import { fileURLToPath, pathToFileURL } from 'node:url';");
 source = source.split('match(/' + bs + bs + 'd+/)').join('match(/[0-9]+/)');
 source = source.split('return /quantidade' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text)&&/nome' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text)&&/cpf' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text);').join('return /quantidade/i.test(text)&&/nome/i.test(text)&&/cpf/i.test(text);');
@@ -25,9 +26,8 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// O runtime original já possui o ponto exato que insere o bloco PagBank
-// no server.js. Inserimos o reconciliador imediatamente depois desse ponto.
-const injectLine = "source=source.slice(0,pos)+block+source.slice(pos);";
+// Reconciliacao automatica: o bloco e inserido no server.js gerado,
+// imediatamente antes do catch-all, usando o marker que ja existe no runtime.
 const autoBlockCode = [
   '// RDS_PAGBANK_AUTO_RECONCILE_V10_61',
   'const RDS_PAGBANK_AUTO_RECONCILE_MS=Math.max(15000,Number(process.env.PAGBANK_AUTO_RECONCILE_MS||30000));',
@@ -52,11 +52,10 @@ const autoBlockCode = [
 ].join('\n');
 
 if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
-  if(!source.includes(injectLine))throw new Error('Ponto de inserção da reconciliação automática não localizado');
   const autoBlockLiteral=JSON.stringify(autoBlockCode);
-  const injectCode="const autoBlockCode="+autoBlockLiteral+";source=source.replace(injectLine,injectLine+'\\n'+autoBlockCode);";
-  source += '\n' + injectCode + '\n';
+  source += "\nconst autoBlockCode=" + autoBlockLiteral + ";const autoPos=source.indexOf(marker);if(autoPos<0)throw new Error('Ponto de insercao da reconciliacao automatica nao localizado');source=source.slice(0,autoPos)+autoBlockCode+'\\n'+source.slice(autoPos);\n";
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-await import(pathToFileURL(fixedPath).href + '?v=1061auto4');
+console.log('[V10.61] generated runtime with automatic PagBank reconciliation');
+await import(pathToFileURL(fixedPath).href + '?v=1061auto5');
