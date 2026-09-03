@@ -64,18 +64,20 @@
 
   window.orders=async function(){
     state.orders=await api('/api/orders');
+    const active=state.orders.filter(o=>!['CONCLUIDO','CANCELADO'].includes(o.status));
     const collecting=state.orders.filter(o=>o.status==='COLETANDO_DADOS');
     const paid=state.orders.filter(o=>o.status==='PAGO_AGUARDANDO_BILHETES');
     const done=state.orders.filter(o=>o.status==='CONCLUIDO');
     const waiting=state.orders.filter(o=>['AGUARDANDO_PAGAMENTO','AGUARDANDO_CONFERENCIA'].includes(o.status));
     app.innerHTML=`<div class=page-title><div><span class=eyebrow>Operação de vendas</span><h1>Compras</h1><p class=mut>Pedidos, entrega dos bilhetes e vendas concluídas.</p></div>${waiting.length?btn(`Pagamentos (${waiting.length})`,"go('payments')",'btn primary'):''}</div>
       <div class=grid><div class="card metric-card"><span class=eyebrow>Coletando dados</span><div class=metric>${collecting.length}</div></div><div class="card metric-card"><span class=eyebrow>Enviar bilhetes</span><div class=metric>${paid.length}</div></div><div class="card metric-card"><span class=eyebrow>Concluídas</span><div class=metric>${done.length}</div></div><div class="card metric-card"><span class=eyebrow>Em pagamento</span><div class=metric>${waiting.length}</div></div></div>
-      ${paid.length?`<div class=card><span class=eyebrow>Ação necessária</span><h2>Bilhetes para entregar</h2>${paid.map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)} • ${o.quantity||0} bilhete(s) • ${money(o.total_amount)}</small></div>${btn('Marcar bilhetes enviados',`ticketsSent('${o.id}')`,'btn primary')}</div>`).join('')}</div>`:''}
-      ${collecting.length?`<div class=card><span class=eyebrow>Pedidos em andamento</span><h2>Coletando dados</h2>${collecting.map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)}</small></div><a target=_blank href="https://wa.me/${esc(o.phone||'')}">${btn('Abrir WhatsApp','')}</a></div>`).join('')}</div>`:''}
+      ${paid.length?`<div class=card><span class=eyebrow>Ação necessária</span><h2>Bilhetes para entregar</h2>${paid.map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)} • ${o.quantity||0} bilhete(s) • ${money(o.total_amount)}</small></div><div class=row>${btn('Marcar bilhetes enviados',`ticketsSent('${o.id}')`,'btn primary')}${btn('Cancelar',`cancelOrder('${o.id}')`,'btn danger')}</div></div>`).join('')}</div>`:''}
+      ${collecting.length?`<div class=card><span class=eyebrow>Pedidos em andamento</span><h2>Coletando dados</h2>${collecting.map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)}</small></div><div class=row><a target=_blank href="https://wa.me/${esc(o.phone||'')}">${btn('Abrir WhatsApp','')}</a>${btn('Cancelar',`cancelOrder('${o.id}')`,'btn danger')}</div></div>`).join('')}</div>`:''}
+      ${waiting.length?`<div class=card><span class=eyebrow>Pedidos aguardando</span><h2>Pagamento / conferência</h2>${waiting.map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)} • ${o.quantity||0} bilhete(s) • ${money(o.total_amount)}</small></div><div class=row>${badge(o.status)}${btn('Cancelar',`cancelOrder('${o.id}')`,'btn danger')}</div></div>`).join('')}</div>`:''}
       <div class=card><span class=eyebrow>Histórico</span><h2>Compras concluídas</h2>${done.slice(0,30).map(o=>`<div class=priority><div><strong>${esc(o.customer_name||o.phone)}</strong><small>${esc(o.code)} • ${o.quantity||0} bilhete(s) • ${money(o.total_amount)}</small></div>${badge('CONCLUIDO')}</div>`).join('')||'<div class=empty-state>Nenhuma compra concluída.</div>'}</div>`;
   };
 
-  render=async function(){
+  window.render=async function(){
     if(page==='payments') return paymentsPage();
     return oldRender();
   };
