@@ -67,7 +67,8 @@ const rdsFlowSource=[
   "function rdsProfessionalOrderMenu(order){const status=String(order?.status||'');if(status==='COLETANDO_DADOS')return 'Pedido *'+order.code+'* em andamento.'+RDS_ORDER_NL+RDS_ORDER_NL+'📝 *DADOS DO PEDIDO*'+RDS_ORDER_NL+'1️⃣ Continuar preenchimento'+RDS_ORDER_NL+'2️⃣ Corrigir dados'+RDS_ORDER_NL+'3️⃣ Recomeçar pedido'+RDS_ORDER_NL+'4️⃣ Encerrar pedido'+RDS_ORDER_NL+'5️⃣ Falar com o escritório'+RDS_ORDER_NL+RDS_ORDER_NL+'Responda apenas com o número.';if(status==='AGUARDANDO_PAGAMENTO')return 'Pedido *'+order.code+'* aguardando pagamento.'+RDS_ORDER_NL+RDS_ORDER_NL+'💳 *PAGAMENTO*'+RDS_ORDER_NL+'1️⃣ Ver PIX / continuar pagamento'+RDS_ORDER_NL+'2️⃣ Corrigir dados'+RDS_ORDER_NL+'3️⃣ Recomeçar pedido'+RDS_ORDER_NL+'4️⃣ Encerrar pedido'+RDS_ORDER_NL+'5️⃣ Falar com o escritório'+RDS_ORDER_NL+RDS_ORDER_NL+'Responda apenas com o número.';if(status==='AGUARDANDO_CONFERENCIA')return 'Pedido *'+order.code+'* com comprovante recebido.'+RDS_ORDER_NL+RDS_ORDER_NL+'🔎 *CONFERÊNCIA*'+RDS_ORDER_NL+'1️⃣ Consultar status'+RDS_ORDER_NL+'2️⃣ Corrigir dados'+RDS_ORDER_NL+'3️⃣ Recomeçar pedido'+RDS_ORDER_NL+'4️⃣ Encerrar pedido'+RDS_ORDER_NL+'5️⃣ Falar com o escritório'+RDS_ORDER_NL+RDS_ORDER_NL+'Responda apenas com o número.';if(status==='PAGO_AGUARDANDO_BILHETES')return 'Pedido *'+order.code+'* com pagamento confirmado.'+RDS_ORDER_NL+RDS_ORDER_NL+'🎟 *EMISSÃO DOS BILHETES*'+RDS_ORDER_NL+'1️⃣ Consultar status'+RDS_ORDER_NL+'3️⃣ Recomeçar pedido'+RDS_ORDER_NL+'4️⃣ Encerrar pedido'+RDS_ORDER_NL+'5️⃣ Falar com o escritório'+RDS_ORDER_NL+RDS_ORDER_NL+'Responda apenas com o número.';return 'Pedido *'+order.code+'* em andamento.'+RDS_ORDER_NL+RDS_ORDER_NL+'1️⃣ Continuar'+RDS_ORDER_NL+'2️⃣ Corrigir'+RDS_ORDER_NL+'3️⃣ Recomeçar'+RDS_ORDER_NL+'4️⃣ Encerrar'+RDS_ORDER_NL+'5️⃣ Escritório'+RDS_ORDER_NL+RDS_ORDER_NL+'Responda apenas com o número.';}",
   "// RDS_ORDER_FLOW_V10_69_SERVER"
 ].join(String.fromCharCode(10));
-if(!source.includes('RDS_ORDER_FLOW_V10_69_SERVER'))source=source.replace(marker,rdsFlowSource+String.fromCharCode(10)+marker);
+const rdsServerMarker='// FECHAMENTO 2 — PagBank/PIX.';
+if(!source.includes('RDS_ORDER_FLOW_V10_69_SERVER'))source=source.replace(rdsServerMarker,rdsFlowSource+String.fromCharCode(10)+rdsServerMarker);
 source=source.replace("function orderMenu(order){return 'Pedido *'+order.code+'* em andamento.\\\\n\\\\n1️⃣ Continuar\\\\n2️⃣ Corrigir\\\\n3️⃣ Recomeçar\\\\n4️⃣ Encerrar\\\\n5️⃣ Escritório\\\\n\\\\nResponda apenas com o número.';}","function orderMenu(order){return rdsProfessionalOrderMenu(order);}");
 
 const rdsOriginalHandleNeedle='async function handleInbound(m){';
@@ -101,5 +102,5 @@ fix=fix.replace(oldSource,"const sourcePath = path.join(dir, 'runtime-v10.69-pag
 fix=fix.replace(oldFixed,"const fixedPath = path.join(dir, 'runtime-v10.69-pagbank-fixed.mjs');");
 fix=fix.replace("'?v=1068'","'?v=1069'");
 fs.writeFileSync(fixPatchedPath,fix,'utf8');
-console.log('[V10.69.1] ciclo de vida, expiracao e retomada por links com escopo corrigido; preservando deduplicacao e PagBank');
+console.log('[V10.69.2] ciclo de vida, expiracao e retomada por links com marcador local corrigido; preservando deduplicacao e PagBank');
 await import(pathToFileURL(fixPatchedPath).href+'?v=1069');
