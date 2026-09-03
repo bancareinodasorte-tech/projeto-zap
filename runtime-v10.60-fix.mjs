@@ -26,13 +26,12 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// Evita processamento duplicado do mesmo evento de entrada do Baileys.
+// Evita que o mesmo evento de entrada do Baileys seja processado duas vezes.
 const inboundProcessedDeclaration = 'const inboundProcessedIds=new Map();';
-const inboundLoopOld = 'for(const m of messages || []){\\n        rememberMessage(m);';
-const inboundLoopNew = 'for(const m of messages || []){\\n        const inboundId=String(m?.key?.id||\\'\\');\\n        if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}\\n        rememberMessage(m);';
-source += '\n' + inboundProcessedDeclaration + '\n';
-source += "source=source.replace('const lidToPn = new Map();','const lidToPn = new Map();\\n'+inboundProcessedDeclaration);\n";
-source += "source=source.replace(" + JSON.stringify(inboundLoopOld) + "," + JSON.stringify(inboundLoopNew) + ");\n";
+const inboundGuard = "const inboundId=String(m?.key?.id||'');if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}";
+source += '\nconst inboundProcessedDeclaration=' + JSON.stringify(inboundProcessedDeclaration) + ';';
+source += '\nsource=source.replace(' + JSON.stringify('const lidToPn = new Map();') + ',' + JSON.stringify('const lidToPn = new Map();\n') + '+inboundProcessedDeclaration);';
+source += '\nsource=source.replace(' + JSON.stringify('        rememberMessage(m);') + ',' + JSON.stringify('        ') + '+' + JSON.stringify(inboundGuard) + '+\'\n        rememberMessage(m);\');';
 
 // Reconciliacao automatica: o bloco e inserido no server.js gerado,
 // imediatamente antes do catch-all, usando o marker que ja existe no runtime.
