@@ -1,9 +1,9 @@
 {
   "name":"canal-de-vendas-rds-v10-final",
-  "version":"10.61.0",
+  "version":"10.69.0",
   "private":true,
   "main":"server.js",
-  "scripts":{"start":"node runtime-v10.60-fix.mjs","start:legacy":"node server.js"},
+  "scripts":{"start":"node runtime-v10.69-menu.mjs","start:legacy":"node server.js"},
   "engines":{"node":"20.x"},
   "dependencies":{"@hapi/boom":"^10.0.1","@whiskeysockets/baileys":"7.0.0-rc14","express":"^4.21.2","pino":"^9.9.0","qrcode":"^1.5.4"}
 }
