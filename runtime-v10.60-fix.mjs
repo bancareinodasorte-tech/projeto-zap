@@ -12,6 +12,7 @@ const bs = String.fromCharCode(92);
 source = source.split("const fs=require('node:fs');").join("import fs from 'node:fs';");
 source = source.split("const path=require('node:path');").join("import path from 'node:path';");
 source = source.split("const {fileURLToPath,pathToFilePath}=require('node:url');").join("import { fileURLToPath, pathToFileURL } from 'node:url';");
+source = source.split("const {fileURLToFilePath,pathToFileURL}=require('node:url');").join("import { fileURLToPath, pathToFileURL } from 'node:url';");
 source = source.split("const {fileURLToPath,pathToFileURL}=require('node:url');").join("import { fileURLToPath, pathToFileURL } from 'node:url';");
 source = source.split('match(/' + bs + bs + 'd+/)').join('match(/[0-9]+/)');
 source = source.split('return /quantidade' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text)&&/nome' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text)&&/cpf' + bs + bs + 's*[:' + bs + bs + '-]/i.test(text);').join('return /quantidade/i.test(text)&&/nome/i.test(text)&&/cpf/i.test(text);');
@@ -26,15 +27,18 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// Evita processamento duplicado do mesmo evento de entrada do Baileys.
-const inboundDeclarationOld = 'const lidToPn = new Map();';
-const inboundDeclarationNew = 'const lidToPn = new Map();\nconst inboundProcessedIds = new Map();';
-const inboundRememberOld = '        rememberMessage(m);';
-const inboundRememberNew = "        const inboundId=String(m?.key?.id||'');\n        if(inboundId){\n          const seenAt=inboundProcessedIds.get(inboundId);\n          const now=Date.now();\n          if(seenAt&&now-seenAt<600000)continue;\n          inboundProcessedIds.set(inboundId,now);\n          if(inboundProcessedIds.size>5000){\n            const first=inboundProcessedIds.keys().next().value;\n            inboundProcessedIds.delete(first);\n          }\n        }\n        rememberMessage(m);";
-source = source.replace(inboundDeclarationOld,inboundDeclarationNew);
-source = source.replace(inboundRememberOld,inboundRememberNew);
+// Evita que o mesmo evento de entrada do Baileys seja processado duas vezes.
+const inboundProcessedDeclaration = 'const inboundProcessedIds=new Map();';
+const inboundGuard = "const inboundId=String(m?.key?.id||'');if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}";
+const declarationNeedle = 'const lidToPn = new Map();';
+const declarationReplacement = declarationNeedle + '\n' + inboundProcessedDeclaration;
+const handlerNeedle = '        rememberMessage(m);';
+const handlerReplacement = '        ' + inboundGuard + '\n        rememberMessage(m);';
+source += '\nsource=source.replace(' + JSON.stringify(declarationNeedle) + ',' + JSON.stringify(declarationReplacement) + ');';
+source += '\nsource=source.replace(' + JSON.stringify(handlerNeedle) + ',' + JSON.stringify(handlerReplacement) + ');';
 
-// Reconciliacao automatica: inserir no server.js gerado, imediatamente antes do catch-all.
+// Reconciliacao automatica: o bloco e inserido no server.js gerado,
+// imediatamente antes do catch-all, usando o marker que ja existe no runtime.
 const autoBlockCode = [
   '// RDS_PAGBANK_AUTO_RECONCILE_V10_61',
   'const RDS_PAGBANK_AUTO_RECONCILE_MS=Math.max(15000,Number(process.env.PAGBANK_AUTO_RECONCILE_MS||30000));',
@@ -64,5 +68,5 @@ if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-console.log('[V10.63] generated runtime with safe inbound dedupe + automatic PagBank reconciliation');
-await import(pathToFileURL(fixedPath).href + '?v=1063');
+console.log('[V10.64] generated runtime with safe inbound dedupe + automatic PagBank reconciliation');
+await import(pathToFileURL(fixedPath).href + '?v=1064');
