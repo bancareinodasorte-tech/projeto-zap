@@ -27,12 +27,13 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// V10.67 — injeta a deduplicação no código interno que realmente lê o server.js.
-// A V10.66 gerava \n literal fora de strings no módulo interno; aqui cada linha é
-// construída explicitamente para que o arquivo gerado seja JavaScript válido.
+// V10.68 — a deduplicação precisa ser instalada no server.js gerado.
+// V10.67 declarava o Map apenas no módulo gerador, causando ReferenceError no server.js.
 const innerSourceNeedle="let source=fs.readFileSync(serverPath,'utf8');";
 const innerSourcePatch=[
-  "const inboundProcessedIds=new Map();",
+  "const inboundProcessedDeclaration='const inboundProcessedIds=new Map();';",
+  "const inboundDeclarationNeedle='const lidToPn = new Map();';",
+  "if(!source.includes(inboundProcessedDeclaration)&&source.includes(inboundDeclarationNeedle)){source=source.replace(inboundDeclarationNeedle,inboundDeclarationNeedle+'\\n'+inboundProcessedDeclaration);}",
   "const inboundRememberNeedle='        rememberMessage(m);';",
   "const inboundRememberReplacement=[",
   "  '        const inboundEventId=String(m?.key?.id||\\'\\');',",
@@ -44,11 +45,11 @@ const innerSourcePatch=[
   "  '        }',",
   "  '        rememberMessage(m);'",
   "].join('\\n');",
-  "source=source.replace(inboundRememberNeedle,inboundRememberReplacement);",
-  "console.log('[V10.67] deduplicacao inbound instalada no messages.upsert');"
+  "if(!source.includes('const inboundEventId=String(m?.key?.id||\\'\\');')){source=source.replace(inboundRememberNeedle,inboundRememberReplacement);}",
+  "console.log('[V10.68] deduplicacao inbound instalada no server.js gerado');"
 ].join('\n');
 const innerSourceReplacement=innerSourceNeedle+'\n'+innerSourcePatch;
-if(!source.includes('V10.67] deduplicacao inbound instalada')){
+if(!source.includes('V10.68] deduplicacao inbound instalada')){
   source=source.replace(innerSourceNeedle,innerSourceReplacement);
 }
 
@@ -82,5 +83,5 @@ if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-console.log('[V10.67] generated runtime with valid inner inbound dedupe + automatic PagBank reconciliation');
-await import(pathToFileURL(fixedPath).href + '?v=1067');
+console.log('[V10.68] generated runtime with server-level inbound dedupe + automatic PagBank reconciliation');
+await import(pathToFileURL(fixedPath).href + '?v=1068');
