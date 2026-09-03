@@ -26,6 +26,16 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
+// Evita que o mesmo evento de entrada do Baileys seja processado duas vezes.
+const inboundDedupePatch = [
+  "const inboundProcessedIds=new Map();",
+  "source=source.replace('const lidToPn = new Map();','const lidToPn = new Map();\\n'+inboundDedupePatch);",
+  "const inboundLoopOld='for(const m of messages || []){\\n        rememberMessage(m);';",
+  "const inboundLoopNew='for(const m of messages || []){\\n        const inboundId=String(m?.key?.id||\\'\\');\\n        if(inboundId){const seenAt=inboundProcessedIds.get(inboundId);const now=Date.now();if(seenAt&&now-seenAt<600000)continue;inboundProcessedIds.set(inboundId,now);if(inboundProcessedIds.size>5000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}}\\n        rememberMessage(m);';",
+  "source=source.replace(inboundLoopOld,inboundLoopNew);"
+].join('\n');
+source += '\n' + inboundDedupePatch + '\n';
+
 // Reconciliacao automatica: o bloco e inserido no server.js gerado,
 // imediatamente antes do catch-all, usando o marker que ja existe no runtime.
 const autoBlockCode = [
@@ -57,5 +67,5 @@ if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-console.log('[V10.61] generated runtime with automatic PagBank reconciliation');
-await import(pathToFileURL(fixedPath).href + '?v=1061auto5');
+console.log('[V10.62] generated runtime with inbound dedupe + automatic PagBank reconciliation');
+await import(pathToFileURL(fixedPath).href + '?v=1062');
