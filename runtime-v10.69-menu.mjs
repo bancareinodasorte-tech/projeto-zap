@@ -9,12 +9,6 @@ const innerPatchedPath=path.join(dir,'runtime-v10.69-pagbank-base.mjs');
 const fixPatchedPath=path.join(dir,'runtime-v10.69-fix-generated.mjs');
 
 let inner=fs.readFileSync(baseInnerPath,'utf8');
-
-// Fechamento 2.69 — máquina de estados do pedido:
-// - pedido de compra/dados/pagamento expira após o prazo configurado;
-// - pedido expirado deixa de bloquear uma nova compra;
-// - qualquer tentativa de continuar/corrigir um pedido expirado recebe orientação clara;
-// - menu passa a ser orientado ao estado do pedido.
 const marker='// FECHAMENTO 2 — PagBank/PIX.';
 const flowPatch=String.raw`
 // RDS_ORDER_FLOW_V10_69
@@ -44,12 +38,11 @@ function rdsProfessionalOrderMenu(order){
   if(status==='PAGO_AGUARDANDO_BILHETES')return 'Pedido *'+order.code+'* com pagamento confirmado.\\n\\n🎟 *EMISSÃO DOS BILHETES*\\n1️⃣ Consultar status\\n3️⃣ Recomeçar pedido\\n4️⃣ Encerrar pedido\\n5️⃣ Falar com o escritório\\n\\nResponda apenas com o número.';
   return 'Pedido *'+order.code+'* em andamento.\\n\\n1️⃣ Continuar\\n2️⃣ Corrigir\\n3️⃣ Recomeçar\\n4️⃣ Encerrar\\n5️⃣ Escritório\\n\\nResponda apenas com o número.';
 }
-const rdsOriginalOrderMenuNeedle='function orderMenu(order){return \'Pedido *\'+order.code+\'* em andamento.\\\\n\\\\n1️⃣ Continuar\\\\n2️⃣ Corrigir\\\\n3️⃣ Recomeçar\\\\n4️⃣ Encerrar\\\\n5️⃣ Escritório\\\\n\\\\nResponda apenas com o número.\';}';
-source=source.replace(rdsOriginalOrderMenuNeedle,'function orderMenu(order){return rdsProfessionalOrderMenu(order);}');
+source=source.replace("function orderMenu(order){return 'Pedido *'+order.code+'* em andamento.\\\\n\\\\n1️⃣ Continuar\\\\n2️⃣ Corrigir\\\\n3️⃣ Recomeçar\\\\n4️⃣ Encerrar\\\\n5️⃣ Escritório\\\\n\\\\nResponda apenas com o número.';}","function orderMenu(order){return rdsProfessionalOrderMenu(order);}");
 
 const rdsOriginalHandleNeedle='async function handleInbound(m){';
-const rdsBaseName='async function handleInboundV1069Base(m){';
-if(source.includes(rdsOriginalHandleNeedle))source=source.replace(rdsOriginalHandleNeedle,rdsBaseName);
+if(source.includes(rdsOriginalHandleNeedle))source=source.replace(rdsOriginalHandleNeedle,'async function handleInboundV1069Base(m){');
+if(!source.includes('async function handleInboundV1069Base(m){'))throw new Error('Base handleInbound V10.69 não localizada.');
 const rdsWrapper=String.raw`async function handleInbound(m){
   const identity=resolveInboundIdentity(m);
   const inbound=extractInbound(m);
@@ -63,15 +56,8 @@ const rdsWrapper=String.raw`async function handleInbound(m){
   return handleInboundV1069Base(m);
 }
 `;
-if(!source.includes('async function handleInboundV1069Base(m)'))throw new Error('Base handleInbound V10.69 não localizada.');
-source=source.replace('async function handleInboundV1069Base(m){',rdsBaseName);
-const firstMarker=source.indexOf('// RDS_ORDER_FLOW_V10_69');
-if(firstMarker>=0){
-  const end=source.indexOf('\n// FECHAMENTO 2 — PagBank/PIX.',firstMarker);
-  if(end>firstMarker)source=source.slice(0,end)+'\n'+rdsWrapper+source.slice(end);
-}
+source += '\n'+rdsWrapper;
 `;
-
 if(!inner.includes(marker))throw new Error('Marcador do Fechamento 2 não localizado no runtime interno.');
 inner=inner.replace(marker,flowPatch+'\n'+marker);
 fs.writeFileSync(innerPatchedPath,inner,'utf8');
