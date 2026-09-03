@@ -27,19 +27,28 @@ source = source.split(customerReturn).join(customerReturnWithEmail);
 // Corrige o escape duplicado que fazia o WhatsApp receber "\\n" em vez de quebra de linha.
 source = source.split('\\\\n').join('\\n');
 
-// V10.66 — injeta a deduplicação no código interno que realmente lê o server.js.
-// A versão anterior tentou aplicar o replace no texto do runtime externo, portanto
-// a proteção não chegava ao listener messages.upsert do servidor.
+// V10.67 — injeta a deduplicação no código interno que realmente lê o server.js.
+// A V10.66 gerava \n literal fora de strings no módulo interno; aqui cada linha é
+// construída explicitamente para que o arquivo gerado seja JavaScript válido.
 const innerSourceNeedle="let source=fs.readFileSync(serverPath,'utf8');";
 const innerSourcePatch=[
   "const inboundProcessedIds=new Map();",
   "const inboundRememberNeedle='        rememberMessage(m);';",
-  "const inboundRememberReplacement='        const inboundEventId=String(m?.key?.id||\\\'\\\');\\n        if(inboundEventId){\\n          const seenAt=inboundProcessedIds.get(inboundEventId);\\n          if(seenAt)continue;\\n          inboundProcessedIds.set(inboundEventId,Date.now());\\n          if(inboundProcessedIds.size>10000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}\\n        }\\n        rememberMessage(m);';",
+  "const inboundRememberReplacement=[",
+  "  '        const inboundEventId=String(m?.key?.id||\\'\\');',",
+  "  '        if(inboundEventId){',",
+  "  '          const seenAt=inboundProcessedIds.get(inboundEventId);',",
+  "  '          if(seenAt)continue;',",
+  "  '          inboundProcessedIds.set(inboundEventId,Date.now());',",
+  "  '          if(inboundProcessedIds.size>10000){const first=inboundProcessedIds.keys().next().value;inboundProcessedIds.delete(first);}',",
+  "  '        }',",
+  "  '        rememberMessage(m);'",
+  "].join('\\n');",
   "source=source.replace(inboundRememberNeedle,inboundRememberReplacement);",
-  "console.log('[V10.66] deduplicacao inbound instalada no messages.upsert');"
-].join('\\n');
-const innerSourceReplacement=innerSourceNeedle+'\\n'+innerSourcePatch;
-if(!source.includes('V10.66] deduplicacao inbound instalada')){
+  "console.log('[V10.67] deduplicacao inbound instalada no messages.upsert');"
+].join('\n');
+const innerSourceReplacement=innerSourceNeedle+'\n'+innerSourcePatch;
+if(!source.includes('V10.67] deduplicacao inbound instalada')){
   source=source.replace(innerSourceNeedle,innerSourceReplacement);
 }
 
@@ -65,13 +74,13 @@ const autoBlockCode = [
   '}',
   'setTimeout(()=>rdsPagBankAutoReconcile().catch(()=>{}),5000);',
   'setInterval(()=>rdsPagBankAutoReconcile().catch(()=>{}),RDS_PAGBANK_AUTO_RECONCILE_MS);'
-].join('\\n');
+].join('\n');
 
 if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
   const autoBlockLiteral=JSON.stringify(autoBlockCode);
-  source += "\\nconst autoBlockCode=" + autoBlockLiteral + ";const autoPos=source.indexOf(marker);if(autoPos<0)throw new Error('Ponto de insercao da reconciliacao automatica nao localizado');source=source.slice(0,autoPos)+autoBlockCode+'\\\\n'+source.slice(autoPos);\\n";
+  source += "\nconst autoBlockCode=" + autoBlockLiteral + ";const autoPos=source.indexOf(marker);if(autoPos<0)throw new Error('Ponto de insercao da reconciliacao automatica nao localizado');source=source.slice(0,autoPos)+autoBlockCode+'\\n'+source.slice(autoPos);\n";
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
-console.log('[V10.66] generated runtime with inbound dedupe applied inside inner server source + automatic PagBank reconciliation');
-await import(pathToFileURL(fixedPath).href + '?v=1066');
+console.log('[V10.67] generated runtime with valid inner inbound dedupe + automatic PagBank reconciliation');
+await import(pathToFileURL(fixedPath).href + '?v=1067');
