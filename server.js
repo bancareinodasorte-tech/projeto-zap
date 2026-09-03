@@ -421,49 +421,29 @@ function isOfficeRoute(text){ return /OUTRO\s*ASSUNTO|ATENDENTE|ESCRIT[ÓO]RIO/i
 function looksLikeForm(text){ return /quantidade\s*[:\-]/i.test(text) || (/nome\s*[:\-]/i.test(text) && /contato\s*[:\-]/i.test(text)); }
 function routerMessage(settings){ return `🍀 *CANAL DE VENDAS RDS*\n\n1️⃣ *Comprar bilhetes*\n2️⃣ *Consultar meu pedido*\n3️⃣ *Falar com atendente*\n4️⃣ *Ver este menu novamente*\n\nDigite apenas o número da opção.`; }
 async function beginOrder(identity, campaignCode=null){
-  if(!identity.phone){
-    await replyInbound(identity,'Recebi sua mensagem, mas o WhatsApp ainda não informou seu número real ao sistema. Envie novamente *QUERO COMPRAR* ou use o link da campanha.');
-    return;
-  }
-  const order = await createOrder(identity.phone,campaignCode);
-  await replyInbound(identity,'🛒 *PREENCHER PEDIDO*');
-  await sleep(350);
-  await replyInbound(identity,`Quantidade:\nNome:\nContato:\n\nPedido: ${order.code}`);
+  if(!identity.phone){ await replyInbound(identity,'Não consegui identificar seu número de WhatsApp. Envie novamente.'); return; }
+  const order=await createOrder(identity.phone,campaignCode);
   await cancelFutureDeliveries(identity.phone,'INTERESSE');
   await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
+  await replyInbound(identity,`🛒 *COMPRA DE BILHETES*\n\nPedido: *${order.code}*\n\nInforme apenas a *quantidade* de bilhetes.\nExemplo: *5*\n\nDigite *CANCELAR* para sair.`);
 }
 async function handleOrderForm(identity, order, text){
-  const p = parseOrderForm(text);
-  const missing=[];
-  if(!p.quantity || p.quantity < 1) missing.push('Quantidade');
-  if(!p.name) missing.push('Nome');
-  if(!p.contact) missing.push('Contato');
-  if(missing.length){
-    await replyInbound(identity,`Falta preencher: *${missing.join(', ')}*.\nEnvie novamente somente o bloco preenchido.`);
-    return;
+  const t=cleanText(text);
+  if(order.status!=='COLETANDO_DADOS') return;
+  if(!order.quantity){
+    const m=t.match(/^(\d{1,4})$/), qty=m?Number(m[1]):0;
+    if(!qty||qty<1){ await replyInbound(identity,'Informe somente a quantidade de bilhetes usando números.\nExemplo: *5*'); return; }
+    await patch('rds10_orders',`id=eq.${order.id}`,{quantity:qty,updated_at:nowISO()}); order.quantity=qty;
+    await replyInbound(identity,`Quantidade: *${qty}* bilhete(s).\n\nAgora informe seu *nome completo*.\n\nDigite *CANCELAR* para sair.`); return;
   }
-  const total = Number((p.quantity * Number(order.unit_price || 3)).toFixed(2));
-  const submittedPhone = phoneKey(p.contact) || identity.phone;
-  // O nome informado pelo comprador passa a ser a referência do CRM, sem criar duplicado.
-  if(identity.phone){
-    const existing = await findContact(identity.phone);
-    if(existing){
-      await patch('rds10_contacts',`id=eq.${existing.id}`,{
-        name:p.name,
-        validated:true,
-        last_seen_at:nowISO(),
-        updated_at:nowISO()
-      });
-    }else{
-      await saveOrMergeContact({name:p.name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()});
-    }
-  }
-  await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:p.name,contact_phone:submittedPhone,quantity:p.quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
-  const s = await getSettings();
-  const pix = cleanText(s.pix_key || 'PIX NÃO CONFIGURADO');
-  const payMsg = `✅ *PEDIDO RECEBIDO*\n\n👤 ${p.name}\n🎟 ${p.quantity} bilhete(s)\n💰 Total: *R$ ${money(total)}*\n🧾 Pedido: ${order.code}\n\n💳 *PAGAMENTO PIX*\nChave: ${pix}\nFavorecido: ${cleanText(s.pix_name || 'REINO DA SORTE')}\nValor: *R$ ${money(total)}*\n\nApós pagar, envie o comprovante aqui 👇`;
-  await replyInbound(identity,payMsg);
-  await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity:p.quantity,total});
+  const name=t.replace(/\s+/g,' ').trim();
+  if(name.length<3||/^(\d+|CANCELAR|SAIR|REINICIAR)$/i.test(name)){ await replyInbound(identity,'Informe seu *nome completo* para continuar.\n\nDigite *CANCELAR* para sair.'); return; }
+  const quantity=Number(order.quantity||0), total=Number((quantity*Number(order.unit_price||3)).toFixed(2));
+  if(identity.phone){ const existing=await findContact(identity.phone); if(existing) await patch('rds10_contacts',`id=eq.${existing.id}`,{name,validated:true,last_seen_at:nowISO(),updated_at:nowISO()}); else await saveOrMergeContact({name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()}); }
+  await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:name,contact_phone:identity.phone,quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
+  const settings=await getSettings(), pix=cleanText(settings.pix_key||'PIX NÃO CONFIGURADO');
+  await replyInbound(identity,`✅ *PEDIDO RECEBIDO*\n\n👤 ${name}\n🎟 ${quantity} bilhete(s)\n💰 Total: *R$ ${money(total)}*\n🧾 Pedido: *${order.code}*\n\n💳 *PAGAMENTO PIX*\nChave: ${pix}\nFavorecido: ${cleanText(settings.pix_name||'REINO DA SORTE')}\nValor: *R$ ${money(total)}*\n\nApós pagar, envie o comprovante aqui 👇`);
+  await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:order.code,quantity,total});
 }
 async function handleProof(identity, order, inbound){
   await patch('rds10_orders',`id=eq.${order.id}`,{status:'AGUARDANDO_CONFERENCIA',proof_type:inbound.type,proof_received_at:nowISO(),updated_at:nowISO()});
@@ -495,13 +475,16 @@ async function handleInbound(m){
 
   if(order){
     if(order.status === 'COLETANDO_DADOS'){
-      if(looksLikeForm(text)) return handleOrderForm(identity,order,text);
+      if(/^(CANCELAR|SAIR|REINICIAR)$/i.test(cleanText(text))){
+        await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
+        return replyInbound(identity,routerMessage(settings));
+      }
       if(isOfficeRoute(text)){
-        const office = normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT);
+        const office=normalizeBR(settings.office_whatsapp||OFFICE_WA_DEFAULT);
         await patch('rds10_orders',`id=eq.${order.id}`,{status:'CANCELADO',updated_at:nowISO()});
         return replyInbound(identity,`🏢 Atendimento do escritório:\nhttps://wa.me/${office}?text=${encodeURIComponent('Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.')}`);
       }
-      return replyInbound(identity,'Seu pedido já foi iniciado. Copie e envie o formulário com *Quantidade, Nome e Contato*.');
+      return handleOrderForm(identity,order,text);
     }
     if(order.status === 'AGUARDANDO_PAGAMENTO'){
       if(inbound.media) return handleProof(identity,order,inbound);
