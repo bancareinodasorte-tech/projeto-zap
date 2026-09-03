@@ -1,0 +1,26 @@
+name: rds-menu-step2
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !startsWith(github.event.head_commit.message, 'bot:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch server
+        run: |
+          perl -0pi -e 's{function routerMessage\(settings\)\{.*?\n\}}{function routerMessage(settings){ return `🍀 *CANAL DE VENDAS RDS*\\n\\n1️⃣ *Comprar bilhetes*\\n2️⃣ *Consultar meu pedido*\\n3️⃣ *Falar com atendente*\\n4️⃣ *Ver este menu novamente*\\n\\nDigite apenas o número da opção.`; }}s' server.js
+          perl -0pi -e 's{(  let order = identity\.phone \? await activeOrder\(identity\.phone\) : null;)}{$1\n  const menuText=cleanText(text); if(/^(0|4|MENU|IN[IÍ]CIO|OI|OL[AÁ])$/i.test(menuText)) return replyInbound(identity,routerMessage(settings)); if(/^1$/.test(menuText)) return beginOrder(identity,null); if(/^3$/.test(menuText)){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,`🏢 *ATENDIMENTO*\\nhttps://wa.me/${office}?text=${encodeURIComponent("Olá, vim pelo CANAL DE VENDAS RDS e preciso de atendimento.")}`); } if(/^2$/.test(menuText)){ if(!order) return replyInbound(identity,"🔎 *CONSULTAR PEDIDO*\\n\\nEnvie o código do pedido."); return replyInbound(identity,`🔎 *STATUS DO PEDIDO*\\n\\nPedido: *${order.code}*\\nStatus: *${order.status}*`); }}s' server.js
+      - name: Validate
+        run: node --check server.js
+      - name: Commit and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.js
+          git rm .github/workflows/rds-menu-step2.yml
+          git commit -m "bot: enable numeric customer menu"
+          git push
