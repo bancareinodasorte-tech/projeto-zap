@@ -11,4 +11,5 @@ if(source.includes(old)){
 }else{
   console.log('[RDS] fonte PagBank já está sem exigência de email');
 }
+await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-v10.71-stable.mjs');
