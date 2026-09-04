@@ -4,21 +4,28 @@ const path='runtime-v10.60-fix.mjs';
 let source=fs.readFileSync(path,'utf8');
 const old="const customerReturnWithEmail=\"const email=String(process.env.PAGBANK_CUSTOMER_EMAIL||process.env.PAGBANK_MERCHANT_EMAIL||process.env.PAGBANK_EMAIL||'').trim();if(!email)throw new Error('PagBank exige customer.email. Configure PAGBANK_CUSTOMER_EMAIL no Render.');return {name,tax_id:tax,email,...(phone?{phones:[phone]}:{})};\";";
 const replacement="const customerReturnWithEmail=\"return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};\";";
-if(source.includes(old)){
-  source=source.replace(old,replacement);
-  fs.writeFileSync(path,source,'utf8');
-  console.log('[RDS] exigencia de email do PagBank removida antes do boot');
-}else{
-  console.log('[RDS] fonte PagBank já está sem exigência de email');
-}
+if(source.includes(old)){source=source.replace(old,replacement);fs.writeFileSync(path,source,'utf8');console.log('[RDS] exigencia de email do PagBank removida antes do boot');}
 
-// A versão V10.71 estável já contém um bloco experimental que não deve ser interpretado.
-// Removemos apenas esse bloco textual antes do import e mantemos o restante da base intacto.
-const stablePath='runtime-v10.71-stable.mjs';
-let stable=fs.readFileSync(stablePath,'utf8');
-const badStart=stable.indexOf("const opsMarker='// RDS V10.71 OPERATIONAL EXTENSION';");
-const badEnd=stable.indexOf("console.log('[V10.71] menu refinado",badStart);
-if(badStart>=0&&badEnd>badStart){stable=stable.slice(0,badStart)+stable.slice(badEnd);fs.writeFileSync(stablePath,stable,'utf8');console.log('[RDS] bloco experimental inválido removido antes do boot');}
+// Gera o runtime V10.71 a partir da base V10.70 válida. O arquivo V10.71-stable.mjs antigo contém um bloco experimental inválido e não será importado.
+const basePath='runtime-v10.70-stable.mjs';
+const cleanPath='runtime-v10.71-stable-runtime.mjs';
+let clean=fs.readFileSync(basePath,'utf8');
+clean=clean.replace("const pagbankPath=path.join(dir,'runtime-v10.60-pagbank.mjs');","const pagbankPath=path.join(dir,'runtime-v10.71-pagbank.mjs');");
+clean=clean.replace("const pagbankPatchedPath=path.join(dir,'runtime-v10.70-pagbank-base.mjs');","const pagbankPatchedPath=path.join(dir,'runtime-v10.71-pagbank-base.mjs');");
+clean=clean.replaceAll('runtime-v10.70-pagbank-base.mjs','runtime-v10.71-pagbank-base.mjs');
+clean=clean.replaceAll('runtime-v10.70-fix-generated.mjs','runtime-v10.71-fix-generated.mjs');
+clean=clean.replaceAll('?v=1070','?v=1071');
+
+// Mantém as correções comerciais V10.71 no servidor sem criar nova versão pública.
+const serverPath='server.js';
+let server=fs.readFileSync(serverPath,'utf8');
+const oldBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA/i.test(text); }";
+const newBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA|^\\s*COMPRA\\s*$/i.test(text); }";
+if(server.includes(oldBuy))server=server.replace(oldBuy,newBuy);
+const menuFunction="function rdsRouterMessageV2(settings){const bot=normalizeBR(connectedNumber||'');const buyText=encodeURIComponent('QUERO COMPRAR\\n\\nQuantidade:\\nNome:\\nCPF:');const buyLink=bot?'https://wa.me/'+bot+'?text='+buyText:'';return '🍀 *CANAL DE VENDAS RDS*\\n\\n'+'1️⃣ *COMPRAR BILHETES*'+(buyLink?'\\n👉 '+buyLink:'')+'\\n\\n2️⃣ *CONSULTAR PEDIDO*\\n3️⃣ *ALTERAR PEDIDO*\\n4️⃣ *CANCELAR PEDIDO*\\n5️⃣ *ATENDIMENTO*\\n\\nEscolha uma opção pelo número ou toque no link de *COMPRAR BILHETES*.\\n\\n🔒 Pagamentos confirmados não podem ser alterados ou cancelados pelo menu.';}";
+if(!server.includes('function rdsRouterMessageV2('))server=server.replace('function isBuyRoute',menuFunction+'\nfunction isBuyRoute');
+fs.writeFileSync(serverPath,server,'utf8');
+fs.writeFileSync(cleanPath,clean,'utf8');
 
 await import('./runtime-v10.71-ops-extension-final.mjs');
-await import('./runtime-v10.71-stable.mjs');
+await import('./runtime-v10.71-stable-runtime.mjs');
