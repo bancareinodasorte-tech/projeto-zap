@@ -26,5 +26,6 @@ await import('./runtime-rds-final-rules.mjs');
 await import('./runtime-rds-interval-fix.mjs');
 await import('./runtime-rds-menu-refinement.mjs');
 await import('./runtime-rds-flow-hardening.mjs');
+await import('./runtime-rds-order-expiration-crm-final.mjs');
 await import('./runtime-rds-returns-cleanup.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
