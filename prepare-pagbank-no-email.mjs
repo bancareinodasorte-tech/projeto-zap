@@ -6,14 +6,10 @@ const old="const customerReturnWithEmail=\"const email=String(process.env.PAGBAN
 const replacement="const customerReturnWithEmail=\"return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};\";";
 if(source.includes(old)){source=source.replace(old,replacement);fs.writeFileSync(path,source,'utf8');console.log('[RDS] exigencia de email do PagBank removida antes do boot');}
 
-// Gera o runtime V10.71 a partir da base V10.70 válida. O arquivo V10.71-stable.mjs antigo contém um bloco experimental inválido e não será importado.
+// Gera o runtime V10.71 a partir da base V10.70 válida, sem importar o arquivo V10.71-stable.mjs que contém um bloco experimental inválido.
 const basePath='runtime-v10.70-stable.mjs';
 const cleanPath='runtime-v10.71-stable-runtime.mjs';
 let clean=fs.readFileSync(basePath,'utf8');
-clean=clean.replace("const pagbankPath=path.join(dir,'runtime-v10.60-pagbank.mjs');","const pagbankPath=path.join(dir,'runtime-v10.71-pagbank.mjs');");
-clean=clean.replace("const pagbankPatchedPath=path.join(dir,'runtime-v10.70-pagbank-base.mjs');","const pagbankPatchedPath=path.join(dir,'runtime-v10.71-pagbank-base.mjs');");
-clean=clean.replaceAll('runtime-v10.70-pagbank-base.mjs','runtime-v10.71-pagbank-base.mjs');
-clean=clean.replaceAll('runtime-v10.70-fix-generated.mjs','runtime-v10.71-fix-generated.mjs');
 clean=clean.replaceAll('?v=1070','?v=1071');
 
 // Mantém as correções comerciais V10.71 no servidor sem criar nova versão pública.
