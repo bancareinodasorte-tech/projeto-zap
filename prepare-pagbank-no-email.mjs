@@ -23,6 +23,7 @@ fs.writeFileSync(cleanPath,clean,'utf8');
 
 await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-rds-final-rules.mjs');
+await import('./runtime-rds-campaign-cta-final.mjs');
 await import('./runtime-rds-interval-fix.mjs');
 await import('./runtime-rds-menu-refinement.mjs');
 await import('./runtime-rds-flow-hardening.mjs');
