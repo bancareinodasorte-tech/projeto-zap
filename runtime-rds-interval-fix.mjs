@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+const path='server.js';
+let server=fs.readFileSync(path,'utf8');
+const old="async function rdsSmartRules(campaignId){return {...(await rdsCampaignRules(campaignId)),interval_seconds:15,intelligent_distribution:true};}";
+const neu="async function rdsSmartRules(campaignId){const r=await rdsCampaignRules(campaignId);return {...r,interval_seconds:Math.max(15,Number(r.interval_seconds||15)),intelligent_distribution:true};}";
+if(server.includes(old))server=server.replace(old,neu);
+const old2="rdsNextGlobalSendAt=Date.now()+15000;";
+const neu2="const rr=await rdsSmartRules(d.campaign_id).catch(()=>({interval_seconds:15}));rdsNextGlobalSendAt=Date.now()+Math.max(15,Number(rr.interval_seconds||15))*1000;";
+if(server.includes(old2))server=server.replace(old2,neu2);
+fs.writeFileSync(path,server,'utf8');
+console.log('[RDS] intervalo global ajustável; mínimo 15 segundos');
