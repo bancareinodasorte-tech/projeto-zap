@@ -30,8 +30,8 @@
 - [x] Webhook de notificação.
 - [x] Validação da notificação.
 - [x] Reconciliação automática como fallback.
-- [x] Teste real em Produção executado.
-- [ ] **Liberar whitelist/homologação da API Orders em Produção — aguardando retorno do PagBank.**
+- [x] Tentativa real em Produção executada.
+- [ ] **Liberar whitelist/homologação da API Orders em Produção — formulário enviado ao PagBank; aguardando retorno por e-mail.**
 - [ ] Repetir somente o teste PIX real após a liberação.
 
 ## BLOCO 4 — Operação pós-pagamento
@@ -47,10 +47,10 @@
 - [x] Interface financeira alinhada ao PIX automático.
 - [x] Menu de pedidos reorganizado.
 - [x] Consulta e ações do pedido organizadas.
-- [ ] Refinamento visual final do painel.
-- [ ] Revisão de textos, títulos e estados.
-- [ ] Revisão mobile.
-- [ ] Revisão de Ajustes/WhatsApp sem ações destrutivas desnecessárias.
+- [x] Refinamento visual operacional do painel.
+- [x] Revisão de textos, títulos e estados principais.
+- [ ] Revisão mobile com uso real em aparelho.
+- [x] Ajustes/WhatsApp sem botão de desconexão destrutivo na tela normal.
 - [ ] Revisão final da tela de Pagamentos após homologação.
 
 ## BLOCO 6 — APK
