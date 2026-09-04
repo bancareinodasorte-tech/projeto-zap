@@ -18,10 +18,12 @@ let server=fs.readFileSync(serverPath,'utf8');
 const oldBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA/i.test(text); }";
 const newBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA|^\\s*COMPRA\\s*$/i.test(text); }";
 if(server.includes(oldBuy))server=server.replace(oldBuy,newBuy);
-const menuFunction="function rdsRouterMessageV2(settings){const bot=normalizeBR(connectedNumber||'');const buyText=encodeURIComponent('QUERO COMPRAR\\n\\nQuantidade:\\nNome:\\nCPF:');const buyLink=bot?'https://wa.me/'+bot+'?text='+buyText:'';return '🍀 *CANAL DE VENDAS RDS*\\n\\n'+'1️⃣ *COMPRAR BILHETES*'+(buyLink?'\\n👉 '+buyLink:'')+'\\n\\n2️⃣ *CONSULTAR PEDIDO*\\n3️⃣ *ALTERAR PEDIDO*\\n4️⃣ *CANCELAR PEDIDO*\\n5️⃣ *ATENDIMENTO*\\n\\nEscolha uma opção pelo número ou toque no link de *COMPRAR BILHETES*.\\n\\n🔒 Pagamentos confirmados não podem ser alterados ou cancelados pelo menu.';}";
+const menuFunction="function rdsRouterMessageV2(settings){const bot=normalizeBR(connectedNumber||'');const buyText=encodeURIComponent('COMPRAR');const buyLink=bot?'https://wa.me/'+bot+'?text='+buyText:'';return '🍀 *CANAL DE VENDAS RDS*\\n\\n'+'1️⃣ *COMPRAR BILHETES*'+(buyLink?'\\n👉 '+buyLink:'')+'\\n2️⃣ *CONSULTAR PEDIDO*\\n3️⃣ *ALTERAR PEDIDO*\\n4️⃣ *CANCELAR PEDIDO*\\n5️⃣ *ATENDIMENTO*\\n6️⃣ *OUTRAS OPÇÕES*\\n\\nEscolha uma opção pelo número.';}";
 if(!server.includes('function rdsRouterMessageV2('))server=server.replace('function isBuyRoute',menuFunction+'\nfunction isBuyRoute');
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
+// Extensão operacional existente + regras comerciais finais, sempre sem nova versão pública.
 await import('./runtime-v10.71-ops-extension-final.mjs');
+await import('./runtime-rds-final-rules.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
