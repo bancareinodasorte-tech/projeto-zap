@@ -20,6 +20,8 @@
 - [x] Cancelar pedido.
 - [x] Atendimento do escritório.
 - [x] Proteção de pedidos com pagamento confirmado.
+- [ ] Revisar em teste final a experiência do menu no WhatsApp, sem duplicar funções.
+- [ ] Validar navegação entre menu principal, opções do pedido e retorno ao menu.
 
 ## BLOCO 3 — PagBank / PIX
 - [x] Integração automática com API Order.
@@ -41,6 +43,7 @@
 - [x] Estado `CONCLUIDO`.
 - [ ] Revisão final do texto de confirmação pós-pagamento.
 - [ ] Revisão final do fluxo de envio dos bilhetes.
+- [ ] Alertas visuais para pagamento confirmado aguardando emissão.
 
 ## BLOCO 5 — Painel / layout
 - [x] Remoção do módulo PIX manual antigo.
@@ -49,9 +52,14 @@
 - [x] Consulta e ações do pedido organizadas.
 - [x] Refinamento visual operacional do painel.
 - [x] Revisão de textos, títulos e estados principais.
-- [ ] Revisão mobile com uso real em aparelho.
+- [x] Relógio com data e hora no painel.
+- [x] Indicadores de pendência nas áreas específicas.
+- [x] Alertas contextuais de espera/mudança de fluxo.
+- [x] Navegação de alerta direcionada à área responsável, sem criar módulos duplicados.
 - [x] Ajustes/WhatsApp sem botão de desconexão destrutivo na tela normal.
+- [ ] Revisão mobile com uso real em aparelho.
 - [ ] Revisão final da tela de Pagamentos após homologação.
+- [ ] Revisão final de textos e microinterações.
 
 ## BLOCO 6 — APK
 - [x] Workflow Android existente.
@@ -64,3 +72,6 @@
 
 ## REGRA DE FECHAMENTO
 Não repetir testes antigos já validados. Enquanto o PagBank estiver em homologação, avançar somente nos itens que não dependem da autorização de Produção. O teste PIX real volta apenas após o e-mail/liberação do PagBank.
+
+## REGRA DE NÃO DUPLICAÇÃO
+Cada função operacional deve ter uma área principal responsável. O WhatsApp orienta o cliente; o painel concentra a operação. Indicadores e atalhos apenas encaminham para a área responsável, sem criar uma segunda função equivalente.
