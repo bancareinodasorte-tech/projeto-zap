@@ -6,13 +6,11 @@ const old="const customerReturnWithEmail=\"const email=String(process.env.PAGBAN
 const replacement="const customerReturnWithEmail=\"return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};\";";
 if(source.includes(old)){source=source.replace(old,replacement);fs.writeFileSync(path,source,'utf8');console.log('[RDS] exigencia de email do PagBank removida antes do boot');}
 
-// Gera o runtime V10.71 a partir da base V10.70 válida, sem importar o arquivo V10.71-stable.mjs que contém um bloco experimental inválido.
 const basePath='runtime-v10.70-stable.mjs';
 const cleanPath='runtime-v10.71-stable-runtime.mjs';
 let clean=fs.readFileSync(basePath,'utf8');
 clean=clean.replaceAll('?v=1070','?v=1071');
 
-// Mantém as correções comerciais V10.71 no servidor sem criar nova versão pública.
 const serverPath='server.js';
 let server=fs.readFileSync(serverPath,'utf8');
 const oldBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA/i.test(text); }";
@@ -23,8 +21,8 @@ if(!server.includes('function rdsRouterMessageV2('))server=server.replace('funct
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
-// Extensão operacional existente + regras comerciais finais, sempre sem nova versão pública.
 await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-rds-final-rules.mjs');
 await import('./runtime-rds-interval-fix.mjs');
+await import('./runtime-rds-menu-refinement.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
