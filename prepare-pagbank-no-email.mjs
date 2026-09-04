@@ -26,4 +26,5 @@ fs.writeFileSync(cleanPath,clean,'utf8');
 // Extensão operacional existente + regras comerciais finais, sempre sem nova versão pública.
 await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-rds-final-rules.mjs');
+await import('./runtime-rds-interval-fix.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
