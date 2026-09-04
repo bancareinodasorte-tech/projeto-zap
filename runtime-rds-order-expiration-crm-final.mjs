@@ -1,40 +1,115 @@
 import fs from 'node:fs';
+
 const path='server.js';
 let s=fs.readFileSync(path,'utf8');
-const marker='// RDS ORDER EXPIRATION CRM FINAL';
-if(s.includes(marker)){console.log('[RDS] expiração/CRM final já aplicada');process.exit(0);}
+const marker='// RDS ORDER EXPIRATION CRM FINAL V2';
+if(s.includes(marker)){
+  console.log('[RDS] expiração/CRM final V2 já aplicada');
+  process.exit(0);
+}
 
-const logOld="async function logEvent(kind, payload={}){\n  try{ await insert('rds10_events',{kind,payload,created_at:nowISO()},'minimal'); }catch{}\n}";
-const logNew="async function logEvent(kind, payload={}){\n  try{\n    if(kind==='PEDIDO_DADOS_COMPLETOS' && payload?.phone){\n      const ord=payload.order?await one('rds10_orders','select=customer_name,code&code=eq.'+encodeURIComponent(payload.order)).catch(()=>null):null;\n      await saveOrMergeContact({name:payload.name||ord?.customer_name||'',phone:payload.phone,group_name:'INTERESSADOS',origin:'PEDIDO',status:'ATIVO',validated:true,force_group:true,last_seen_at:nowISO()}).catch(()=>{});\n    }\n    await insert('rds10_events',{kind,payload,created_at:nowISO()},'minimal');\n  }catch{}\n}";
-if(s.includes(logOld))s=s.replace(logOld,logNew);
+const block = String.raw`
+${marker}
 
-s=s.replace("function rdsQualifiedContact(c){const o=String(c?.origin||'').toUpperCase();const g=String(c?.group_name||'').toUpperCase();return ['MANUAL','IMPORTACAO','PEDIDO','COMPRA'].includes(o)||(!['ENTRADA WHATSAPP','NOVOS'].includes(g)&&o!=='WHATSAPP');}","function rdsQualifiedContact(c){const o=String(c?.origin||'').toUpperCase();const g=String(c?.group_name||'').toUpperCase();return ['MANUAL','IMPORTACAO','PEDIDO','COMPRA'].includes(o)||(!['ENTRADA WHATSAPP','NOVOS'].includes(g));}");
+async function rdsOrderExpirationHours(){
+  try{
+    const st=await getSettings();
+    const n=Number(st?.order_expiration_hours||3);
+    return Math.max(0.25,Math.min(168,n));
+  }catch{return 3;}
+}
 
-const oldConst="const RDS_ORDER_EXPIRATION_HOURS=Math.max(1,Number(process.env.RDS_ORDER_EXPIRATION_HOURS||process.env.ORDER_EXPIRATION_HOURS||24));\nconst RDS_ORDER_EXPIRATION_MS=RDS_ORDER_EXPIRATION_HOURS*60*60*1000;";
-const newConst="async function rdsOrderExpirationHours(){try{const st=await getSettings();const n=Number(st.order_expiration_hours||3);return Math.max(0.25,Math.min(168,n));}catch{return 3;}}";
-if(s.includes(oldConst))s=s.replace(oldConst,newConst);
-const oldFn="function rdsOrderIsExpiredV1070(order){if(!order||!['COLETANDO_DADOS','AGUARDANDO_PAGAMENTO'].includes(String(order.status||''))||!order.created_at)return false;const created=Date.parse(order.created_at);return Number.isFinite(created)&&(Date.now()-created)>=RDS_ORDER_EXPIRATION_MS;}";
-const newFn="async function rdsOrderIsExpiredV1070(order){if(!order||!['COLETANDO_DADOS','AGUARDANDO_PAGAMENTO'].includes(String(order.status||''))||!order.created_at)return false;const created=Date.parse(order.created_at);const hours=await rdsOrderExpirationHours();return Number.isFinite(created)&&(Date.now()-created)>=hours*60*60*1000;}";
-if(s.includes(oldFn))s=s.replace(oldFn,newFn);
+async function rdsEnsureInterestedContact(phone,name,lid){
+  try{
+    const p=normalizeBR(phone);
+    if(!validBRPhone(p))return;
+    const existing=await one('rds10_contacts','select=*&phone=eq.'+encodeURIComponent(p));
+    const data={name:cleanText(name)||'SEM NOME',phone:p,group_name:'INTERESSADOS',status:'ATIVO',origin:'PEDIDO',whatsapp_validated:true,validated:true,last_seen_at:nowISO(),updated_at:nowISO()};
+    if(lid)data.lid=String(lid);
+    if(existing){
+      await patch('rds10_contacts','id=eq.'+existing.id,data);
+    }else{
+      await insert('rds10_contacts',data,'minimal');
+    }
+  }catch(e){console.error('[RDS] CRM interessado:',e.message);}
+}
 
-const helper=['',marker,'async function rdsRestoreCampaignQueueAfterExpiration(phone){','  try{',"    const rows=await list('rds10_deliveries','select=id,scheduled_at,status,campaign_id,step_id,step_index,cancel_reason&phone=eq.'+encodeURIComponent(phone)+'&status=eq.CANCELADA&limit=500');',"    const eligible=rows.filter(x=>['INTERESSE','CLIENTE_EM_PEDIDO'].includes(String(x.cancel_reason||'')));",'    const now=Date.now();','    for(const d of eligible){','      const when=new Date(d.scheduled_at||now).getTime();',"      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Math.max(now,Number.isFinite(when)?when:now)).toISOString(),updated_at:nowISO()});",'    }',"    if(eligible.length)await logEvent('PEDIDO_EXPIRADO_RETORNO_FILA',{phone,count:eligible.length});",'  }catch(e){console.error(\'[RDS] retorno à fila após expiração:\',e.message);}','}'].join('\n');
-if(!s.includes('async function rdsRestoreCampaignQueueAfterExpiration'))s=s.replace('async function rdsExpireOrderV1070(order){',helper+'\nasync function rdsExpireOrderV1070(order){');
-s=s.replace("await cancelFutureDeliveries(order.phone,'PEDIDO_EXPIRADO');\nawait logEvent('PEDIDO_EXPIRADO'", "await rdsRestoreCampaignQueueAfterExpiration(order.phone);\nawait logEvent('PEDIDO_EXPIRADO'");
+async function rdsRestoreQueueAfterExpiration(phone){
+  try{
+    const p=normalizeBR(phone);
+    if(!validBRPhone(p))return;
+    const rows=await list('rds10_deliveries','select=id,scheduled_at,cancel_reason&phone=eq.'+encodeURIComponent(p)+'&status=eq.CANCELADA&limit=1000');
+    const eligible=rows.filter(d=>String(d.cancel_reason||'')==='CLIENTE_EM_PEDIDO');
+    for(const d of eligible){
+      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Math.max(Date.now(),Date.parse(d.scheduled_at||'')||0)).toISOString(),updated_at:nowISO()});
+    }
+    if(eligible.length)console.log('[RDS] fila restaurada após expiração:',eligible.length);
+  }catch(e){console.error('[RDS] fila após expiração:',e.message);}
+}
 
-if(!s.includes('const rdsExpiredReset'))s=s.replace('const rdsPendingExpiredNotice=new Map();','const rdsPendingExpiredNotice=new Map();\nconst rdsExpiredReset=new Map();');
-s=s.replace("rdsPendingExpiredNotice.set(order.phone,{code:order.code});", "rdsPendingExpiredNotice.set(order.phone,{code:order.code});\n  rdsExpiredReset.set(order.phone,{at:Date.now()});");
+async function rdsExpireOneOrder(order){
+  if(!order?.id)return false;
+  const status=String(order.status||'');
+  if(!['COLETANDO_DADOS','AGUARDANDO_PAGAMENTO'].includes(status))return false;
+  const created=Date.parse(order.created_at||'');
+  const hours=await rdsOrderExpirationHours();
+  if(!Number.isFinite(created)||Date.now()-created < hours*3600000)return false;
+  await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',updated_at:nowISO()});
+  await rdsRestoreQueueAfterExpiration(order.phone);
+  console.log('[RDS] pedido expirado:',order.code,'após',hours,'h');
+  return true;
+}
 
-const apiMarker="app.get('/api/settings',async(req,res)=>";
-if(!s.includes("app.get('/api/order-expiration',async(req,res)=>")){const pos=s.indexOf(apiMarker);if(pos>=0){const routes="app.get('/api/order-expiration',async(req,res)=>{try{res.json({hours:await rdsOrderExpirationHours(),default_hours:3});}catch(e){res.status(500).json({error:e.message});}});app.put('/api/order-expiration',async(req,res)=>{try{const hours=Math.max(0.25,Math.min(168,Number(req.body?.hours||3)));await patch('rds10_settings','id=eq.1',{order_expiration_hours:hours,updated_at:nowISO()});res.json({ok:true,hours});}catch(e){res.status(400).json({error:e.message});}});\n\n";s=s.slice(0,pos)+routes+s.slice(pos);}}
+async function rdsExpireActiveOrders(){
+  try{
+    const rows=await list('rds10_orders','select=*&status=in.(COLETANDO_DADOS,AGUARDANDO_PAGAMENTO)&order=created_at.asc&limit=500');
+    for(const order of rows)await rdsExpireOneOrder(order);
+  }catch(e){console.error('[RDS] expiração automática:',e.message);}
+}
 
-const cmdAnchor="const text=cleanText(inbound.text);const cmd=text.toLowerCase().replace(/[.]/g,'').trim();";
-const cmdBlock="const text=cleanText(inbound.text);const cmd=text.toLowerCase().replace(/[.]/g,'').trim();\n  const expiredReset=identity.phone?rdsExpiredReset.get(normalizeBR(identity.phone)):null;\n  if(expiredReset && !order){\n    rdsExpiredReset.delete(normalizeBR(identity.phone));\n    rdsPendingExpiredNotice.delete(normalizeBR(identity.phone));\n    await replyInbound(identity,rdsMainMenu(settings));\n    return;\n  }\n  if(expiredReset && order)rdsExpiredReset.delete(normalizeBR(identity.phone));\n  if(await rdsPurchaseOnlyWithoutOrder(identity,cmd))return;";
-const guardMarker='// RDS NO ACTIVE ORDER PURCHASE ONLY';
-const guardCode=['',guardMarker,'async function rdsPurchaseOnlyWithoutOrder(identity,cmd){','  if(!identity.phone)return false;','  const o=await activeOrder(identity.phone);','  if(o)return false;',"  if(['2','3','4','5','6','consultar pedido','consultar meu pedido','alterar pedido','cancelar pedido','atendimento','outras opcoes','outras opções'].includes(cmd)){await replyInbound(identity,'🛒 *COMPRAR BILHETES*\\n\\nEnvie *COMPRAR* para iniciar.');return true;}",'  return false;','}',''].join('\n');
-if(!s.includes(guardMarker))s=s.replace("const settings=await getSettings();if(!settings.bot_enabled)return;",guardCode+"\n  const settings=await getSettings();if(!settings.bot_enabled)return;");
-if(s.includes(cmdAnchor)&&!s.includes('const expiredReset=identity.phone?rdsExpiredReset.get'))s=s.replace(cmdAnchor,cmdBlock);
+app.get('/api/order-expiration',async(req,res)=>{
+  try{res.json({hours:await rdsOrderExpirationHours(),default_hours:3});}
+  catch(e){res.status(500).json({error:e.message});}
+});
 
-if(!s.includes('rdsExpireActiveOrdersTick')){const listen='app.listen(PORT,async()=>{';const tick=['async function rdsExpireActiveOrdersTick(){try{const rows=await list(\'rds10_orders\',\'select=*&status=in.(COLETANDO_DADOS,AGUARDANDO_PAGAMENTO)&order=created_at.asc&limit=500\');for(const o of rows)await rdsExpireOrderV1070(o,\'SCHEDULED_EXPIRATION\');}catch(e){console.error(\'[RDS] expiração automática:\',e.message);}}','setTimeout(()=>rdsExpireActiveOrdersTick().catch(()=>{}),15000);','setInterval(()=>rdsExpireActiveOrdersTick().catch(()=>{}),60000);'].join('\n');const p=s.indexOf(listen);if(p>=0)s=s.slice(0,p)+tick+'\n'+s.slice(p);}
+app.put('/api/order-expiration',async(req,res)=>{
+  try{
+    const hours=Math.max(0.25,Math.min(168,Number(req.body?.hours||3)));
+    const st=await one('rds10_settings','select=id&limit=1');
+    if(!st?.id)throw new Error('Configuração principal não encontrada.');
+    await patch('rds10_settings','id=eq.'+encodeURIComponent(st.id),{order_expiration_hours:hours,updated_at:nowISO()});
+    res.json({ok:true,hours});
+  }catch(e){res.status(400).json({error:e.message});}
+});
 
+const rdsOriginalHandleInboundForExpiration=handleInbound;
+handleInbound=async function(message){
+  const identity=resolveInboundIdentity(message);
+  try{
+    if(identity.phone){
+      const before=await activeOrder(identity.phone);
+      if(before)await rdsExpireOneOrder(before);
+    }
+  }catch(e){console.error('[RDS] pré-expiração inbound:',e.message);}
+  await rdsOriginalHandleInboundForExpiration(message);
+  try{
+    if(identity.phone){
+      const after=await activeOrder(identity.phone);
+      if(after && Number(after.quantity||0)>0 && cleanText(after.customer_name) && cleanText(after.customer_tax_id)){
+        await rdsEnsureInterestedContact(identity.phone,after.customer_name,identity.lid);
+      }
+    }
+  }catch(e){console.error('[RDS] CRM pós-pedido:',e.message);}
+};
+
+setTimeout(()=>rdsExpireActiveOrders().catch(()=>{}),15000);
+setInterval(()=>rdsExpireActiveOrders().catch(()=>{}),60000);
+console.log('[RDS] expiração 3h editável + CRM de interessados + retorno de fila instalados');
+`;
+
+const anchor='app.listen(PORT,async()=>{';
+const pos=s.indexOf(anchor);
+if(pos<0)throw new Error('ponto de inserção não localizado');
+s=s.slice(0,pos)+block+'\n'+s.slice(pos);
 fs.writeFileSync(path,s,'utf8');
-console.log('[RDS] expiração 3h editável + CRM interessado + retorno à fila + reset pós-expiração aplicados');
+console.log('[RDS] expiração/CRM final V2 aplicada');
