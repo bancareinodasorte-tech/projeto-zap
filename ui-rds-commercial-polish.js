@@ -24,7 +24,7 @@
     }catch{}
   }
   const badgeStyle=document.createElement('style');
-  badgeStyle.textContent='.rds-nav-return-badge{display:inline-grid!important;place-items:center!important;min-width:18px!important;height:18px!important;padding:0 5px!important;margin-left:4px!important;border-radius:999px!important;background:#c53c46!important;color:#fff!important;font-size:10px!important;font-weight:900!important;line-height:18px!important}.mobile-nav .rds-nav-return-badge{position:absolute!important;transform:translate(8px,-6px)!important}.mobile-nav button[data-page="returns"]{position:relative!important}';
+  badgeStyle.textContent='.rds-nav-return-badge{display:inline-grid!important;place-items:center!important;min-width:18px!important;height:18px!important;padding:0 5px!important;margin-left:4px!important;border-radius:999px!important;background:#c53c46!important;color:#fff!important;font-size:10px!important;font-weight:900!important;line-height:18px!important}.mobile-nav .rds-nav-return-badge{position:absolute!important;transform:translate(8px,-6px)!important}.mobile-nav button[data-page="returns"]{position:relative!important}.side-nav button[data-page="returns"]::after,.mobile-nav button[data-page="returns"]::after{content:none!important;display:none!important}';
   document.head.appendChild(badgeStyle);
   setInterval(syncReturnBadge,10000);setTimeout(syncReturnBadge,700);document.addEventListener('click',e=>{if(e.target.closest('button[data-page="returns"]'))setTimeout(syncReturnBadge,300);});
 
