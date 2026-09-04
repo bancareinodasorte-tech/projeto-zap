@@ -29,13 +29,9 @@ if(pos<0)throw new Error('app.listen não localizado para blindagem do fluxo.');
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 
 const anchor="  const order=identity.phone?await activeOrder(identity.phone):null;";
-const injection=`  const order=identity.phone?await activeOrder(identity.phone):null;\n  const pendingBuy=identity.phone?rdsPendingBuy.get(normalizeBR(identity.phone)):null;\n  if(pendingBuy && Date.now()>Number(pendingBuy.expiresAt||0))rdsPendingBuy.delete(normalizeBR(identity.phone));\n  if(pendingBuy && Date.now()<=Number(pendingBuy.expiresAt||0) && looksLikeForm(text) && !order){\n    rdsPendingBuy.delete(normalizeBR(identity.phone));\n    const created=await createOrder(normalizeBR(identity.phone),pendingBuy.campaignCode||null);\n    await cancelFutureDeliveries(normalizeBR(identity.phone),'INTERESSE');\n    await logEvent('INTERESSE',{phone:normalizeBR(identity.phone),order:created.code,campaignCode:pendingBuy.campaignCode||null,stage:'DADOS_PREENCHIDOS'});\n    return handleOrderForm(identity,created,text);\n  }`;
+const injection=`  let order=identity.phone?await activeOrder(identity.phone):null;\n  if(order && order.status==='COLETANDO_DADOS' && Number(order.quantity||0)===0 && !String(order.customer_name||'').trim() && !String(order.customer_cpf||'').trim()){\n    await rdsCancelOrderFinal(order,'PEDIDO_VAZIO_RECUPERADO');\n    order=null;\n  }\n  const pendingBuy=identity.phone?rdsPendingBuy.get(normalizeBR(identity.phone)):null;\n  if(pendingBuy && Date.now()>Number(pendingBuy.expiresAt||0))rdsPendingBuy.delete(normalizeBR(identity.phone));\n  if(pendingBuy && Date.now()<=Number(pendingBuy.expiresAt||0) && looksLikeForm(text) && !order){\n    rdsPendingBuy.delete(normalizeBR(identity.phone));\n    const created=await createOrder(normalizeBR(identity.phone),pendingBuy.campaignCode||null);\n    await cancelFutureDeliveries(normalizeBR(identity.phone),'INTERESSE');\n    await logEvent('INTERESSE',{phone:normalizeBR(identity.phone),order:created.code,campaignCode:pendingBuy.campaignCode||null,stage:'DADOS_PREENCHIDOS'});\n    return handleOrderForm(identity,created,text);\n  }`;
 if(!server.includes(anchor))throw new Error('Ponto de entrada do pedido não localizado.');
 server=server.replace(anchor,injection);
-
-const emptyGuard=`  if(order && order.status==='COLETANDO_DADOS' && Number(order.quantity||0)===0 && !String(order.customer_name||'').trim() && !String(order.customer_cpf||'').trim()){\n    await rdsCancelOrderFinal(order,'PEDIDO_VAZIO_RECUPERADO');\n  }`;
-const orderAnchor="  const pendingBuy=identity.phone?rdsPendingBuy.get(normalizeBR(identity.phone)):null;";
-if(!server.includes(emptyGuard))server=server.replace(orderAnchor,emptyGuard+'\n'+orderAnchor);
 
 server += `\n${marker}\n`;
 fs.writeFileSync(path,server,'utf8');
