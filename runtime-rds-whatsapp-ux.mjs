@@ -53,7 +53,7 @@ function rdsInteractiveFallback(kind){
 const listen='app.listen(PORT,async()=>{';
 const pos=server.indexOf(listen);
 if(pos<0)throw new Error('app.listen não localizado para UX WhatsApp.');
-server=server.slice(0,pos)+helpers+'\\n'+server.slice(pos);
+server=server.slice(0,pos)+helpers+'\n'+server.slice(pos);
 
 const oldSend=`async function sendToJid(jid, content){\n  if(!sock || !connected) throw new Error('WhatsApp não está conectado.');\n  const r = await sock.sendMessage(jid, content);`;
 const newSend=`async function sendToJid(jid, content){\n  if(!sock || !connected) throw new Error('WhatsApp não está conectado.');\n  let outgoing=content;\n  const markerText=String(content?.text||'');\n  if(markerText==='RDSUI:MAIN' || markerText==='RDSUI:OTHER'){\n    const kind=markerText==='RDSUI:MAIN'?'MAIN':'OTHER';\n    const interactive=kind==='MAIN'?rdsInteractiveMain():rdsInteractiveOther();\n    try{\n      const rInteractive=await sock.sendMessage(jid,interactive);\n      rememberMessage(rInteractive);\n      try{ await sock.sendPresenceUpdate('unavailable'); }catch{}\n      return rInteractive;\n    }catch(e){\n      outgoing={text:rdsInteractiveFallback(kind)};\n      console.warn('[RDS] menu interativo indisponível; usando fallback textual:',e.message);\n    }\n  }\n  const r = await sock.sendMessage(jid, outgoing);`;
