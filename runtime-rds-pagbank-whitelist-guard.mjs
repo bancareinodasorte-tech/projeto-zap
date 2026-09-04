@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 
-const path='server.js';
+const path='runtime-v10.60-pagbank.mjs';
 let s=fs.readFileSync(path,'utf8');
-const marker='// RDS PAGBANK WHITELIST GUARD V2';
+const marker='// RDS PAGBANK WHITELIST GUARD V3';
 if(s.includes(marker)){
-  console.log('[RDS] proteção de whitelist PagBank V2 já aplicada');
+  console.log('[RDS] proteção de whitelist PagBank V3 já aplicada');
   process.exit(0);
 }
 
@@ -28,7 +28,7 @@ function replaceFunction(src,signature,replacement){
   throw new Error('Fechamento não localizado: '+signature);
 }
 
-const replacement=String.raw`async function handleOrderForm(identity,order,text){
+const replacement=String.raw`async function handleOrderForm(identity, order, text){
   const p=parseOrderForm(text);
   const missing=[];
   if(!p.quantity||p.quantity<1)missing.push('Quantidade');
@@ -65,6 +65,6 @@ const replacement=String.raw`async function handleOrderForm(identity,order,text)
 }
 ${marker}`;
 
-s=replaceFunction(s,'async function handleOrderForm(identity,order,text)',replacement);
+s=replaceFunction(s,'async function handleOrderForm(identity, order, text)',replacement);
 fs.writeFileSync(path,s,'utf8');
-console.log('[RDS] proteção de whitelist PagBank V2 instalada');
+console.log('[RDS] proteção de whitelist PagBank V3 instalada');
