@@ -6,7 +6,7 @@ if(server.includes(marker)){console.log('[RDS] refinamento do menu já aplicado'
 
 const oldMenu=/function rdsMainMenu\(settings\)\{[\s\S]*?\n\}/;
 const newMenu=`function rdsMainMenu(settings){
-  return '🍀 *CANAL DE VENDAS RDS*\\n\\n1️⃣ 🛒 *COMPRAR BILHETES*\\n2️⃣ 🔎 *CONSULTAR PEDIDO*\\n3️⃣ 📝 *ALTERAR PEDIDO*\\n4️⃣ ❌ *CANCELAR PEDIDO*\\n5️⃣ 🏢 *ATENDIMENTO*\\n6️⃣ ⚙️ *OUTRAS OPÇÕES*\\n\\nEscolha uma opção pelo número.';
+  return 'CANAL DE VENDAS RDS\\n\\n1️⃣ COMPRAR BILHETES\\n2️⃣ CONSULTAR PEDIDO\\n3️⃣ ALTERAR PEDIDO\\n4️⃣ CANCELAR PEDIDO\\n5️⃣ ATENDIMENTO\\n6️⃣ OUTRAS OPÇÕES\\n\\nEscolha uma opção pelo número.';
 }`;
 if(!oldMenu.test(server))throw new Error('rdsMainMenu não localizado.');
 server=server.replace(oldMenu,newMenu);
@@ -27,4 +27,4 @@ if(server.includes(oldRoute))server=server.replace(oldRoute,newRoute);
 
 server += `\n${marker}\n`;
 fs.writeFileSync(path,server,'utf8');
-console.log('[RDS] menu refinado: sem link, cancelamento com duas mensagens e nova compra');
+console.log('[RDS] menu refinado: somente emojis numéricos, sem emojis nas opções');
