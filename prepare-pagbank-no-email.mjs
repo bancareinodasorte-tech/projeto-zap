@@ -31,5 +31,6 @@ await import('./runtime-rds-order-expiration-crm-final.mjs');
 await import('./runtime-rds-returns-cleanup.mjs');
 await import('./runtime-rds-whatsapp-ux.mjs');
 await import('./runtime-rds-whatsapp-ux-poll.mjs');
+await import('./runtime-rds-whatsapp-ux-native.mjs');
 await import('./runtime-rds-pagbank-whitelist-guard.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
