@@ -48,7 +48,7 @@ async function rdsGuidedFinish(identity,state){
   rdsGuidedPurchase.delete(phone);
   await cancelFutureDeliveries(phone,'INTERESSE');
   await logEvent('INTERESSE',{phone,order:created.code,campaignCode:state.campaignCode||null,stage:'DADOS_PREENCHIDOS_GUIADOS'});
-  const fresh=await one('rds10_orders','select=*&id='+created.id);
+  const fresh=await one('rds10_orders','select=*&id=eq.'+created.id);
   if(!fresh)return;
   const synthetic='Quantidade: '+state.quantity+'\nNome: '+state.name+'\nCPF: '+state.cpf;
   return handleOrderForm(identity,fresh,synthetic);
