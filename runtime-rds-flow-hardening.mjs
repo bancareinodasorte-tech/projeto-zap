@@ -37,7 +37,8 @@ async function rdsGuidedStart(identity,campaignCode=null){
   await logEvent('INTERESSE',{phone,campaignCode:campaignCode||null,stage:'COMPRA_GUIADA_INICIADA'});
   await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
   await sleep(250);
-  return replyInbound(identity,'🛒 *PREENCHA O PEDIDO*\\n\\n⚠️ *ATENÇÃO* ⚠️\\n✅ *Nome* deve ter mínimo 4 caracteres.\\n✅ *CPF* deve ser válido com 11 dígitos.');
+  await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*\\n\\n⚠️ *ATENÇÃO* ⚠️\\n✅ *Nome* deve ter mínimo 4 caracteres.\\n✅ *CPF* deve ser válido com 11 dígitos.');
+  return replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
 }
 async function rdsGuidedFinish(identity,state){
   const phone=rdsGuidedPhone(identity);
@@ -59,7 +60,6 @@ handleInbound=async function(m){
   const inbound=extractInbound(m);
   const text=cleanText(inbound.text);
   const phone=rdsGuidedPhone(identity);
-  const cmd=text.toLowerCase().replace(/[.]/g,'').trim();
 
   let state=phone?rdsGuidedPurchase.get(phone):null;
   if(state&&Date.now()>Number(state.expiresAt||0)){
@@ -95,13 +95,13 @@ handleInbound=async function(m){
       const quantity=rdsGuidedQuantity(text);
       if(!quantity)return replyInbound(identity,'❌ *QUANTIDADE INVÁLIDA*\\n\\nDigite apenas a quantidade de bilhetes que você deseja.');
       state.quantity=quantity;state.step='NOME';state.expiresAt=Date.now()+15*60*1000;
-      return replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
+      return replyInbound(identity,'👤 *DIGITE SEU NOME:* 👇');
     }
     if(state.step==='NOME'){
       const name=rdsGuidedName(text);
       if(!name)return replyInbound(identity,'❌ *NOME INVÁLIDO*\\n\\nDigite seu nome para continuar.');
       state.name=name;state.step='CPF';state.expiresAt=Date.now()+15*60*1000;
-      return replyInbound(identity,'👤 *DIGITE SEU NOME:* 👇');
+      return replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
     }
     if(state.step==='CPF'){
       const cpf=rdsGuidedCpf(text);
