@@ -3,18 +3,18 @@
   if(!app)return;
   const style=document.createElement('style');
   style.textContent=`
-    .card.table{overflow:visible!important;max-width:100%!important}
-    .rds-mobile-table-scroll{width:100%;max-width:100%;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain}
-    .rds-mobile-table-scroll>table{min-width:760px!important;width:760px!important;max-width:none!important;margin:0}
+    .rds-mobile-table-viewport{width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;display:block!important}
+    .rds-mobile-table-viewport>.card.table{width:max-content!important;min-width:100%!important;max-width:none!important;overflow:visible!important;margin:0!important}
+    .rds-mobile-table-viewport>.card.table>table{width:1000px!important;min-width:1000px!important;max-width:none!important;table-layout:auto!important}
   `;
   document.head.appendChild(style);
   const enhanceTables=()=>{
-    app.querySelectorAll('.card.table>table').forEach(table=>{
-      if(table.parentElement?.classList.contains('rds-mobile-table-scroll'))return;
+    app.querySelectorAll('.card.table').forEach(card=>{
+      if(card.parentElement?.classList.contains('rds-mobile-table-viewport'))return;
       const wrap=document.createElement('div');
-      wrap.className='rds-mobile-table-scroll';
-      table.parentNode.insertBefore(wrap,table);
-      wrap.appendChild(table);
+      wrap.className='rds-mobile-table-viewport';
+      card.parentNode.insertBefore(wrap,card);
+      wrap.appendChild(card);
     });
   };
   const closeOrderSections=()=>{
