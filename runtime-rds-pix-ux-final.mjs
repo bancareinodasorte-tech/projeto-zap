@@ -25,7 +25,6 @@ async function rdsPixUxSend(identity,order,pix){
 
   const interactive={
     interactiveMessage:{
-      header:{title:'Pagamento via PIX',hasMediaAttachment:false},
       body:{text:paymentText},
       footer:{text:'Toque no botão para copiar somente o PIX.'},
       nativeFlowMessage:{
@@ -57,6 +56,6 @@ sendPixToIdentity=rdsPixUxSend;
 const listen="app.listen(PORT,async()=>{";
 const pos=server.indexOf(listen);
 if(pos<0)throw new Error('app.listen não localizado para UX PIX.');
-server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] UX PIX aplicada: pedido recebido separado + tentativa cta_copy + fallback texto');
