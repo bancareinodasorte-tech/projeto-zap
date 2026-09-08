@@ -91,8 +91,6 @@ rdsPagBankCreatePix=rdsMercadoPagoCreatePix;
 rdsApplyPagBankResult=rdsMercadoPagoApplyResult;
 rdsPagBankWebhookValid=rdsMercadoPagoWebhookValid;
 rdsPagBankAutoReconcile=rdsMercadoPagoAutoReconcile;
-
-server=server.replace("app.get('/api/pagbank/status',(req,res)=>res.json({ok:true,configured:rdsPagBankConfigured(),environment:PAGBANK_ENV,webhook_url:PAGBANK_WEBHOOK_URL||null}));","app.get('/api/pagbank/status',(req,res)=>res.json({ok:true,configured:rdsMercadoPagoConfigured(),environment:MERCADOPAGO_ENV,provider:'mercadopago',webhook_url:(PUBLIC_URL||'')+'/api/pagbank/webhook'}));");
 `;
 
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
