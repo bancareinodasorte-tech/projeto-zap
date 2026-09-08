@@ -27,6 +27,7 @@ await import('./runtime-rds-campaign-cta-final.mjs');
 await import('./runtime-rds-interval-fix.mjs');
 await import('./runtime-rds-menu-refinement.mjs');
 await import('./runtime-rds-flow-hardening.mjs');
+await import('./runtime-rds-mercadopago-final.mjs');
 await import('./runtime-rds-pix-ux-final.mjs');
 await import('./runtime-rds-order-expiration-crm-final.mjs');
 await import('./runtime-rds-returns-cleanup.mjs');
