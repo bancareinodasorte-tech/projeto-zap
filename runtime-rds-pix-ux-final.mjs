@@ -14,10 +14,10 @@ async function rdsPixUxSend(identity,order,pix){
   const code=cleanText(pix?.qr?.text||order?.pix_copy_paste||'');
   if(!code)throw new Error('PIX sem código copia e cola.');
   const total=money(order?.total_amount);
-  await replyInbound(identity,'✅ *PEDIDO RECEBIDO*\\n🧾 N° do Pedido: '+order.code);
+  await replyInbound(identity,'✅ *PEDIDO RECEBIDO*\n🧾 N° do Pedido: '+order.code);
   await sleep(250);
 
-  const paymentText='💳 *PAGAMENTO VIA PIX*\\n\\n💰 Valor: *R$ '+total+'*\\n\\n📋 *PIX COPIA E COLA:*\\n\\n'+code+'\\n\\n⬆️ Copie o código acima e faça o pagamento.';
+  const paymentText='💳 *PAGAMENTO VIA PIX*\n\n💰 Valor: *R$ '+total+'*\n\n📋 *PIX COPIA E COLA:*\n\n'+code+'\n\n⬆️ Copie o código acima e faça o pagamento.';
   let jid=identity?.remoteJid||'';
   if(identity?.phone){
     try{jid=(await ensureTargetJid(identity.phone)).jid;}catch{}
