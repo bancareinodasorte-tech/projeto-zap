@@ -44,6 +44,9 @@
 - [x] Texto de confirmação pós-pagamento revisado e validado em teste.
 - [x] Fluxo de envio/fechamento dos bilhetes revisado e validado em teste.
 - [x] Alertas visuais para pagamento confirmado aguardando emissão.
+- [x] Rota operacional `Emitir bilhetes` adicionada às áreas de Pagamentos e Compras.
+- [ ] Vincular o destino real do sistema externo de emissão de bilhetes.
+- [ ] Validar emissão real e entrega do bilhete após o vínculo do emissor.
 
 ## BLOCO 5 — Painel / layout
 - [x] Remoção do módulo PIX manual antigo.
@@ -58,7 +61,10 @@
 - [x] Navegação de alerta direcionada à área responsável, sem criar módulos duplicados.
 - [x] Ajustes/WhatsApp sem botão de desconexão destrutivo na tela normal.
 - [x] Correção da retração instantânea das abas expansíveis.
+- [x] Cabeçalho oficial reduzido para `CANAL DE VENDAS`.
+- [x] Indicador de WhatsApp compactado para estado visual conectado/desconectado.
 - [x] Refinamento responsivo para navegador celular/PC e camada PWA.
+- [x] Aba `Sobre` criada com identidade, funcionamento e funcionalidades.
 - [x] Revisão final de textos e microinterações adicionais.
 - [ ] Revisão mobile com uso real em aparelho.
 - [ ] Revisão final da tela de Pagamentos após homologação.
@@ -66,10 +72,10 @@
 ## BLOCO 6 — APK
 - [x] Workflow Android existente.
 - [x] WebView configurada para o Canal de Vendas RDS.
-- [x] Build final V11.0 validado pelo GitHub Actions.
-- [x] APK final V11.0 gerado como artefato instalável.
+- [x] Build final V11.1 validado pelo GitHub Actions.
+- [x] APK final V11.1 gerado e estrutura validada.
 - [x] WebView reforçada para Android 15 e navegação segura.
-- [ ] Instalar APK em aparelho.
+- [ ] Instalar APK V11.1 em aparelho.
 - [ ] Testar abertura e navegação.
 - [ ] Testar comunicação com Render.
 - [ ] Fechar versão final para distribuição após teste no aparelho.
