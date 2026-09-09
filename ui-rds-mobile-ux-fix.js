@@ -17,10 +17,12 @@
       wrap.appendChild(card);
     });
   };
-  const closeOrderSections=()=>{
+  // Apenas o primeiro carregamento pode aplicar o estado inicial fechado.
+  // Não fechar novamente durante mutações evita o efeito de abrir e retrair imediatamente.
+  const closeOrderSectionsInitially=()=>{
     app.querySelectorAll('details.rds-collapse').forEach(d=>d.removeAttribute('open'));
   };
-  const refresh=()=>{enhanceTables();closeOrderSections()};
-  new MutationObserver(refresh).observe(app,{childList:true,subtree:true});
-  setTimeout(refresh,0);
+  enhanceTables();
+  closeOrderSectionsInitially();
+  new MutationObserver(enhanceTables).observe(app,{childList:true,subtree:true});
 })();
