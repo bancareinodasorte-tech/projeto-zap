@@ -57,18 +57,22 @@
 - [x] Alertas contextuais de espera/mudança de fluxo.
 - [x] Navegação de alerta direcionada à área responsável, sem criar módulos duplicados.
 - [x] Ajustes/WhatsApp sem botão de desconexão destrutivo na tela normal.
+- [x] Correção da retração instantânea das abas expansíveis.
+- [x] Refinamento responsivo para navegador celular/PC e camada PWA.
+- [x] Revisão final de textos e microinterações adicionais.
 - [ ] Revisão mobile com uso real em aparelho.
 - [ ] Revisão final da tela de Pagamentos após homologação.
-- [ ] Revisão final de textos e microinterações adicionais.
 
 ## BLOCO 6 — APK
 - [x] Workflow Android existente.
 - [x] WebView configurada para o Canal de Vendas RDS.
-- [ ] Validar build final do APK.
+- [x] Build final V11.0 validado pelo GitHub Actions.
+- [x] APK final V11.0 gerado como artefato instalável.
+- [x] WebView reforçada para Android 15 e navegação segura.
 - [ ] Instalar APK em aparelho.
 - [ ] Testar abertura e navegação.
 - [ ] Testar comunicação com Render.
-- [ ] Fechar versão final para distribuição.
+- [ ] Fechar versão final para distribuição após teste no aparelho.
 
 ## REGRA DE FECHAMENTO
 Não repetir testes antigos já validados. Enquanto a produção do provedor de pagamento não estiver disponível, avançar somente nos itens que não dependem dessa autorização. O teste PIX real volta apenas quando a produção estiver disponível.
