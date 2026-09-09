@@ -17,7 +17,7 @@ async function rdsPixUxSendV6(identity,order,pix){
 
   await sleep(250);
 
-  const paymentText='🧾 *N° do Pedido:* '+order.code+'\\n\\n💳 *DADOS PARA PAGAMENTO*\\n\\n💰 *VALOR:* R$ '+total+'\\n\\n🔑 *CHAVE PIX*\\n'+code;
+  const paymentText='🧾 *N° do Pedido:* '+order.code+'\n\n💳 *DADOS PARA PAGAMENTO*\n\n💰 *VALOR:* R$ '+total+'\n\n🔑 *CHAVE PIX*\n'+code;
   let jid=identity?.remoteJid||'';
   if(identity?.phone){
     try{jid=(await ensureTargetJid(identity.phone)).jid;}catch{}
@@ -34,9 +34,7 @@ async function rdsPixUxSendV6(identity,order,pix){
 
     const interactive={
       interactiveMessage:{
-        header:{title:'Dados para pagamento',hasMediaAttachment:false},
         body:{text:paymentText},
-        footer:{text:'Toque em COPIAR PIX para copiar somente o código.'},
         nativeFlowMessage:{
           messageParamsJson:'',
           buttons:[{
