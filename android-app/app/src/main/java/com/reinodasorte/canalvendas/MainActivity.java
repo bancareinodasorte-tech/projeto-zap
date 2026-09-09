@@ -4,9 +4,12 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -26,9 +29,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Window window = getWindow();
+        window.setStatusBarColor(0xFFFFFFFF);
+        window.setNavigationBarColor(0xFFFFFFFF);
+        if (Build.VERSION.SDK_INT >= 23) window.getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(true);
+
         webView = new WebView(this);
         webView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(webView);
+
+        if (Build.VERSION.SDK_INT >= 30) {
+            webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                view.setPadding(0, bars.top, 0, bars.bottom);
+                return insets;
+            });
+        }
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -39,7 +56,11 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setSupportZoom(false);
-        if (android.os.Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setLoadWithOverviewMode(false);
+        settings.setUseWideViewPort(false);
+        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
@@ -104,6 +125,16 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle outState) {
         webView.saveState(outState);
         super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (fileCallback != null) {
+            fileCallback.onReceiveValue(null);
+            fileCallback = null;
+        }
+        if (webView != null) webView.stopLoading();
+        super.onDestroy();
     }
 
     @Override
