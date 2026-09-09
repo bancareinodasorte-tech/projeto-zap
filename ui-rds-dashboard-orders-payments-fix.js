@@ -1,67 +1,10 @@
-(() => {
-  const rdsFetch = async (url, ms=8000) => {
-    const c = new AbortController();
-    const t = setTimeout(() => c.abort(), ms);
-    try {
-      const r = await fetch(url, {headers:{'Content-Type':'application/json'}, signal:c.signal});
-      const d = await r.json().catch(()=>({}));
-      if(!r.ok) throw new Error(d.error || 'Falha na operação');
-      return d;
-    } finally { clearTimeout(t); }
-  };
-
-  async function rdsHomeFixed(){
-    const d = await rdsFetch('/api/dashboard');
-    let contacts=[];
-    try { contacts = await rdsFetch('/api/contacts'); } catch {}
-    const activeClients = contacts.filter(c =>
-      !c.opted_out &&
-      String(c.status||'').toUpperCase() !== 'INATIVO' &&
-      /INTERESSADOS/i.test(String(c.group_name||''))
-    ).length;
-    const actions = [
-      d.proofReview ? ['Comprovantes aguardando conferência',d.proofReview,"go('orders')",'warn'] : null,
-      d.ticketsPending ? ['Pedidos aguardando envio dos bilhetes',d.ticketsPending,"go('orders')",'warn'] : null,
-      d.failed ? ['Falhas de envio para revisar',d.failed,"go('execution')",'bad'] : null,
-      d.alerts ? ['Alertas não lidos',d.alerts,"go('execution')",'warn'] : null
-    ].filter(Boolean);
-    app.innerHTML=`<div class=page-title><div><span class=eyebrow>Operação comercial</span><h1>Central de Vendas</h1><p class=mut>O que precisa de atenção agora, sem ruído.</p></div>${btn('Nova campanha',"go('campaigns')",'btn primary')}</div>
-    <div class=grid>${[
-      ['Clientes ativos',activeClients],['Campanhas',d.campaigns],['Na fila',d.queue],['Enviadas',d.sent],
-      ['Retornos',d.returns],['Pedidos',d.orders],['Compras',d.purchases],['Receita',money(d.revenue)]
-    ].map(x=>`<div class="card metric-card"><span class=eyebrow>${x[0]}</span><div class=metric>${x[1]}</div></div>`).join('')}</div>
-    <div class=action-center><div class=card><h2>Ações agora</h2><div class=priority-list>${actions.length?actions.map(a=>`<div class=priority><div><strong>${a[0]}</strong><small>${a[1]} pendência(s)</small></div>${btn('Abrir',a[2],`btn ${a[3]}`)}</div>`).join(''):'<div class=empty-state>Nenhuma pendência crítica. Operação em dia.</div>'}</div></div>
-    <div class=card><h2>Próximo disparo</h2><div class=metric>${d.nextSend?new Date(d.nextSend).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'}</div><p class=mut>${d.nextSend?dt(d.nextSend):'Nenhum envio agendado.'}</p><p>${badge(d.connected?'WHATSAPP CONECTADO':'WHATSAPP OFFLINE')}</p></div></div>`;
-  }
-
-  const previousRender = render;
-  render = async function(){
-    if(page==='home'){
-      app.innerHTML='<div class="card"><span class=mut>Carregando central...</span></div>';
-      try { return await rdsHomeFixed(); }
-      catch(e){ app.innerHTML=`<div class=card><h2>Não foi possível carregar a Central</h2><p>${esc(e.name==='AbortError'?'A operação demorou mais que o esperado. Tente novamente.':e.message)}</p></div>`; }
-      return;
-    }
-    if(page==='orders'){
-      app.innerHTML='<div class="card"><span class=mut>Carregando compras...</span></div>';
-      try {
-        if(typeof window.orders==='function') return await window.orders();
-        return await previousRender();
-      } catch(e){
-        app.innerHTML=`<div class=card><h2>Não foi possível carregar Compras</h2><p>${esc(e.name==='AbortError'?'A operação demorou mais que o esperado. Tente novamente.':e.message)}</p></div>`;
-      }
-      return;
-    }
-    if(page==='payments'){
-      app.innerHTML='<div class="card"><span class=mut>Carregando pagamentos...</span></div>';
-      try {
-        if(typeof window.paymentsPage==='function') return await window.paymentsPage();
-        return await previousRender();
-      } catch(e){
-        app.innerHTML=`<div class=card><h2>Não foi possível carregar Pagamentos</h2><p>${esc(e.name==='AbortError'?'A operação demorou mais que o esperado. Tente novamente.':e.message)}</p></div>`;
-      }
-      return;
-    }
-    return previousRender();
-  };
+(()=>{
+const F=async(u,ms=8000)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(u,{headers:{'Content-Type':'application/json'},signal:c.signal}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Falha na operação');return d}finally{clearTimeout(t)}};
+const E=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const M=v=>typeof money==='function'?money(v):`R$ ${Number(v||0).toFixed(2).replace('.',',')}`,D=v=>typeof dt==='function'?dt(v):new Date(v).toLocaleString('pt-BR'),B=v=>typeof badge==='function'?badge(v):`<span class="badge">${E(v)}</span>`,T=(t,f,c='btn')=>typeof btn==='function'?btn(t,f,c):`<button class="${c}" onclick="${f}">${E(t)}</button>`,W=p=>`https://wa.me/${String(p||'').replace(/\D/g,'')}`;
+const G=[['COLETANDO_DADOS','Em atendimento'],['AGUARDANDO_PAGAMENTO','Aguardando PIX'],['AGUARDANDO_CONFERENCIA','Conferir pagamento'],['PAGO_AGUARDANDO_BILHETES','Enviar bilhetes'],['CONCLUIDO','Concluídas'],['CANCELADO','Cancelados']];
+async function home(){const d=await F('/api/dashboard'),cs=await F('/api/contacts').catch(()=>[]),n=cs.filter(c=>!c.opted_out&&String(c.status||'').toUpperCase()!=='INATIVO'&&/INTERESSADOS/i.test(String(c.group_name||''))).length;app.innerHTML=`<div class="page-title"><div><span class="eyebrow">Operação comercial</span><h1>Central de Vendas</h1><p class="mut">O que precisa de atenção agora, sem ruído.</p></div>${T('Nova campanha',"go('campaigns')",'btn primary')}</div><div class="grid">${[['Clientes ativos',n],['Campanhas',d.campaigns],['Na fila',d.queue],['Enviadas',d.sent],['Retornos',d.returns],['Pedidos',d.orders],['Compras',d.purchases],['Receita',M(d.revenue)]].map(x=>`<div class="card metric-card"><span class="eyebrow">${x[0]}</span><div class="metric">${x[1]}</div></div>`).join('')}</div>`}
+async function orders(){const rows=await F('/api/orders');state.orders=Array.isArray(rows)?rows:[];const cs=G.map(([k,n])=>({k,n,r:state.orders.filter(o=>o.status===k)}));const active=cs.filter(x=>!['CONCLUIDO','CANCELADO'].includes(x.k)).reduce((a,x)=>a+x.r.length,0);app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Vendas</span><h1>Compras</h1><p class="rds-clean-sub">Pagamento confirmado → emissão → envio dos bilhetes → conclusão.</p></div></div><div class="rds-mini-grid"><div class="card metric-card"><span class="eyebrow">Em andamento</span><div class="metric">${active}</div></div>${cs.slice(0,3).map(x=>`<div class="card metric-card"><span class="eyebrow">${x.n}</span><div class="metric">${x.r.length}</div></div>`).join('')}</div><div class="toolbar rds-orders-toolbar"><input id="rdsOrderSearch" placeholder="Buscar pedido, cliente ou WhatsApp"><select id="rdsOrderStatus"><option value="">Todas as etapas</option>${G.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></div><div id="rdsOrdersStages">${cs.map(x=>`<details class="rds-collapse" data-status="${x.k}"><summary><span><b>${x.n}</b><small>${x.r.length} registro(s)</small></span><strong>${x.r.length}</strong></summary><div class="rds-collapse-body">${x.r.map(o=>`<div class="card rds-order-clean"><div class="rds-order-head"><div><h2>${E(o.code)}</h2><p>${E(o.customer_name||o.phone||'Cliente')} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><span class="mini">Criado: ${D(o.created_at)}</span></div>${B(x.n)}</div><div class="rds-action-row">${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}${x.k==='AGUARDANDO_PAGAMENTO'?T('Pagamentos',"go('payments')",'btn primary'):''}${x.k==='AGUARDANDO_CONFERENCIA'?T('Confirmar pagamento',`confirmPay('${o.id}')`,'btn success'):''}${x.k==='PAGO_AGUARDANDO_BILHETES'?T('Bilhetes enviados',`ticketsSent('${o.id}')`,'btn primary'):''}${!['CONCLUIDO','CANCELADO','PAGO_AGUARDANDO_BILHETES'].includes(x.k)?T('Cancelar',`cancelOrder('${o.id}')`,'btn danger'):''}</div></div>`).join('')||'<div class="empty-state">Nenhum registro nesta etapa.</div>'}</div></details>`).join('')}</div>`;const s=document.querySelector('#rdsOrderSearch'),f=document.querySelector('#rdsOrderStatus');const apply=()=>{const q=String(s?.value||'').toLowerCase().trim(),st=f?.value||'';document.querySelectorAll('#rdsOrdersStages details').forEach(d=>d.style.display=!st||d.dataset.status===st?'':'none');document.querySelectorAll('.rds-order-clean').forEach(c=>c.style.display=!q||c.textContent.toLowerCase().includes(q)?'':'none')};s?.addEventListener('input',apply);f?.addEventListener('change',apply)}
+async function payments(){const rows=await F('/api/orders');state.orders=Array.isArray(rows)?rows:[];const w=state.orders.filter(o=>o.status==='AGUARDANDO_PAGAMENTO'),p=state.orders.filter(o=>o.status==='AGUARDANDO_CONFERENCIA'),paid=state.orders.filter(o=>o.status==='PAGO_AGUARDANDO_BILHETES');app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro</span><h1>Pagamentos</h1><p class="rds-clean-sub">Gerar PIX, acompanhar pagamentos e conferir comprovantes.</p></div></div><div class="rds-mini-grid"><div class="card metric-card"><span class="eyebrow">Aguardando PIX</span><div class="metric">${w.length}</div></div><div class="card metric-card"><span class="eyebrow">Conferir pagamento</span><div class="metric">${p.length}</div></div><div class="card metric-card"><span class="eyebrow">Enviar bilhetes</span><div class="metric">${paid.length}</div></div></div><div class="rds-section card"><div class="rds-section-title"><h2>Cobranças PIX</h2></div><div class="rds-order-list">${w.map(o=>`<div class="rds-order"><div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p></div>${B('AGUARDANDO PIX')}</div><div class="rds-buttons">${T('Gerar PIX',`rdsCreatePix('${o.id}',false)`,'btn primary')}${T('Gerar e enviar no WhatsApp',`rdsCreatePix('${o.id}',true)`,'btn success')}${T('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a></div></div>`).join('')||'<div class="rds-empty">Nenhum pedido aguardando PIX.</div>'}</div></div><div class="rds-section card"><div class="rds-section-title"><h2>Comprovantes recebidos</h2></div><div class="rds-order-list">${p.map(o=>`<div class="rds-order"><div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p></div>${B('COMPROVANTE RECEBIDO')}</div><div class="rds-buttons">${T('Confirmar pagamento',`rdsApproveProof('${o.id}')`,'btn success')}${T('Rejeitar e voltar ao PIX',`rdsRejectProof('${o.id}')`,'btn danger')}</div></div>`).join('')||'<div class="rds-empty">Nenhum comprovante aguardando decisão.</div>'}</div></div>`}
+const oldRender=render;render=async function(){app.innerHTML='<div class="card"><span class="mut">Carregando...</span></div>';try{if(page==='home')return await home();if(page==='orders')return await orders();if(page==='payments')return await payments();return await oldRender()}catch(e){app.innerHTML=`<div class="card"><h2>Não foi possível carregar</h2><p>${E(e.name==='AbortError'?'A operação demorou mais que o esperado. Tente novamente.':e.message)}</p></div>`}};
 })();
