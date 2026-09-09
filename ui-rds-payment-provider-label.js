@@ -1,6 +1,6 @@
 (()=>{
   const fix=()=>{
-    const root=document.querySelector('#app');
+    const root=document.body;
     if(!root)return;
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     const nodes=[];
@@ -13,8 +13,7 @@
   };
   const start=()=>{
     fix();
-    const root=document.querySelector('#app')||document.body;
-    new MutationObserver(fix).observe(root,{childList:true,subtree:true,characterData:true});
+    new MutationObserver(fix).observe(document.body,{childList:true,subtree:true,characterData:true});
     [250,750,1500,3000,5000].forEach(ms=>setTimeout(fix,ms));
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
