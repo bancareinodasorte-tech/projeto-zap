@@ -42,7 +42,7 @@ async function rdsMercadoPagoCreatePix(order){
   const existing=rdsMercadoPagoExisting(order);if(existing)return existing;
   const total=Number(order.total_amount||0);if(!Number.isFinite(total)||total<=0)throw new Error('Valor do pedido inválido para PIX.');
   if(!MERCADOPAGO_PAYER_EMAIL||!/@/.test(MERCADOPAGO_PAYER_EMAIL))throw new Error('MERCADOPAGO_PAYER_EMAIL inválido.');
-  const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration()}]},payer:{email:MERCADOPAGO_PAYER_EMAIL}};
+  const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration()}]},payer:{email:MERCADOPAGO_PAYER_EMAIL,...(MERCADOPAGO_ENV==='sandbox'?{first_name:'APRO'}:{})}};
   const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(payload)});
   const qr=rdsMercadoPagoQR(data);if(!qr?.text)throw new Error('Mercado Pago não retornou o PIX copia e cola.');
   const createdAt=data?.created_date?new Date(data.created_date).getTime():Date.now();
