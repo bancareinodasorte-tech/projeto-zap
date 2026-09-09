@@ -14,7 +14,7 @@ async function rdsPixUxSendV7(identity,order,pix){
   const code=cleanText(pix?.qr?.text||order?.pix_copy_paste||'');
   if(!code)throw new Error('PIX sem código copia e cola.');
   const total=money(order?.total_amount);
-  const paymentText='🧾 *N° do Pedido:* '+order.code+'\\n\\n💳 *DADOS PARA PAGAMENTO*\\n\\n💰 *VALOR:* R$ '+total+'\\n\\n🔑 *CHAVE PIX*\\n'+code;
+  const paymentText='🧾 *N° do Pedido:* '+order.code+'\n\n💳 *DADOS PARA PAGAMENTO*\n\n💰 *VALOR:* R$ '+total+'\n\n🔑 *CHAVE PIX*\n'+code;
   let jid=identity?.remoteJid||'';
   if(identity?.phone){
     try{jid=(await ensureTargetJid(identity.phone)).jid;}catch{}
@@ -47,7 +47,7 @@ async function rdsPixUxSendV7(identity,order,pix){
     return fullMsg;
   }catch(e){
     console.warn('[RDS] PIX V7 nativo indisponível; usando texto:',e.message);
-    const fallback=await sendToJid(jid,{text:paymentText+'\\n\\n📋 COPIAR PIX'});
+    const fallback=await sendToJid(jid,{text:paymentText});
     await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'OUT',type:'text',body:paymentText,status:'ENVIADA',waId:fallback?.key?.id,raw:{jid,fallback:'text_v7'}});
     return fallback;
   }
