@@ -11,18 +11,25 @@
 
   function compactWhatsApp(){
     const apply=()=>{
-      ['waStatus','waStatusMobile'].forEach(id=>{const el=document.getElementById(id);if(!el)return;const txt=(el.textContent||'').toLowerCase();const on=txt.includes('conectado')&&!txt.includes('desconectado')&&!txt.includes('offline');el.classList.toggle('rds-wa-online',on);el.classList.toggle('rds-wa-offline',!on);el.setAttribute('title',on?'WhatsApp conectado':'WhatsApp desconectado');el.textContent='';});
+      ['waStatus','waStatusMobile'].forEach(id=>{
+        const el=document.getElementById(id);if(!el)return;
+        const txt=(el.textContent||'').toLowerCase();
+        const on=txt.includes('conectado')&&!txt.includes('desconectado')&&!txt.includes('offline');
+        el.classList.toggle('rds-wa-online',on);
+        el.classList.toggle('rds-wa-offline',!on);
+        el.setAttribute('title',on?'WhatsApp conectado':'WhatsApp desconectado');
+        if(el.textContent!=='')el.textContent='';
+      });
     };
     apply();
-    new MutationObserver(apply).observe(document.body,{subtree:true,childList:true,characterData:true});
     setInterval(apply,1500);
   }
   function header(){
     document.title='CANAL DE VENDAS';
-    document.querySelectorAll('.top b').forEach(x=>x.textContent='CANAL DE VENDAS');
-    document.querySelectorAll('.brand-lockup strong').forEach(x=>x.textContent='CANAL DE VENDAS');
-    document.querySelectorAll('.brand-lockup small').forEach(x=>x.textContent='Operação comercial');
-    document.querySelectorAll('.top small').forEach(x=>x.textContent='Operação comercial');
+    document.querySelectorAll('.top b').forEach(x=>{if(x.textContent!=='CANAL DE VENDAS')x.textContent='CANAL DE VENDAS';});
+    document.querySelectorAll('.brand-lockup strong').forEach(x=>{if(x.textContent!=='CANAL DE VENDAS')x.textContent='CANAL DE VENDAS';});
+    document.querySelectorAll('.brand-lockup small').forEach(x=>{if(x.textContent!=='Operação comercial')x.textContent='Operação comercial';});
+    document.querySelectorAll('.top small').forEach(x=>{if(x.textContent!=='Operação comercial')x.textContent='Operação comercial';});
   }
   function addAboutNav(){
     ['#nav','#mobileNav'].forEach(sel=>{const nav=document.querySelector(sel);if(!nav||nav.querySelector('[data-page="about"]'))return;const b=document.createElement('button');b.dataset.page='about';b.innerHTML=sel==='#nav'?'<span>ⓘ</span><b>Sobre</b>':'ⓘ<small>Sobre</small>';b.addEventListener('click',e=>{e.preventDefault();rdsAbout();});nav.appendChild(b);});
