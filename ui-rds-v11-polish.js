@@ -1,0 +1,98 @@
+(()=>{
+  const issuerKey='rds_ticket_issuer_web_url';
+  const clean=v=>String(v||'').trim();
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const dt=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
+  const getIssuer=()=>clean(localStorage.getItem(issuerKey)||'');
+  const setIssuer=v=>localStorage.setItem(issuerKey,clean(v));
+  const btn=(t,fn,cls='btn')=>`<button class="${cls}" onclick="${fn}">${t}</button>`;
+  const modal=html=>{const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><div class="row" style="justify-content:flex-end">${btn('✕',"this.closest('.modal').remove()")}</div>${html}</div>`;document.body.appendChild(m);return m};
+
+  function compactWhatsApp(){
+    const apply=()=>{
+      ['waStatus','waStatusMobile'].forEach(id=>{const el=document.getElementById(id);if(!el)return;const txt=(el.textContent||'').toLowerCase();const on=txt.includes('conectado')&&!txt.includes('desconectado')&&!txt.includes('offline');el.classList.toggle('rds-wa-online',on);el.classList.toggle('rds-wa-offline',!on);el.setAttribute('title',on?'WhatsApp conectado':'WhatsApp desconectado');el.textContent='';});
+    };
+    apply();
+    new MutationObserver(apply).observe(document.body,{subtree:true,childList:true,characterData:true});
+    setInterval(apply,1500);
+  }
+  function header(){
+    document.title='CANAL DE VENDAS';
+    document.querySelectorAll('.top b').forEach(x=>x.textContent='CANAL DE VENDAS');
+    document.querySelectorAll('.brand-lockup strong').forEach(x=>x.textContent='CANAL DE VENDAS');
+    document.querySelectorAll('.brand-lockup small').forEach(x=>x.textContent='Operação comercial');
+    document.querySelectorAll('.top small').forEach(x=>x.textContent='Operação comercial');
+  }
+  function addAboutNav(){
+    ['#nav','#mobileNav'].forEach(sel=>{const nav=document.querySelector(sel);if(!nav||nav.querySelector('[data-page="about"]'))return;const b=document.createElement('button');b.dataset.page='about';b.innerHTML=sel==='#nav'?'<span>ⓘ</span><b>Sobre</b>':'ⓘ<small>Sobre</small>';b.addEventListener('click',e=>{e.preventDefault();rdsAbout();});nav.appendChild(b);});
+  }
+  function about(){
+    const app=document.querySelector('#app');
+    app.innerHTML=`<div class="page-title"><div><span class="eyebrow">Informações do sistema</span><h1>Sobre</h1><p class="mut">Identidade, finalidade e recursos do CANAL DE VENDAS.</p></div></div>
+    <div class="grid rds-about-grid">
+      <div class="card"><span class="eyebrow">Sistema</span><h2>CANAL DE VENDAS</h2><p>Plataforma operacional para organizar clientes, campanhas, pedidos, pagamentos, atendimento e pós-venda da operação comercial.</p></div>
+      <div class="card"><span class="eyebrow">Desenvolvimento</span><h2>Tecnologia REINO DA SORTE</h2><p>Arquitetura preparada para evolução modular. A identidade visual do canal fica independente da marca, permitindo futura reutilização com outra logo e paleta.</p></div>
+      <div class="card"><span class="eyebrow">Operação</span><h2>Fluxo integrado</h2><p>WhatsApp orienta o cliente; o painel concentra a operação; o pagamento é acompanhado automaticamente; após a confirmação, o operador encaminha a emissão e a entrega dos bilhetes.</p></div>
+      <div class="card"><span class="eyebrow">Recursos</span><h2>Principais funcionalidades</h2><ul class="rds-about-list"><li>CRM e histórico comercial</li><li>Campanhas e distribuição inteligente</li><li>Pedidos e acompanhamento de pagamento</li><li>Alertas operacionais</li><li>Emissão/entrega de bilhetes por integração externa</li><li>Uso em PC, celular e Android</li></ul></div>
+      <div class="card"><span class="eyebrow">Versão</span><h2>V11 — preparação final</h2><p>Interface responsiva, PWA e aplicativo Android preparados para a mesma operação.</p></div>
+      <div class="card"><span class="eyebrow">Princípio</span><h2>Uma função, uma rota</h2><p>Cada etapa possui uma área principal. Atalhos encaminham o operador para o ponto correto sem duplicar funções.</p></div>
+    </div>`;
+  }
+  window.rdsAbout=about;
+
+  async function payments(){
+    const app=document.querySelector('#app');
+    app.innerHTML='<div class="card"><span class="mut">Carregando pagamentos...</span></div>';
+    try{
+      const orders=await fetch('/api/orders',{cache:'no-store'}).then(r=>r.json());
+      const list=Array.isArray(orders)?orders:[];
+      const counts={AGUARDANDO_PAGAMENTO:0,AGUARDANDO_CONFERENCIA:0,PAGO_AGUARDANDO_BILHETES:0,CONCLUIDO:0};
+      list.forEach(o=>{if(counts[o.status]!==undefined)counts[o.status]++});
+      const statusName={AGUARDANDO_PAGAMENTO:'Aguardando PIX',AGUARDANDO_CONFERENCIA:'Conferir pagamento',PAGO_AGUARDANDO_BILHETES:'Emitir bilhetes',CONCLUIDO:'Concluídas'};
+      app.innerHTML=`<div class="page-title"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="mut">Acompanhe o pagamento e encaminhe a emissão sem perder o pedido.</p></div></div>
+      <div class="funnel">${Object.entries(statusName).map(([k,n])=>`<div><span class="eyebrow">${n}</span><div class="metric">${counts[k]}</div></div>`).join('')}</div>
+      <div class="card"><div class="rds-section-head"><div><h2>Pedidos que exigem ação</h2><p class="mut">O botão de emissão aparece somente quando o pagamento estiver confirmado.</p></div></div>
+      ${list.filter(o=>['AGUARDANDO_PAGAMENTO','AGUARDANDO_CONFERENCIA','PAGO_AGUARDANDO_BILHETES'].includes(o.status)).map(o=>`<div class="priority rds-payment-row"><div><strong>${esc(o.code)}</strong><small>${esc(o.customer_name||o.phone)} • ${o.quantity||'—'} bilhete(s) • ${money(o.total_amount)}</small><small>${statusName[o.status]||o.status} • atualizado ${dt(o.updated_at)}</small></div><div class="row">${o.status==='AGUARDANDO_CONFERENCIA'?btn('Confirmar pagamento',`rdsConfirmPayment('${o.id}')`,'btn success'):''}${o.status==='PAGO_AGUARDANDO_BILHETES'?btn('🎟 Emitir bilhetes',`rdsEmitTickets('${o.id}')`,'btn primary'):''}</div></div>`).join('')||'<div class="empty-state">Nenhum pagamento pendente de ação.</div>'}</div>`;
+    }catch(e){app.innerHTML=`<div class="card"><h2>Pagamentos indisponíveis</h2><p>${esc(e.message||'Não foi possível carregar os pagamentos.')}</p>${btn('Tentar novamente','rdsPayments()','btn primary')}</div>`}
+  }
+  window.rdsPayments=payments;
+  window.rdsConfirmPayment=async id=>{try{const r=await fetch(`/api/orders/${id}/payment-confirmed`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha');toast(d.message||'Pagamento confirmado.');payments()}catch(e){toast(e.message)}};
+  window.rdsEmitTickets=async id=>{
+    try{
+      const orders=await fetch('/api/orders',{cache:'no-store'}).then(r=>r.json());
+      const o=(orders||[]).find(x=>x.id===id);if(!o)throw new Error('Pedido não encontrado.');
+      const base=getIssuer();
+      const params=new URLSearchParams({pedido:o.code||'',cliente:o.customer_name||'',telefone:o.phone||'',quantidade:String(o.quantity||1),valor:String(o.total_amount||0),origem:'CANAL_DE_VENDAS'});
+      if(!base){
+        modal(`<span class="eyebrow">Emissão de bilhetes</span><h2>${esc(o.code)}</h2><p>O pagamento está confirmado. O pedido está pronto para ser enviado ao emissor de bilhetes.</p><div class="card"><strong>Vínculo do emissor ainda não configurado.</strong><p class="mut">Configure a URL do site/aplicativo de vendas em <b>Ajustes → Emissor de bilhetes</b>. Depois, este botão abrirá o emissor já com os dados do pedido.</p></div><div class="row">${btn('Abrir Ajustes',"document.querySelector('.modal')?.remove();go('settings')",'btn primary')}</div>`);return;
+      }
+      const url=base+(base.includes('?')?'&':'?')+params.toString();
+      const win=window.open(url,'_blank','noopener,noreferrer');
+      if(!win) window.location.href=url;
+      modal(`<span class="eyebrow">Emissão de bilhetes</span><h2>${esc(o.code)}</h2><p>O emissor foi aberto com os dados do pedido.</p><div class="card"><strong>Depois de emitir e entregar os bilhetes:</strong><p class="mut">Volte ao CANAL DE VENDAS e finalize o pedido em <b>Bilhetes enviados</b>.</p></div><div class="row">${btn('Concluir entrega',`document.querySelector('.modal')?.remove();rdsCompleteTickets('${o.id}')`,'btn success')}</div>`);
+    }catch(e){toast(e.message)}
+  };
+  window.rdsCompleteTickets=async id=>{try{const r=await fetch(`/api/orders/${id}/tickets-sent`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao concluir');toast('Bilhetes enviados e pedido concluído.');payments()}catch(e){toast(e.message)}};
+
+  function settingsHook(){
+    const app=document.querySelector('#app');if(!app||!app.innerHTML.includes('<h1>Ajustes</h1>')||document.getElementById('rdsIssuerCard'))return;
+    const holder=document.createElement('div');holder.id='rdsIssuerCard';holder.className='card rds-issuer-card';
+    holder.innerHTML=`<span class="eyebrow">Integração operacional</span><h2>Emissor de bilhetes</h2><p class="mut">Informe a página de vendas/emissão. O CANAL DE VENDAS enviará o pedido já preenchido por URL.</p><label>URL do emissor</label><input id="rdsIssuerUrl" inputmode="url" placeholder="https://seu-emissor.exemplo/emitir" value="${esc(getIssuer())}"><p class="mini">No Android, a mesma URL poderá abrir o aplicativo de vendas quando o aplicativo estiver associado ao domínio por Android App Links. No iPhone/PC, abrirá no navegador.</p><div class="row">${btn('Salvar emissor',"rdsSaveIssuer()",'btn primary')}${getIssuer()?btn('Testar abertura',"rdsTestIssuer()",'btn'):''}</div>`;
+    app.appendChild(holder);
+  }
+  window.rdsSaveIssuer=()=>{setIssuer(document.getElementById('rdsIssuerUrl')?.value||'');toast('Emissor salvo neste dispositivo.')};
+  window.rdsTestIssuer=()=>{const u=getIssuer();if(u)window.open(u,'_blank','noopener,noreferrer')};
+  function nav(){
+    document.querySelectorAll('[data-page="payments"]').forEach(b=>b.onclick=e=>{e.preventDefault();payments()});
+    document.querySelectorAll('[data-page="about"]').forEach(b=>b.onclick=e=>{e.preventDefault();about()});
+  }
+  function boot(){
+    header();addAboutNav();nav();compactWhatsApp();
+    const obs=new MutationObserver(()=>{header();addAboutNav();nav();settingsHook()});
+    obs.observe(document.getElementById('app')||document.body,{childList:true,subtree:true});
+    setTimeout(()=>{if(document.querySelector('#app')?.textContent.includes('Carregando')){try{window.render?.()}catch{}}},8000);
+    setTimeout(()=>{if(document.querySelector('#app')?.textContent.includes('Carregando'))document.querySelector('#app').innerHTML='<div class="card"><h2>Conexão demorando mais que o esperado</h2><p class="mut">O painel não ficou pronto no tempo normal. Tente novamente sem fechar a sessão do WhatsApp.</p>'+btn('Recarregar painel','location.reload()','btn primary')+'</div>'},15000);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
