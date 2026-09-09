@@ -3,7 +3,7 @@
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
-        android:label="Canal de Vendas RDS"
+        android:label="CANAL DE VENDAS"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/AppTheme">
         <activity
