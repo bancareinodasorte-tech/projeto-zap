@@ -2,23 +2,22 @@ import fs from 'node:fs';
 
 const path='server.js';
 let server=fs.readFileSync(path,'utf8');
-const marker='// RDS PIX UX FINAL V5';
+const marker='// RDS PIX UX FINAL V6';
 if(server.includes(marker)){
-  console.log('[RDS] UX final do PIX V5 já aplicada');
+  console.log('[RDS] UX final do PIX V6 já aplicada');
   process.exit(0);
 }
 
 const block=String.raw`
 ${marker}
-async function rdsPixUxSendV5(identity,order,pix){
+async function rdsPixUxSendV6(identity,order,pix){
   const code=cleanText(pix?.qr?.text||order?.pix_copy_paste||'');
   if(!code)throw new Error('PIX sem código copia e cola.');
   const total=money(order?.total_amount);
 
-  await replyInbound(identity,'✅ *PEDIDO RECEBIDO*\n🧾 N° do Pedido: '+order.code);
   await sleep(250);
 
-  const paymentText='💳 *PAGAMENTO VIA PIX*\n\n💰 Valor: *R$ '+total+'*\n\n📋 *PIX COPIA E COLA:*\n\n'+code;
+  const paymentText='🧾 *N° do Pedido:* '+order.code+'\\n\\n💳 *DADOS PARA PAGAMENTO*\\n\\n💰 *VALOR:* R$ '+total+'\\n\\n🔑 *CHAVE PIX*\\n'+code;
   let jid=identity?.remoteJid||'';
   if(identity?.phone){
     try{jid=(await ensureTargetJid(identity.phone)).jid;}catch{}
@@ -35,7 +34,7 @@ async function rdsPixUxSendV5(identity,order,pix){
 
     const interactive={
       interactiveMessage:{
-        header:{title:'Pagamento via PIX',hasMediaAttachment:false},
+        header:{title:'Dados para pagamento',hasMediaAttachment:false},
         body:{text:paymentText},
         footer:{text:'Toque em COPIAR PIX para copiar somente o código.'},
         nativeFlowMessage:{
@@ -48,10 +47,7 @@ async function rdsPixUxSendV5(identity,order,pix){
       }
     };
 
-    const fullMsg=generateWAMessageFromContent(jid,interactive,{
-      userJid:sock?.user?.id,
-      timestamp:new Date()
-    });
+    const fullMsg=generateWAMessageFromContent(jid,interactive,{userJid:sock?.user?.id,timestamp:new Date()});
     const normalized=normalizeMessageContent(fullMsg.message);
     const nativeFlow=normalized?.interactiveMessage?.nativeFlowMessage;
     if(!nativeFlow?.buttons?.length)throw new Error('Botão cta_copy não foi serializado.');
@@ -75,23 +71,23 @@ async function rdsPixUxSendV5(identity,order,pix){
     await sock.relayMessage(jid,fullMsg.message,{messageId:fullMsg.key.id,additionalNodes});
     rememberMessage(fullMsg);
     try{ await sock.sendPresenceUpdate('unavailable'); }catch{}
-    await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'OUT',type:'text',body:paymentText,status:'ENVIADA',waId:fullMsg?.key?.id,raw:{jid,interactive:'cta_copy',relay:'native_flow_v5'}});
-    console.log('[RDS] PIX enviado com cta_copy V5: mensagem compacta');
+    await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'OUT',type:'text',body:paymentText,status:'ENVIADA',waId:fullMsg?.key?.id,raw:{jid,interactive:'cta_copy',relay:'native_flow_v6'}});
+    console.log('[RDS] PIX enviado com cta_copy V6: mensagem compacta');
     return fullMsg;
   }catch(e){
-    console.warn('[RDS] cta_copy V5 indisponível; usando PIX em texto:',e.message);
+    console.warn('[RDS] cta_copy V6 indisponível; usando PIX em texto:',e.message);
     const r=await sendToJid(jid,{text:paymentText});
-    await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'OUT',type:'text',body:paymentText,status:'ENVIADA',waId:r?.key?.id,raw:{jid,fallback:'text_v5'}});
+    await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'OUT',type:'text',body:paymentText,status:'ENVIADA',waId:r?.key?.id,raw:{jid,fallback:'text_v6'}});
     return r;
   }
 }
 
-sendPixToIdentity=rdsPixUxSendV5;
+sendPixToIdentity=rdsPixUxSendV6;
 `;
 
 const listen="app.listen(PORT,async()=>{";
 const pos=server.indexOf(listen);
-if(pos<0)throw new Error('app.listen não localizado para UX PIX V5.');
+if(pos<0)throw new Error('app.listen não localizado para UX PIX V6.');
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
-console.log('[RDS] UX PIX V5 aplicada: mensagem compacta + quebras de linha corretas');
+console.log('[RDS] UX PIX V6 aplicada: pedido + dados de pagamento + chave PIX + copiar');
