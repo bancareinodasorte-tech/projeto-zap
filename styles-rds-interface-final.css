@@ -1,0 +1,39 @@
+:root{--rds-focus:#3b82f6;--rds-radius:16px}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{min-width:0;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+button,a,input,select,textarea{touch-action:manipulation}
+button{font-family:inherit}
+.page-title{align-items:flex-start;gap:18px}.page-title>div:first-child{min-width:0}.page-title h1{line-height:1.08}.page-title .mut{max-width:760px;line-height:1.5}
+.card{border-radius:var(--rds-radius)}
+.card h2,.card h3{letter-spacing:-.02em}
+.btn{border-radius:12px;min-height:42px;font-weight:800}
+.btn:focus-visible,.side-nav button:focus-visible,.mobile-nav button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(59,130,246,.2);outline-offset:2px}
+.toolbar{align-items:center}
+label{line-height:1.4}
+.mini,.mut{line-height:1.45}
+/* Collapsible panels: stable, obvious and touch friendly. */
+details.rds-collapse,details.rds-campaign-rules,details.rds-pay-section{overflow:hidden;border-radius:14px}
+details>summary{list-style:none;user-select:none;-webkit-user-select:none;cursor:pointer;touch-action:manipulation}
+details>summary::-webkit-details-marker{display:none}
+details>summary:after{content:'⌄';display:inline-block;margin-left:10px;font-size:18px;font-weight:900;line-height:1;transition:transform .16s ease;transform:translateY(-1px)}
+details[open]>summary:after{transform:rotate(180deg) translateY(-1px)}
+.rds-collapse summary{min-height:54px;display:flex!important;align-items:center;justify-content:space-between;gap:14px;padding:12px 15px!important;background:linear-gradient(100deg,#f8fbff,#fff);border-bottom:1px solid transparent}
+.rds-collapse[open] summary{border-bottom-color:#dce6f2}
+.rds-collapse summary>span{display:flex;align-items:center;gap:9px;min-width:0}.rds-collapse summary small{font-size:11px;color:#718198;font-weight:700}.rds-collapse summary strong{min-width:30px;text-align:center;color:#0d55a5}
+.rds-collapse-body{padding:0 10px 10px}
+.rds-campaign-rules summary{min-height:48px}.rds-campaign-rules summary b{font-size:13px}.rds-campaign-rules summary span{margin-left:auto}
+.rds-pay-section summary{min-height:50px;display:flex!important;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px!important}
+/* Modal usability on phones and small notebooks. */
+.modal{padding:12px!important;overscroll-behavior:contain}
+.modal>div{width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;border-radius:18px}
+.modal .row{align-items:center}
+/* Mobile navigation remains fixed without stealing horizontal content. */
+@media(max-width:760px){
+  .sidebar{display:none!important}.workspace{width:100%;margin-left:0}.top{position:sticky;top:0;z-index:20}
+  main{width:100%;box-sizing:border-box}.page-title{display:flex;flex-direction:column}.page-title>div:last-child{width:100%}.page-title .row{width:100%}.page-title .btn{flex:1 1 auto}
+  .grid,.action-center,.funnel{grid-template-columns:1fr!important}.funnel{gap:9px}
+  .rds-collapse summary{padding:11px 12px!important}.rds-collapse-body{padding:0 6px 8px}
+  .rds-collapse .rds-order-clean{border-radius:13px}.rds-action-row{display:flex;flex-wrap:wrap;gap:8px}.rds-action-row .btn{flex:1 1 140px}
+  .modal>div{width:100%;max-height:calc(100dvh - 16px)}
+}
+@media(min-width:761px){.mobile-nav{display:none!important}}
