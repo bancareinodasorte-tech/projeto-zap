@@ -6,13 +6,13 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -25,6 +25,7 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER = 1001;
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean mainFrameError = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,6 +75,17 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 return handleUrl(Uri.parse(url));
             }
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                mainFrameError = false;
+            }
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    mainFrameError = true;
+                    showLoadError();
+                }
+            }
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
@@ -96,6 +108,13 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState == null) webView.loadUrl(APP_URL);
         else webView.restoreState(savedInstanceState);
+    }
+
+    private void showLoadError() {
+        if (webView == null) return;
+        webView.loadDataWithBaseURL(APP_URL,
+            "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:sans-serif;padding:28px;background:#f3f6fb;color:#17324d'><h2>CANAL DE VENDAS</h2><p>Não foi possível carregar o painel neste momento.</p><p>Verifique a internet e tente novamente.</p><button onclick=\"location.href='" + APP_URL + "'\" style='padding:14px 18px;border:0;border-radius:12px;background:#0b3f86;color:white;font-weight:700'>TENTAR NOVAMENTE</button></body></html>",
+            "text/html", "UTF-8", null);
     }
 
     private boolean handleUrl(Uri uri) {
