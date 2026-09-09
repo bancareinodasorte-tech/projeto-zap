@@ -20,11 +20,11 @@
 - [x] Cancelar pedido.
 - [x] Atendimento do escritório.
 - [x] Proteção de pedidos com pagamento confirmado.
-- [ ] Revisar em teste final a experiência do menu no WhatsApp, sem duplicar funções.
-- [ ] Validar navegação entre menu principal, opções do pedido e retorno ao menu.
+- [x] Revisar em teste final a experiência do menu no WhatsApp, sem duplicar funções.
+- [x] Validar navegação entre menu principal, opções do pedido e retorno ao menu.
 
-## BLOCO 3 — PagBank / PIX
-- [x] Integração automática com API Order.
+## BLOCO 3 — Mercado Pago / PIX
+- [x] Integração automática com API de Orders.
 - [x] PIX QR Code.
 - [x] PIX Copia e Cola.
 - [x] Expiração do PIX.
@@ -32,18 +32,18 @@
 - [x] Webhook de notificação.
 - [x] Validação da notificação.
 - [x] Reconciliação automática como fallback.
-- [x] Tentativa real em Produção executada.
-- [ ] **Liberar whitelist/homologação da API Orders em Produção — formulário enviado ao PagBank; aguardando retorno por e-mail.**
-- [ ] Repetir somente o teste PIX real após a liberação.
+- [x] Teste sandbox com aprovação automática concluído.
+- [x] Pagamento confirmado automaticamente e refletido no painel.
+- [ ] Repetir somente o teste PIX real após disponibilidade de produção do provedor.
 
 ## BLOCO 4 — Operação pós-pagamento
 - [x] Pedido pago fica protegido contra alteração/cancelamento.
 - [x] Estado `PAGO_AGUARDANDO_BILHETES`.
 - [x] Operador consegue concluir o envio dos bilhetes.
 - [x] Estado `CONCLUIDO`.
-- [ ] Revisão final do texto de confirmação pós-pagamento.
-- [ ] Revisão final do fluxo de envio dos bilhetes.
-- [ ] Alertas visuais para pagamento confirmado aguardando emissão.
+- [x] Texto de confirmação pós-pagamento revisado e validado em teste.
+- [x] Fluxo de envio/fechamento dos bilhetes revisado e validado em teste.
+- [x] Alertas visuais para pagamento confirmado aguardando emissão.
 
 ## BLOCO 5 — Painel / layout
 - [x] Remoção do módulo PIX manual antigo.
@@ -59,7 +59,7 @@
 - [x] Ajustes/WhatsApp sem botão de desconexão destrutivo na tela normal.
 - [ ] Revisão mobile com uso real em aparelho.
 - [ ] Revisão final da tela de Pagamentos após homologação.
-- [ ] Revisão final de textos e microinterações.
+- [ ] Revisão final de textos e microinterações adicionais.
 
 ## BLOCO 6 — APK
 - [x] Workflow Android existente.
@@ -71,7 +71,7 @@
 - [ ] Fechar versão final para distribuição.
 
 ## REGRA DE FECHAMENTO
-Não repetir testes antigos já validados. Enquanto o PagBank estiver em homologação, avançar somente nos itens que não dependem da autorização de Produção. O teste PIX real volta apenas após o e-mail/liberação do PagBank.
+Não repetir testes antigos já validados. Enquanto a produção do provedor de pagamento não estiver disponível, avançar somente nos itens que não dependem dessa autorização. O teste PIX real volta apenas quando a produção estiver disponível.
 
 ## REGRA DE NÃO DUPLICAÇÃO
 Cada função operacional deve ter uma área principal responsável. O WhatsApp orienta o cliente; o painel concentra a operação. Indicadores e atalhos apenas encaminham para a área responsável, sem criar uma segunda função equivalente.
