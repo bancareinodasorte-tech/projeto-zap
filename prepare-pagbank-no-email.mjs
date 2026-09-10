@@ -37,3 +37,4 @@ await import('./runtime-rds-orders-api-lean.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-orders-payments-safe.mjs');
 await import('./runtime-rds-pix-ux-v7.mjs');
+await import('./runtime-rds-official-sales-auth-v1.mjs');
