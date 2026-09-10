@@ -13,9 +13,28 @@
     });
   };
 
+  const nativeFetch=window.fetch.bind(window);
+  window.fetch=async function(input,init){
+    const method=String(init?.method||input?.method||'GET').toUpperCase();
+    const url=String(typeof input==='string'?input:input?.url||'');
+    const isDashboard=method==='GET'&&/\/api\/dashboard(?:\?|$)/.test(url);
+    if(!isDashboard) return nativeFetch(input,init);
+    const [dash,ret]=await Promise.all([
+      nativeFetch(input,init),
+      nativeFetch('/api/returns',{cache:'no-store'})
+    ]);
+    if(!dash.ok||!ret.ok) return dash;
+    try{
+      const data=await dash.clone().json();
+      const rows=await ret.clone().json();
+      data.returns=actionable(rows).length;
+      return new Response(JSON.stringify(data),{status:dash.status,statusText:dash.statusText,headers:{'Content-Type':'application/json'}});
+    }catch{return dash}
+  };
+
   async function syncReturnsIndicator(){
     try{
-      const rows=await fetch('/api/returns',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('returns');return r.json()});
+      const rows=await nativeFetch('/api/returns',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('returns');return r.json()});
       const n=actionable(rows).length;
       document.querySelectorAll('#nav button[data-page="returns"],#mobileNav button[data-page="returns"]').forEach(b=>{
         const badge=b.querySelector('.rds-nav-alert');
@@ -36,15 +55,6 @@
       }
       return n;
     }catch(e){return null}
-  }
-
-  const originalRender=window.render;
-  if(typeof originalRender==='function'){
-    window.render=async function(...args){
-      const result=await originalRender.apply(this,args);
-      await syncReturnsIndicator();
-      return result;
-    };
   }
 
   function navigate(p){
