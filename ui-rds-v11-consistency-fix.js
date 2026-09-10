@@ -3,7 +3,6 @@
   window.__RDS_V11_CONSISTENCY_FIX__=true;
 
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const dt=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
   let lastReturnSignature='';
   let returnBusy=false;
@@ -43,10 +42,7 @@
   function paintCentralReturnCount(count){
     document.querySelectorAll('#app .metric-card').forEach(card=>{
       const label=card.querySelector('.eyebrow')?.textContent?.trim();
-      if(label==='Retornos'){
-        const metric=card.querySelector('.metric');
-        if(metric)metric.textContent=String(count);
-      }
+      if(label==='Retornos')card.querySelector('.metric')?.replaceChildren(document.createTextNode(String(count)));
     });
   }
 
@@ -57,7 +53,7 @@
       paintCentralReturnCount(list.length);
       if(list.length===0)removeReturnAlert();
       return list;
-    }catch(e){return null}
+    }catch{return null}
   }
 
   async function syncReturns(){
@@ -80,7 +76,7 @@
       if(signature===lastReturnSignature)return;
       const app=document.querySelector('#app');
       if(!app)return;
-      app.innerHTML=`<div class="page-title"><div><span class="eyebrow">ATENDIMENTO E RETORNOS</span><h1>Retornos</h1><p class="mut">Somente retornos que realmente precisam de intervenção.</p></div></div><div class="card"><div class="rds-section-head"><div><span class="eyebrow">RETORNOS PENDENTES</span></div><strong>${list.length}</strong></div>${list.map(r=>{const o=(Array.isArray(os)?os:[]).find(x=>x.phone===r.phone&&!['CONCLUIDO','CANCELADO'].includes(x.status));return `<div class="priority"><div><strong>${esc(r.phone||'Identidade pendente')}</strong><small>${dt(r.created_at)}</small><small>${esc(r.body||`[${r.message_type||'mídia'} recebida]`)}</small></div><div class="row"><a target="_blank" href="https://wa.me/${esc(r.phone||'')}">${'<button class="btn">Abrir WhatsApp</button>'}</a>${o?'<button class="btn primary" onclick="go(\'orders\')">Abrir pedido</button>':''}</div></div>`}).join('')}</div>`;
+      app.innerHTML=`<div class="page-title"><div><span class="eyebrow">ATENDIMENTO E RETORNOS</span><h1>Retornos</h1><p class="mut">Somente retornos que realmente precisam de intervenção.</p></div></div><div class="card"><div class="rds-section-head"><div><span class="eyebrow">RETORNOS PENDENTES</span></div><strong>${list.length}</strong></div>${list.map(r=>{const o=(Array.isArray(os)?os:[]).find(x=>x.phone===r.phone&&!['CONCLUIDO','CANCELADO'].includes(x.status));return `<div class="priority"><div><strong>${esc(r.phone||'Identidade pendente')}</strong><small>${dt(r.created_at)}</small><small>${esc(r.body||`[${r.message_type||'mídia'} recebida]`)}</small></div><div class="row"><a target="_blank" href="https://wa.me/${esc(r.phone||'')}"><button class="btn">Abrir WhatsApp</button></a>${o?'<button class="btn primary" onclick="go(\'orders\')">Abrir pedido</button>':''}</div></div>`}).join('')}</div>`;
       lastReturnSignature=signature;
     }catch(e){console.warn('[RDS] consistency returns',e)}finally{returnBusy=false;}
   }
@@ -93,7 +89,7 @@
         e.preventDefault();
         e.stopImmediatePropagation();
         const p=b.dataset.page;
-        if(p==='about'&&typeof window.rdsAbout==='function'){window.go?.('about');return;}
+        if(p==='about'&&typeof window.rdsAbout==='function'){window.rdsAbout();return;}
         if(typeof window.go==='function')window.go(p);
       },true);
     });
@@ -101,6 +97,6 @@
 
   bindNavigationCapture();
   new MutationObserver(()=>{bindNavigationCapture();if(isReturnsPage())syncReturns();else syncPendingReturnIndicator();}).observe(document.body,{childList:true,subtree:true});
-  setInterval(()=>{bindNavigationCapture();syncPendingReturnIndicator();syncReturns();},2000);
+  setInterval(()=>{bindNavigationCapture();syncPendingReturnIndicator();syncReturns()},2000);
   setTimeout(()=>{syncPendingReturnIndicator();syncReturns()},250);
 })();
