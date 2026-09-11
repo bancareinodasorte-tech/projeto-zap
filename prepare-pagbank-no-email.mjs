@@ -4,7 +4,7 @@ const path='runtime-v10.60-fix.mjs';
 let source=fs.readFileSync(path,'utf8');
 const old="const customerReturnWithEmail=\"const email=String(process.env.PAGBANK_CUSTOMER_EMAIL||process.env.PAGBANK_MERCHANT_EMAIL||process.env.PAGBANK_EMAIL||'').trim();if(!email)throw new Error('PagBank exige customer.email. Configure PAGBANK_CUSTOMER_EMAIL no Render.');return {name,tax_id:tax,email,...(phone?{phones:[phone]}:{})};\";";
 const replacement="const customerReturnWithEmail=\"return {name,tax_id:tax,...(phone?{phones:[phone]}:{})};\";";
-if(source.includes(old)){source=source.replace(old,replacement);fs.writeFileSync(path,source,'utf8');console.log('[RDS] exigencia de email do PagBank removida antes do boot');}
+if(source.includes(old)){source=source.replace(old,replacement);fs.writeFileSync(path,source, 'utf8');console.log('[RDS] exigencia de email do PagBank removida antes do boot');}
 
 const basePath='runtime-v10.70-stable.mjs';
 const cleanPath='runtime-v10.71-stable-runtime.mjs';
@@ -21,8 +21,7 @@ if(!server.includes('function rdsRouterMessageV2('))server=server.replace('funct
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
-// A autenticação oficial precisa entrar no server.js ANTES do catch-all e antes da geração do runtime executável.
-await import('./runtime-rds-official-sales-auth-v2.mjs');
+// A autenticação oficial deve ser inserida antes do catch-all GET e antes da geração do runtime executável.
 await import('./runtime-rds-official-sales-auth-v3.mjs');
 await import('./runtime-rds-official-sales-diagnostics-v1.mjs');
 await import('./runtime-rds-official-sales-final-v1.mjs');
