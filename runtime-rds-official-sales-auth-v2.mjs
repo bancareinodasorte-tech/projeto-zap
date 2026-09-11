@@ -98,7 +98,7 @@ async function rdsOfficialRequestV2(endpoint,opt={}){
 }
 
 app.get('/api/v1011/official-sales/bootstrap',async(req,res)=>{
-  try{const row=await rdsOfficialEnsureDeviceV2();return res.json({configured:Boolean(RDS_OFFICIAL_EMAIL_V2&&RDS_OFFICIAL_PASSWORD_V2),deviceId:rdsOfficialDeviceIdV2,authorized:Boolean(row?.refresh_token_enc),emailConfigured:Boolean(RDS_OFFICIAL_EMAIL_V2)});}catch(e){return res.status(502).json({configured:false,authorized:false,message:String(e?.message||e)});}
+  try{const row=await rdsOfficialEnsureDeviceV2();return res.json({configured:Boolean(RDS_OFFICIAL_EMAIL_V2&&RDS_OFFICIAL_PASSWORD_V2),deviceId:rdsOfficialDeviceIdV2,authorized:Boolean(row?.refresh_token_enc),emailConfigured:Boolean(RDS_OFFICIAL_EMAIL_V2),diagnostics:{emailPresent:Boolean(RDS_OFFICIAL_EMAIL_V2),passwordPresent:Boolean(RDS_OFFICIAL_PASSWORD_V2),keyPresent:Boolean(RDS_OFFICIAL_KEY_V2),deviceRowPresent:Boolean(row?.device_id)}});}catch(e){return res.status(502).json({configured:false,authorized:false,message:String(e?.message||e)});}
 });
 app.post('/api/v1011/official-sales/authorize',async(req,res)=>{
   try{
