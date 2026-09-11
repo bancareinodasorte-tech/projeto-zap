@@ -21,8 +21,9 @@ if(!server.includes('function rdsRouterMessageV2('))server=server.replace('funct
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
-// A autenticação oficial precisa entrar no server.js ANTES da geração do runtime executável.
+// A autenticação oficial precisa entrar no server.js ANTES do catch-all e antes da geração do runtime executável.
 await import('./runtime-rds-official-sales-auth-v2.mjs');
+await import('./runtime-rds-official-sales-auth-v3.mjs');
 await import('./runtime-rds-official-sales-diagnostics-v1.mjs');
 await import('./runtime-rds-official-sales-final-v1.mjs');
 await import('./runtime-v10.71-ops-extension-final.mjs');
