@@ -5,8 +5,7 @@ let server=fs.readFileSync(path,'utf8');
 const marker='// RDS OFFICIAL SALES AUTH V3';
 if(server.includes(marker)){
   console.log('[RDS] autenticação oficial V3 já aplicada antes do catch-all');
-  process.exit(0);
-}
+} else {
 const anchor="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 const pos=server.indexOf(anchor);
 if(pos<0)throw new Error('catch-all do server.js não localizado para autenticação oficial V3.');
@@ -37,3 +36,4 @@ console.log('[RDS] autenticação oficial V3 instalada antes do catch-all');
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] autenticação oficial V3 instalada antes do catch-all');
+}
