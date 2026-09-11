@@ -21,6 +21,8 @@ if(!server.includes('function rdsRouterMessageV2('))server=server.replace('funct
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
+// A autenticação oficial precisa alterar o server.js ANTES de qualquer runtime que possa iniciar o servidor.
+await import('./runtime-rds-official-sales-auth-v2.mjs');
 await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-rds-final-rules.mjs');
 await import('./runtime-rds-campaign-cta-final.mjs');
@@ -37,4 +39,3 @@ await import('./runtime-rds-orders-api-lean.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-orders-payments-safe.mjs');
 await import('./runtime-rds-pix-ux-v7.mjs');
-await import('./runtime-rds-official-sales-auth-v2.mjs');
