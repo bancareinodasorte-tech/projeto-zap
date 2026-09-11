@@ -24,6 +24,7 @@ fs.writeFileSync(cleanPath,clean,'utf8');
 // A autenticação oficial precisa entrar no server.js ANTES da geração do runtime executável.
 await import('./runtime-rds-official-sales-auth-v2.mjs');
 await import('./runtime-rds-official-sales-diagnostics-v1.mjs');
+await import('./runtime-rds-official-sales-final-v1.mjs');
 await import('./runtime-v10.71-ops-extension-final.mjs');
 await import('./runtime-rds-final-rules.mjs');
 await import('./runtime-rds-campaign-cta-final.mjs');
