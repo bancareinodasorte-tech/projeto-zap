@@ -6,14 +6,13 @@
   const drawOf=o=>o?.data||o||{};
   const modal=html=>{const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><div class="row" style="justify-content:flex-end"><button class="btn" onclick="this.closest('.modal').remove()">✕</button></div>${html}</div>`;document.body.appendChild(m);return m;};
   const toastSafe=m=>{try{toast(m)}catch{alert(m)}};
-  async function jsonFetch(url,opt={}){const r=await fetch(url,{cache:'no-store',...opt});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Falha na operação.');return d;}
+  async function jsonFetch(url,opt={}){const r=await fetch(url,{cache:'no-store',...opt});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;}
   async function officialStatus(){return jsonFetch('/api/v1011/official-sales/status');}
   async function officialBootstrap(){return jsonFetch('/api/v1011/official-sales/bootstrap');}
   async function officialDraw(){const d=await jsonFetch('/api/v1011/official-sales/draw-info');if(d.success===false)throw new Error(d.message||'Falha ao consultar o sorteio oficial.');return drawOf(d.data);}
   async function renderOfficialCard(){
     const app=document.querySelector('#app');
     if(!app||!app.innerHTML.includes('<h1>Ajustes</h1>'))return;
-    // Não recria o cartão a cada mutação do DOM. Isso evita loop de MutationObserver e travamentos.
     let card=document.getElementById('rdsOfficialSalesCard');
     if(card)return;
     const old=document.getElementById('rdsIssuerCard');if(old)old.style.display='none';
@@ -34,14 +33,8 @@
   window.rdsOfficialAuthorizeDevice=()=>{const m=modal('<span class="eyebrow">AUTORIZAÇÃO DO SERVIDOR</span><h2>Autorizar dispositivo</h2><p>O código deve ser gerado pelo administrador do sistema oficial para este dispositivo.</p><label class="input-label">Código de autorização</label><input id="rdsOfficialAuthCode" class="input-field" placeholder="Ex: 240131173045-A3F9K2" autocomplete="off"/><div class="row" style="margin-top:12px"><button class="btn primary" onclick="rdsOfficialSubmitAuthorization()">Autorizar</button></div><p id="rdsOfficialAuthMsg" class="mut"></p>');m.querySelector('#rdsOfficialAuthCode')?.focus();};
   window.rdsOfficialSubmitAuthorization=async()=>{const input=document.getElementById('rdsOfficialAuthCode'),msg=document.getElementById('rdsOfficialAuthMsg'),code=clean(input?.value);if(!code){if(msg)msg.textContent='Digite o código de autorização.';return;}if(msg)msg.textContent='Autorizando dispositivo...';try{await jsonFetch('/api/v1011/official-sales/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({authorizationCode:code})});document.querySelector('.modal')?.remove();toastSafe('🟢 Dispositivo oficial autorizado com sucesso.');rdsOfficialRefreshSettings();}catch(e){if(msg)msg.textContent=e.message||'Código inválido ou expirado.';}};
   window.rdsOfficialRefreshSettings=()=>{document.getElementById('rdsOfficialSalesCard')?.remove();renderOfficialCard();};
+  window.rdsCompleteTickets=async id=>{try{const result=await jsonFetch(`/api/orders/${encodeURIComponent(id)}/tickets-sent`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'REINO_DA_SORTE_OFICIAL'})});toastSafe('🟢 Entrega concluída. Pedido finalizado.');try{if(typeof render==='function')await render();}catch{}return result;}catch(e){toastSafe(e.message||'Não foi possível concluir a entrega.');throw e;}};
   window.rdsEmitTickets=async id=>{try{const orders=await fetch('/api/orders',{cache:'no-store'}).then(r=>r.json());const o=(orders||[]).find(x=>x.id===id);if(!o)throw new Error('Pedido não encontrado.');const quantity=Math.max(1,Number(o.quantity||1)),customerName=clean(o.customer_name||o.name||''),customerPhone=clean(o.phone||o.contact_phone||o.customer_phone||'');if(!customerName)throw new Error('O pedido não possui nome do cliente.');if(!customerPhone)throw new Error('O pedido não possui telefone do cliente.');const m=modal('<span class="eyebrow">EMISSÃO OFICIAL</span><h2>'+esc(o.code)+'</h2><p>Pedido pago. Emitindo no sistema oficial REINO DA SORTE.</p><div class="card"><strong>Cliente:</strong> '+esc(customerName)+'<br><strong>Quantidade:</strong> '+quantity+' bloco(s)<br><strong>Total:</strong> '+money(o.total_amount)+'</div><p class="mut">A numeração será definida exclusivamente pelo sistema oficial.</p>');const r=await fetch('/api/v1011/official-sales/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName,customerPhone,quantityBooklets:quantity,paymentMethod:'pix',lotNumber:1})});const d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw new Error(d.message||'O sistema oficial recusou a emissão.');const sale=d.data||{},b=Array.isArray(sale.booklets)?sale.booklets:[],allTickets=b.flatMap(x=>Array.isArray(x.tickets)?x.tickets:[]),summary=b.map(x=>String(x.bookletNumber).padStart(4,'0')+'-'+String(x.lotNumber??1)).join(', ');m.querySelector('div').insertAdjacentHTML('beforeend',`<div class="card"><strong>🟢 EMISSÃO OFICIAL CONCLUÍDA</strong><p class="mut">Venda ${esc(sale.saleId||'—')} • ${esc(summary||'bloco emitido')} • ${allTickets.length} número(s)</p><p class="mut">Os números vieram diretamente da API oficial.</p><div class="row"><button class="btn success" onclick="document.querySelector('.modal')?.remove();rdsCompleteTickets('${esc(id)}')">Concluir entrega</button></div></div>`);}catch(e){document.querySelector('.modal')?.remove();toastSafe(e.message||'Falha na emissão oficial.');}};
-  function boot(){
-    renderOfficialCard();
-    const app=document.getElementById('app');
-    if(!app)return;
-    let queued=false;
-    const obs=new MutationObserver(()=>{if(queued)return;queued=true;setTimeout(()=>{queued=false;renderOfficialCard();},100);});
-    obs.observe(app,{childList:true,subtree:true});
-  }
+  function boot(){renderOfficialCard();const app=document.getElementById('app');if(!app)return;let queued=false;const obs=new MutationObserver(()=>{if(queued)return;queued=true;setTimeout(()=>{queued=false;renderOfficialCard();},100);});obs.observe(app,{childList:true,subtree:true});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
