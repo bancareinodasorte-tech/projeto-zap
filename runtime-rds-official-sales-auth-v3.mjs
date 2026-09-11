@@ -10,7 +10,7 @@ const anchor="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 const pos=server.indexOf(anchor);
 if(pos<0)throw new Error('catch-all do server.js não localizado para autenticação oficial V3.');
 const block=String.raw`
-{
+(()=>{
 ${marker}
 var RDS_OFFICIAL_API_V3='https://api.reinodasorte.com.br';
 var RDS_OFFICIAL_EMAIL_V3=String(process.env.RDS_OFFICIAL_EMAIL||'').trim();
@@ -32,7 +32,7 @@ app.post('/api/v1011/official-sales/authorize',async(req,res)=>{try{if(!RDS_OFFI
 app.get('/api/v1011/official-sales/status',async(req,res)=>{try{await rdsOfficialDeviceV3();var me=await rdsOfficialRequestV3('/auth/me');return res.json({configured:true,authenticated:true,seller:me||null,deviceId:rdsOfficialDeviceV3.value});}catch(e){var row=await rdsOfficialRowV3().catch(()=>null);return res.status(502).json({configured:Boolean(RDS_OFFICIAL_EMAIL_V3&&RDS_OFFICIAL_PASSWORD_V3),authenticated:false,authorized:Boolean(row?.refresh_token_enc),deviceId:rdsOfficialDeviceV3.value||row?.device_id||null,message:String(e?.message||e)});}});
 app.get('/api/v1011/official-sales/draw-info',async(req,res)=>{try{return res.json({success:true,data:await rdsOfficialRequestV3('/seller/draw-info')});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
 app.post('/api/v1011/official-sales/issue',async(req,res)=>{try{var b=req.body||{},customerName=String(b.customerName||'').trim(),customerPhone=String(b.customerPhone||'').trim(),quantityBooklets=Math.max(1,Math.floor(Number(b.quantityBooklets||0)));if(customerName.length<2)throw new Error('Nome do cliente inválido.');if(!customerPhone)throw new Error('Telefone do cliente não informado.');var draw=await rdsOfficialRequestV3('/seller/draw-info');if(!draw||draw.isDrawClosed)throw new Error('O sorteio oficial está encerrado ou indisponível.');if(Number(draw.totalBooklets||0)<quantityBooklets)throw new Error('Quantidade solicitada maior que a disponibilidade oficial.');var sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:draw.drawId,customerName,customerPhone,quantityBooklets,lotNumber:Math.max(1,Math.floor(Number(b.lotNumber||1))),paymentMethod:String(b.paymentMethod||'pix').trim().toLowerCase()})});return res.status(201).json({success:true,data:sale});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
-}
+})();
 `;
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
