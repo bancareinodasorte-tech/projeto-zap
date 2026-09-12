@@ -74,9 +74,10 @@
    try{
      const d=await flowStatus();
      const fp=fingerprint(d);
-     if(!lastOpsFingerprint){lastOpsFingerprint=fp;return;}
-     if(fp!==lastOpsFingerprint){lastOpsFingerprint=fp;await render();}
+     if(!lastOpsFingerprint){lastOpsFingerprint=fp;return}
+     if(fp!==lastOpsFingerprint){lastOpsFingerprint=fp;await render()}
    }catch{}
  },4000);
- window.addEventListener('focus',()=>{if(['home','payments','orders'].includes(page))render().catch(()=>{})});
+ // Removido o refresh automático no evento focus: ele chamava o render legado
+ // ao voltar do segundo plano e provocava o flash da interface antiga.
 })();
