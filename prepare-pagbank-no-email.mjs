@@ -21,7 +21,7 @@ if(!server.includes('function rdsRouterMessageV2('))server=server.replace('funct
 fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
-// A autenticação oficial deve ser inserida antes do catch-all GET e antes da geração do runtime executável.
+// Camadas que alteram server.js precisam ser aplicadas antes da geração do runtime executável.
 await import('./runtime-rds-official-sales-auth-v3.mjs');
 await import('./runtime-rds-official-sales-diagnostics-v1.mjs');
 await import('./runtime-rds-official-sales-final-v1.mjs');
@@ -38,7 +38,7 @@ await import('./runtime-rds-returns-cleanup.mjs');
 await import('./runtime-rds-pagbank-whitelist-guard.mjs');
 await import('./runtime-rds-mercadopago-reconcile-auto.mjs');
 await import('./runtime-rds-orders-api-lean.mjs');
-await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-orders-payments-safe.mjs');
 await import('./runtime-rds-admin-delete-v1.mjs');
+await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-pix-ux-v7.mjs');
