@@ -1,13 +1,13 @@
 (()=>{
-  if(window.__RDS_SAFE_NAV_V1__) return;
-  window.__RDS_SAFE_NAV_V1__=true;
+  if(window.__RDS_SAFE_NAV_V2__) return;
+  window.__RDS_SAFE_NAV_V2__=true;
 
   const PREMIUM=new Set(['home','contacts','returns','settings']);
   const app=()=>document.querySelector('#app');
   const setActive=p=>document.querySelectorAll('#nav button,#mobileNav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
 
   const css=document.createElement('style');
-  css.textContent='#app.rds-safe-pending{visibility:hidden!important}';
+  css.textContent=`#app.rds-safe-pending{visibility:hidden!important}.top>div:first-child{min-width:0!important}.top>div:first-child b{white-space:nowrap!important;font-size:14px!important}.top #waStatusMobile{min-width:42px!important;width:auto!important;padding:5px 9px!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important}`;
   document.head.appendChild(css);
 
   function hide(){app()?.classList.add('rds-safe-pending')}
@@ -23,6 +23,16 @@
         return;
       }
       return originalGo.apply(this,arguments);
+    };
+  }
+
+  const originalRender=window.render;
+  if(typeof originalRender==='function'){
+    window.render=function(){
+      try{
+        if(window.__RDS_PREMIUM_V12__ && typeof page!=='undefined' && PREMIUM.has(page) && app()?.querySelector('.rds-p12')) return Promise.resolve();
+      }catch{}
+      return originalRender.apply(this,arguments);
     };
   }
 
