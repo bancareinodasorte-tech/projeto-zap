@@ -7,7 +7,7 @@
   const setActive=p=>document.querySelectorAll('#nav button,#mobileNav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
 
   const css=document.createElement('style');
-  css.textContent=`#app.rds-safe-pending{visibility:hidden!important}.top>div:first-child{min-width:0!important}.top>div:first-child b{white-space:nowrap!important;font-size:14px!important}.top #waStatusMobile{min-width:42px!important;width:auto!important;padding:5px 9px!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important}`;
+  css.textContent=`#app.rds-safe-pending{visibility:hidden!important}.top>div:first-child{min-width:0!important;flex:1 1 auto!important}.top>div:first-child b{white-space:nowrap!important;font-size:13px!important;overflow:visible!important;text-overflow:clip!important}.top>div:first-child small{white-space:nowrap!important}.top-actions{flex:0 0 auto!important;min-width:0!important}.top-actions #clock{white-space:nowrap!important;font-size:10px!important}.top #waStatusMobile{min-width:42px!important;width:auto!important;padding:5px 9px!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important}`;
   document.head.appendChild(css);
 
   function hide(){app()?.classList.add('rds-safe-pending')}
@@ -35,6 +35,16 @@
       return originalRender.apply(this,arguments);
     };
   }
+
+  // Impede somente o render legado disparado pelo retorno ao primeiro plano.
+  // Isso preserva os demais eventos de foco da aplicação.
+  window.addEventListener('focus',e=>{
+    try{
+      if(window.__RDS_PREMIUM_V12__ && typeof page!=='undefined' && PREMIUM.has(page)){
+        e.stopImmediatePropagation();
+      }
+    }catch{}
+  },true);
 
   const observer=new MutationObserver(showIfPremium);
   const root=app();
