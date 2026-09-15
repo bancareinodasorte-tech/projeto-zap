@@ -4,9 +4,10 @@ const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'B
 const clean=v=>String(v??'').trim();
 const json=async(u,o={})=>{const r=await fetch(u,{cache:'no-store',...o});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;};
 let rendering=false;
+function isSettingsPage(){return !!document.querySelector('#nav button.active[data-page="settings"],#mobileNav button.active[data-page="settings"]');}
 async function card(){
   const app=document.querySelector('#app');
-  if(!app||!app.innerHTML.includes('<h1>Ajustes</h1>'))return;
+  if(!app||!isSettingsPage())return;
   if(document.getElementById('rdsOfficialSalesCard'))return;
   if(rendering)return;
   rendering=true;
