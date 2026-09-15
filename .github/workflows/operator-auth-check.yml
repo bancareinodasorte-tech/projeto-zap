@@ -14,10 +14,10 @@ jobs:
       - name: Validate operator runtime
         run: |
           cp server.js /tmp/rds-server.js
-          cp runtime-rds-operator-auth-v1.mjs /tmp/runtime-rds-operator-auth-v1.mjs
+          cp runtime-rds-operator-auth-v2.mjs /tmp/runtime-rds-operator-auth-v2.mjs
           cp runtime-rds-operator-pages-v1.mjs /tmp/runtime-rds-operator-pages-v1.mjs
           cd /tmp
-          node -e "require('fs').copyFileSync('rds-server.js','server.js'); import('./runtime-rds-operator-auth-v1.mjs').then(()=>import('./runtime-rds-operator-pages-v1.mjs')).then(()=>{require('fs').copyFileSync('server.js','/tmp/generated-server.js')}).catch(e=>{console.error(e);process.exit(1)})"
+          node -e "require('fs').copyFileSync('rds-server.js','server.js'); import('./runtime-rds-operator-auth-v2.mjs').then(()=>import('./runtime-rds-operator-pages-v1.mjs')).then(()=>{require('fs').copyFileSync('server.js','/tmp/generated-server.js')}).catch(e=>{console.error(e);process.exit(1)})"
           node --check /tmp/generated-server.js
       - name: Validate frontend scripts
         run: |
