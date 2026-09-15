@@ -7,11 +7,9 @@ if(server.includes(marker)){
   console.log('[RDS] exclusão administrativa segura já aplicada');
   process.exit(0);
 }
-
 const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 const pos=server.indexOf(catchAll);
 if(pos<0)throw new Error('catch-all GET não localizado para exclusão administrativa.');
-
 const block=`${marker}
 app.post('/api/contacts/bulk-delete',async(req,res)=>{
   try{
@@ -21,7 +19,7 @@ app.post('/api/contacts/bulk-delete',async(req,res)=>{
     if(!password||password!==expected)return res.status(403).json({error:'Senha administrativa incorreta.'});
     const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String).filter(Boolean))]:[];
     if(!ids.length)return res.status(400).json({error:'Nenhum cliente selecionado.'});
-    for(const id of ids)await del('rds10_contacts',`id=eq.${encodeURIComponent(id)}`);
+    for(const id of ids)await del('rds10_contacts','id=eq.'+encodeURIComponent(id));
     res.json({ok:true,deleted:ids.length});
   }catch(e){res.status(400).json({error:e.message});}
 });
