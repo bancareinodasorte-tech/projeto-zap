@@ -16,7 +16,7 @@ function cors(req,res){
   if(allowed.includes(origin))res.setHeader('Access-Control-Allow-Origin',origin);
   res.setHeader('Vary','Origin');
   res.setHeader('Access-Control-Allow-Methods','GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  res.setHeader('Access-Control-Allow-Headers','Content-Type, Accept');res.setHeader('Cache-Control','no-store');
 }
 app.options('/api/v1/central-pro/:resource',(req,res)=>{cors(req,res);res.status(204).end();});
 app.get('/api/v1/central-pro/official-draw',async(req,res)=>{
@@ -33,8 +33,7 @@ app.get('/api/v1/central-pro/official-draw',async(req,res)=>{
       pricePerTicket:x.pricePerTicket??x.ticketPrice??null,
       totalBooklets:x.totalBooklets??null,
       availableBooklets:x.availableBooklets??null,
-      isDrawClosed:Boolean(x.isDrawClosed),
-      rawSafe:x
+      isDrawClosed:Boolean(x.isDrawClosed)
     }});
   }catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}
 });
