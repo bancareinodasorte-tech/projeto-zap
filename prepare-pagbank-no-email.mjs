@@ -22,6 +22,7 @@ fs.writeFileSync(serverPath,server,'utf8');
 fs.writeFileSync(cleanPath,clean,'utf8');
 
 await import('./runtime-rds-official-sales-auth-v3.mjs');
+await import('./runtime-rds-central-pro-bridge-v1.mjs');
 await import('./runtime-rds-official-sales-diagnostics-v1.mjs');
 await import('./runtime-rds-official-sales-final-v1.mjs');
 await import('./runtime-v10.71-ops-extension-final.mjs');
