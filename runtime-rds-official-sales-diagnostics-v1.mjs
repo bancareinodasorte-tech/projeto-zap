@@ -37,7 +37,13 @@ setTimeout(async()=>{
     const row=await one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc,last_auth_at,last_error&id=eq.main');
     console.log('[RDS] OFICIAL DIAG V1 email='+d.emailPresent+' password='+d.passwordPresent+' key='+d.encryptionKeyPresent+' deviceEnv='+d.deviceIdEnvPresent+' deviceRow='+Boolean(row)+' deviceStored='+Boolean(String(row?.device_id||'').trim())+' authorized='+Boolean(row?.refresh_token_enc)+' lastAuth='+(row?.last_auth_at||'-')+' lastError='+(row?.last_error?'PRESENT':'-'));
   }catch(e){console.warn('[RDS] OFICIAL DIAG V1 falhou:',e?.message||e);}
-},4000);
+  try{
+    const base='http://127.0.0.1:'+(process.env.PORT||10000);
+    const rr=await fetch(base+'/api/v1/central-pro/official-draw?t='+Date.now(),{headers:{Accept:'application/json'}});
+    const dd=await rr.json().catch(()=>({}));
+    console.log('[RDS] CENTRAL PRO SELFTEST status='+rr.status+' success='+Boolean(dd?.success)+' drawId='+(dd?.data?.drawId||'-')+' title='+(dd?.data?.drawTitle||'-')+' price='+(dd?.data?.pricePerTicket??'-')+' available='+(dd?.data?.availableBooklets??dd?.data?.totalBooklets??'-')+' message='+(dd?.message||'-'));
+  }catch(e){console.warn('[RDS] CENTRAL PRO SELFTEST falhou:',e?.message||e);}
+},6000);
 `;
 
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
