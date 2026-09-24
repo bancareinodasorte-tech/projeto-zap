@@ -1,9 +1,10 @@
 (()=>{
   const TOKEN_KEY='rds_operator_token';
   const deviceKey='rds_operator_device_id';
+  const platform=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'')?'web_mobile':'web_pc';
   const $=s=>document.querySelector(s);
   const esc=v=>String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
-  const deviceId=()=>{let v=localStorage.getItem(deviceKey);if(!v){v='web_'+crypto.randomUUID();localStorage.setItem(deviceKey,v);}return v;};
+  const deviceId=()=>{let v=localStorage.getItem(deviceKey);if(!v){v=platform()+'_'+crypto.randomUUID();localStorage.setItem(deviceKey,v);}return v;};
   const phone=v=>{let n=String(v||'').replace(/\D/g,'');if(n.startsWith('00'))n=n.slice(2);if(!n.startsWith('55'))n='55'+n;return n;};
   const token=()=>localStorage.getItem(TOKEN_KEY)||'';
   async function api(url,opt={}){
@@ -51,7 +52,7 @@
     </div>`;document.body.appendChild(d);
     $('#rdsAuthForm').onsubmit=async e=>{
       e.preventDefault();const msg=$('#rdsAuthMsg');msg.className='auth-msg';msg.textContent='Autenticando...';
-      try{const d=await api('/api/operator/login',{method:'POST',body:JSON.stringify({phone:phone($('#rdsAuthPhone').value),password:$('#rdsAuthPassword').value,platform:'web',deviceId:deviceId()})});if(d.token)localStorage.setItem(TOKEN_KEY,d.token);msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Carregando painel...';setTimeout(()=>{d.remove();location.reload();},250);}catch(err){msg.className='auth-msg bad';msg.textContent=err.message;}
+      try{const d=await api('/api/operator/login',{method:'POST',body:JSON.stringify({phone:phone($('#rdsAuthPhone').value),password:$('#rdsAuthPassword').value,platform:platform(),deviceId:deviceId()})});if(d.token)localStorage.setItem(TOKEN_KEY,d.token);msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Carregando painel...';setTimeout(()=>{d.remove();location.reload();},250);}catch(err){msg.className='auth-msg bad';msg.textContent=err.message;}
     };
     $('#rdsAuthRegister').onclick=()=>{location.href='/operador';};
   }
