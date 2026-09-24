@@ -4,7 +4,7 @@
 
   window.paymentsPage=async function(){
     const [ordersList,pb]=await Promise.all([
-      api('/api/orders'),
+      api('/api/operator/orders'),
       api('/api/pagbank/status').catch(()=>({configured:false,environment:'sandbox'}))
     ]);
     state.orders=ordersList;
@@ -33,7 +33,7 @@
 
   window.rdsCreatePix=async function(id,send){
     try{
-      const o=state.orders.find(x=>x.id===id)||await api('/api/orders').then(xs=>xs.find(x=>x.id===id));
+      const o=state.orders.find(x=>x.id===id)||await api('/api/operator/orders').then(xs=>(xs.orders||xs).find(x=>x.id===id));
       if(!o)throw new Error('Pedido não encontrado.');
       const r=await post(send?`/api/pagbank/orders/${id}/send-pix`:`/api/pagbank/orders/${id}/pix`,{});
       const code=r?.qr?.text||o.pix_copy_paste||'';
@@ -53,6 +53,6 @@
     try{await navigator.clipboard.writeText(t);toast('PIX copiado.')}catch{const el=document.querySelector('#rdsPixCode');el.select();document.execCommand('copy');toast('PIX copiado.')}
   };
 
-  window.rdsApproveProof=async function(id){if(!confirm('Confirmar este pagamento manualmente?'))return;try{await post(`/api/orders/${id}/payment-confirmed`);toast('Pagamento confirmado.');go('orders')}catch(e){showError(e)}};
-  window.rdsRejectProof=async function(id){if(!confirm('Rejeitar o comprovante e voltar ao PIX?'))return;try{await post(`/api/orders/${id}/proof-rejected`,{notify:true});toast('Comprovante rejeitado.');setTimeout(()=>go('payments'),250)}catch(e){showError(e)}};
+  window.rdsApproveProof=async function(id){if(!confirm('Confirmar este pagamento manualmente?'))return;try{await post(`/api/operator/orders/${id}/payment-confirmed`);toast('Pagamento confirmado.');go('orders')}catch(e){showError(e)}};
+  window.rdsRejectProof=async function(id){if(!confirm('Rejeitar o comprovante e voltar ao PIX?'))return;try{await post(`/api/operator/orders/${id}/proof-rejected`,{notify:true});toast('Comprovante rejeitado.');setTimeout(()=>go('payments'),250)}catch(e){showError(e)}};
 })();
