@@ -1,0 +1,26 @@
+import fs from 'node:fs';
+const path='server.js';
+let server=fs.readFileSync(path,'utf8');
+const marker='// RDS ADMIN RECOVERY V1';
+if(server.includes(marker)){console.log('[RDS] admin recovery já aplicado');process.exit(0);}
+const ca="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const pos=server.indexOf(ca); if(pos<0)throw new Error('catch-all não localizado.');
+const block=`
+${marker}
+const RDS_ADMIN_EMAIL=String(process.env.RDS_OPERATOR_ADMIN_EMAIL||'bancareinodasorte@gmail.com').trim().toLowerCase();
+const RDS_ADMIN_FROM=String(process.env.RDS_ADMIN_EMAIL_FROM||'onboarding@resend.dev').trim();
+const RDS_ADMIN_BASE_URL=String(process.env.RDS_PUBLIC_BASE_URL||'https://projeto-zap-4tyg.onrender.com').replace(/\\/+$/,'');
+function rdsAdminTokenHash(t){return crypto.createHash('sha256').update(String(t)).digest('hex');}
+async function rdsAdminRow(){return await one('rds10_admin','select=id,email,password_hash,password_salt&email=eq.'+encodeURIComponent(RDS_ADMIN_EMAIL));}
+async function rdsAdminBootstrap(){let a=await rdsAdminRow();if(a)return a;const seed=String(process.env.RDS_OPERATOR_ADMIN_PASSWORD||'').trim();if(!seed)throw new Error('Senha administrativa inicial não configurada.');const p=rdsOpNewHash(seed);const rows=await insert('rds10_admin',{email:RDS_ADMIN_EMAIL,password_hash:p.hash,password_salt:p.salt,created_at:nowISO(),updated_at:nowISO()});return rows?.[0]||await rdsAdminRow();}
+async function rdsAdminAuth(req){const provided=String(req.headers['x-rds-admin-password']||'');if(!provided)return false;const a=await rdsAdminBootstrap();const h=rdsOpHash(provided,a.password_salt),b=String(a.password_hash||'');return h.length===b.length&&crypto.timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(b,'hex'));}
+async function rdsAdminSendReset(to,link){const key=String(process.env.RDS_RESEND_API_KEY||'').trim();if(!key)throw new Error('Recuperação por e-mail não configurada: falta RDS_RESEND_API_KEY.');const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({from:RDS_ADMIN_FROM,to:[to],subject:'REINO DA SORTE — Recuperação do acesso administrativo',html:'<h2>CANAL DE VENDAS RDS</h2><p>Foi solicitada a recuperação da senha administrativa.</p><p><a href="'+link+'">RECUPERAR SENHA</a></p><p>O link expira em 30 minutos e só pode ser usado uma vez.</p>'})});const body=await rr.json().catch(()=>({}));if(!rr.ok)throw new Error(body?.message||body?.error||'Falha ao enviar e-mail.');}
+server=server.replaceAll("if(!rdsOpAdmin(req))return res.status(403).json({success:false,error:'Acesso administrativo não autorizado.'});","if(!(await rdsAdminAuth(req)))return res.status(403).json({success:false,error:'Acesso administrativo não autorizado.'});");
+app.post('/api/operator/admin/forgot-password',async(req,res)=>{try{const email=String(req.body?.email||'').trim().toLowerCase(),a=await rdsAdminBootstrap();if(email!==a.email)return res.json({success:true,message:'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.'});await patch('rds10_admin_reset_tokens','admin_id=eq.'+a.id+'&used_at=is.null',{used_at:nowISO()}).catch(()=>{});const token=crypto.randomBytes(32).toString('base64url');await insert('rds10_admin_reset_tokens',{admin_id:a.id,token_hash:rdsAdminTokenHash(token),expires_at:new Date(Date.now()+1800000).toISOString(),created_at:nowISO()});await rdsAdminSendReset(a.email,RDS_ADMIN_BASE_URL+'/admin-recuperar?token='+encodeURIComponent(token));return res.json({success:true,message:'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.'});}catch(e){return res.status(500).json({success:false,error:String(e?.message||e)});}});
+app.post('/api/operator/admin/reset-password',async(req,res)=>{try{const token=String(req.body?.token||'').trim(),password=String(req.body?.password||'');if(token.length<20)throw new Error('Link de recuperação inválido.');if(password.length<8)throw new Error('A nova senha deve ter pelo menos 8 caracteres.');const t=await one('rds10_admin_reset_tokens','select=id,admin_id,expires_at&token_hash=eq.'+encodeURIComponent(rdsAdminTokenHash(token))+'&used_at=is.null');if(!t||new Date(t.expires_at).getTime()<=Date.now())throw new Error('Link expirado ou já utilizado.');const p=rdsOpNewHash(password),rows=await patch('rds10_admin','id=eq.'+t.admin_id,{password_hash:p.hash,password_salt:p.salt,updated_at:nowISO()});if(!rows?.[0])throw new Error('Administrador não encontrado.');await patch('rds10_admin_reset_tokens','id=eq.'+t.id,{used_at:nowISO()});return res.json({success:true,message:'Senha administrativa alterada com sucesso.'});}catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}});
+app.get('/admin-recuperar',(req,res)=>res.sendFile(__dirname+'/admin-recuperar.html'));
+console.log('[RDS] recuperação administrativa V1 instalada');
+`;
+server=server.slice(0,pos)+block+'\n'+server.slice(pos);
+fs.writeFileSync(path,server,'utf8');
+console.log('[RDS] recuperação administrativa V1 instalada');
