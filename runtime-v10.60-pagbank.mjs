@@ -230,7 +230,7 @@ async function rdsApplyPagBankResult(order,data,source){
   if(['DECLINED','CANCELED','EXPIRED'].includes(status)){patchData.payment_last_error='PagBank status '+status;await patch('rds10_orders','id=eq.'+order.id,patchData);return false;}
   await patch('rds10_orders','id=eq.'+order.id,patchData);return false;
 }
-const const RDS_PAGBANK_TENANT_GUARD='V1';
+const RDS_PAGBANK_TENANT_GUARD='V1';
 async function rdsPagBankTenantOrder(req,id){if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');const s=await rdsOpSession(req);if(!s)throw new Error('Sessão do vendedor inválida ou expirada.');const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(id)+'&seller_id=eq.'+encodeURIComponent(s.seller.id));if(!o)throw new Error('Pedido não encontrado para este vendedor.');return o;}
 app.get('/api/pagbank/status',(req,res)=>res.json({ok:true,configured:rdsPagBankConfigured(),environment:PAGBANK_ENV,webhook_url:PAGBANK_WEBHOOK_URL||null}));
 app.post('/api/pagbank/orders/:id/pix',async(req,res)=>{try{const o=await rdsPagBankTenantOrder(req,req.params.id);if(req.body?.customer_tax_id){const tax=digits(req.body.customer_tax_id);if(!validCPF(tax))throw new Error('CPF inválido.');await patch('rds10_orders','id=eq.'+o.id,{customer_tax_id:tax,updated_at:nowISO()});}const fresh=await one('rds10_orders','select=*&id=eq.'+o.id);const pix=await rdsPagBankCreatePix(fresh);res.json({ok:true,...pix});}catch(e){res.status(400).json({ok:false,error:e.message});}});
