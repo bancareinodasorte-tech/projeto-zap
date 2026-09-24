@@ -13,6 +13,20 @@ clean=clean.replaceAll('?v=1070','?v=1071');
 
 const serverPath='server.js';
 let server=fs.readFileSync(serverPath,'utf8');
+const ticketClosureMarker='// RDS TICKET CLOSURE V1';
+let ticketServer=fs.readFileSync('server.js','utf8');
+if(!ticketServer.includes(ticketClosureMarker)){
+  const oldSelect="function tenantOrderSelect(){return 'id,code,seller_id,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,tickets_sent_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,pagbank_order_id,pagbank_charge_id,pagbank_status,pix_copy_paste,pix_qr_code_url,pix_expires_at,payment_method,payment_created_at,payment_updated_at,payment_last_error';}";
+  const newSelect="function tenantOrderSelect(){return 'id,code,seller_id,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,pagbank_order_id,pagbank_charge_id,pagbank_status,pix_copy_paste,pix_qr_code_url,pix_expires_at,payment_method,payment_created_at,payment_updated_at,payment_last_error';}";
+  if(ticketServer.includes(oldSelect))ticketServer=ticketServer.replace(oldSelect,newSelect);
+  const oldPatch="{status:'CONCLUIDO',tickets_sent_at:nowISO(),completed_at:nowISO(),updated_at:nowISO()}";
+  const newPatch="{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO()}";
+  if(ticketServer.includes(oldPatch))ticketServer=ticketServer.replace(oldPatch,newPatch);
+  ticketServer=ticketClosureMarker+'\\n'+ticketServer;
+  fs.writeFileSync('server.js',ticketServer,'utf8');
+  console.log('[RDS] fechamento de bilhetes V1 aplicado sem alterar a sessão oficial ou WhatsApp');
+}
+
 const oldBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA/i.test(text); }";
 const newBuy="function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\\s*COMPRAR|COMPRE\\s*AGORA|^\\s*COMPRA\\s*$/i.test(text); }";
 if(server.includes(oldBuy))server=server.replace(oldBuy,newBuy);
