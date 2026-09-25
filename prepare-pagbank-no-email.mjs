@@ -57,6 +57,7 @@ await import('./runtime-rds-operator-pages-v1.mjs');
 await import('./runtime-rds-seller-recovery-v1.mjs');
 await import('./runtime-rds-admin-users-v1.mjs');
 await import('./runtime-rds-tenant-sales-v1.mjs');
+await import('./runtime-rds-whatsapp-meta-cloud-v1.mjs');
 await import('./runtime-rds-whatsapp-pairing-v1.mjs');
 await import('./runtime-rds-whatsapp-panel-v1.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
