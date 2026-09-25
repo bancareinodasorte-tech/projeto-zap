@@ -35,7 +35,7 @@ async function commandHome(){
   '</div></div><div class="rds-panel"><div class="rds-panel-head"><div><span class="eyebrow">Fluxo de vendas</span><h2>Status do funil</h2></div></div><div class="rds-funnel">'+
   funnel.map(x=>{const n=os.filter(o=>o.status===x[1]).length;return '<button onclick="go(\''+x[2]+'\')"><span>'+x[0]+'</span><b>'+n+'</b></button>'}).join('')+
   '</div></div></section>'+
-  '<section class="rds-command-grid"><div class="rds-panel"><div class="rds-panel-head"><div><span class="eyebrow">Vendas recentes</span><h2>Últimos pedidos</h2></div>'+B('Ver compras',"go('orders)")+'</div><div class="rds-recent-list">'+
+  '<section class="rds-command-grid"><div class="rds-panel"><div class="rds-panel-head"><div><span class="eyebrow">Vendas recentes</span><h2>Últimos pedidos</h2></div>'+B('Ver compras',"go('orders')")+'</div><div class="rds-recent-list">'+
   (recent.length?recent.map(o=>'<button onclick="go(\'orders\')"><span class="rds-avatar">'+E((o.customer_name||o.phone||'?').slice(0,1).toUpperCase())+'</span><span class="rds-recent-main"><b>'+E(o.customer_name||o.phone||'Cliente')+'</b><small>'+E(o.code||'Pedido')+' • '+(o.quantity||0)+' bilhete(s)</small></span><span class="rds-recent-right"><b>'+M(o.total_amount)+'</b><small>'+E(o.status||'—')+'</small></span></button>').join(''):'<div class="rds-empty">Nenhum pedido encontrado.</div>')+
   '</div></div><div class="rds-panel"><div class="rds-panel-head"><div><span class="eyebrow">Indicadores</span><h2>Operação</h2></div></div>'+
   [['Campanhas',d.campaigns],['Na fila',d.queue],['Enviadas',d.sent],['Retornos',d.returns],['Falhas',d.failed]].map(x=>'<div class="rds-stat-row"><span>'+x[0]+'</span><b class="'+(x[0]==='Falhas'&&x[1]?'rds-danger':'')+'">'+x[1]+'</b></div>').join('')+
