@@ -1,0 +1,23 @@
+/* RDS STABILITY V1 — camada visual final, sem alterar regras de negócio */
+@media(max-width:760px){
+  body{padding-bottom:78px!important}
+  main{padding:18px 12px calc(92px + env(safe-area-inset-bottom))!important}
+  .top{height:68px!important;padding:0 12px!important}
+  .top-actions{gap:7px!important}
+  .grid{grid-template-columns:1fr 1fr!important;gap:10px!important}
+  .grid .metric-card{margin:0!important;padding:14px!important;min-height:104px;display:flex;flex-direction:column;justify-content:center}
+  .grid .metric-card .metric{font-size:25px!important;margin-top:5px!important}
+  .grid .metric-card .eyebrow{font-size:9px!important;line-height:1.25}
+  .page-title,.rds-clean-head{margin-bottom:16px!important}
+  .page-title h1,.rds-clean-head h1{font-size:25px!important}
+  .page-title .mut,.rds-clean-sub{font-size:14px!important;line-height:1.4!important}
+  .card{border-radius:16px!important}
+  .mobile-nav{display:flex!important;overflow:hidden!important;padding:6px 3px calc(6px + env(safe-area-inset-bottom))!important;gap:2px!important}
+  .mobile-nav button{min-width:0!important;flex:1 1 0!important;width:12.5%!important;padding:7px 1px!important;font-size:16px!important}
+  .mobile-nav small{font-size:8px!important;font-weight:850!important}
+}
+@media(min-width:761px){
+  .mobile-nav{display:none!important}
+}
+.rds-stability-banner{border:1px solid #cfe0f5;background:linear-gradient(135deg,#fafdff,#eef6ff);border-radius:16px;padding:14px 16px;margin:0 0 16px;box-shadow:0 8px 24px rgba(9,45,94,.05)}
+.rds-stability-banner strong{color:#0b3f86}
