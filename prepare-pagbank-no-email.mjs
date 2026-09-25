@@ -55,6 +55,7 @@ await import('./runtime-rds-admin-delete-v1.mjs');
 await import('./runtime-rds-operator-auth-v2.mjs');
 await import('./runtime-rds-operator-pages-v1.mjs');
 await import('./runtime-rds-seller-recovery-v1.mjs');
+await import('./runtime-rds-admin-users-v1.mjs');
 await import('./runtime-rds-tenant-sales-v1.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-orders-payments-safe.mjs');
