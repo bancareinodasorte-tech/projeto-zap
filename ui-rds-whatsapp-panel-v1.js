@@ -11,7 +11,7 @@ function statusCard(d){
 }
 function shell(d){
  app.innerHTML='<section class="rds-wa-app">'+
- '<header class="rds-wa-top"><div><span class="eyebrow">ATENDIMENTO</span><h1>WhatsApp</h1><p>Converse com seus clientes pelo número conectado ao CANAL DE VENDAS RDS.</p></div><span class="rds-wa-state '+(d.connected?'on':'off')+'">● '+(d.connected?'Conectado':'Desconectado')+'</span></header>'+
+ '<header class="rds-wa-top"><div><span class="eyebrow">ATENDIMENTO</span><h1>WhatsApp</h1><p>Converse com seus clientes pelo número conectado ao CANAL DE VENDAS RDS.</p></div><span class="rds-wa-state '+((d.meta||{}).connected?'on':'off')+'">● '+(((d.meta||{}).connected)?'Conectado':'Aguardando conexão oficial')+'</span></header>'+
  '<div id="rdsWaStatus">'+statusCard(d)+'</div><div id="rdsWaPairBox"></div>'+
  '<div class="rds-wa-layout">'+
  '<aside class="rds-wa-list"><div class="rds-wa-list-head"><b>Conversas</b><span id="rdsWaCount"></span></div><div class="rds-wa-search"><span>⌕</span><input id="rdsWaSearch" placeholder="Pesquisar nome ou número..."></div><div id="rdsWaChats"></div></aside>'+
