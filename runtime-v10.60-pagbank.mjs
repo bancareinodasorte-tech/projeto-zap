@@ -184,7 +184,7 @@ async function rdsPagBankCreatePix(order){
   const customer=rdsPagBankCustomer(order);
   const expiration=new Date(Date.now()+PAGBANK_PIX_EXPIRATION_MINUTES*60000).toISOString();
   const reference=String(order.code||('RDS-'+order.id)).slice(0,64);
-  const payload={reference_id:reference,customer,items:[{reference_id:reference,name:'Bilhetes Reino da Sorte - '+reference,quantity:Number(order.quantity||1),unit_amount:Math.round(cents/Math.max(1,Number(order.quantity||1)))}],charges:[{reference_id:(reference+'-PIX').slice(0,64),description:('Pagamento '+reference).slice(0,100),amount:{value:cents,currency:'BRL'},payment_method:{type:'PIX',pix:{expiration_date:expiration}}}]};
+  const payload={reference_id:reference,customer,items:[{reference_id:reference,name:'Bilhetes Reino da Sorte - '+reference,quantity:1,unit_amount:cents}],charges:[{reference_id:(reference+'-PIX').slice(0,64),description:('Pagamento '+reference).slice(0,100),amount:{value:cents,currency:'BRL'},payment_method:{type:'PIX',pix:{expiration_date:expiration}}}]};
   if(PAGBANK_WEBHOOK_URL)payload.notification_urls=[PAGBANK_WEBHOOK_URL];
   const idem='rds-pix-'+String(order.id)+'-'+String(order.updated_at||'').replace(/\\D/g,'').slice(-20);
   const data=await rdsPagBankRequest('/orders',{method:'POST',headers:{'x-idempotency-key':idem.slice(0,200)},body:JSON.stringify(payload)});
@@ -199,7 +199,7 @@ async function sendPixToIdentity(identity,order,pix){
   const code=pix?.qr?.text||order?.pix_copy_paste;if(!code)return;
   const caption='💳 PAGAMENTO PIX\\nPedido '+order.code+'\\nValor: R$ '+money(order.total_amount)+'\\n\\nEscaneie o QR Code abaixo ou use o PIX Copia e Cola.';
   try{
-    const jid=ensureTargetJid(identity.phone||order.phone);
+    const jid=(await ensureTargetJid(identity.phone||order.phone)).jid;
     const image=await QRCode.toBuffer(code,{type:'png',width:700,margin:2});
     await sock.sendMessage(jid,{image,caption});
     await logMessage({phone:identity.phone||order.phone,direction:'OUT',type:'image',body:caption,status:'ENVIADA',waId:null,raw:{order:order.code,pagbank_order_id:pix.orderId}});
