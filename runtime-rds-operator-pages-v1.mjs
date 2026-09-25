@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-await import('./runtime-rds-admin-auth-v1.mjs');
+await import('./runtime-rds-admin-auth-v2.mjs');
 const path='server.js';
 let server=fs.readFileSync(path,'utf8');
 const marker='// RDS OPERATOR PAGES V1';
