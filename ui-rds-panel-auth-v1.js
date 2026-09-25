@@ -4,7 +4,7 @@
   const platform=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'')?'web_mobile':'web_pc';
   const $=s=>document.querySelector(s);
   const esc=v=>String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
-  const deviceId=()=>{let v=localStorage.getItem(deviceKey);if(!v){v=platform()+'_'+crypto.randomUUID();localStorage.setItem(deviceKey,v);}return v;};
+  const deviceId=()=>{let v='';try{v=localStorage.getItem(deviceKey)||'';}catch{}if(!v){let uid='';try{if(globalThis.crypto?.randomUUID)uid=globalThis.crypto.randomUUID();else if(globalThis.crypto?.getRandomValues){const a=new Uint32Array(4);globalThis.crypto.getRandomValues(a);uid=Array.from(a).map(x=>x.toString(16)).join('');}}catch{}if(!uid)uid=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);v=platform()+'_'+uid;try{localStorage.setItem(deviceKey,v);}catch{}}return v;};
   const phone=v=>{let n=String(v||'').replace(/\D/g,'');if(n.startsWith('00'))n=n.slice(2);if(!n.startsWith('55'))n='55'+n;return n;};
   const token=()=>localStorage.getItem(TOKEN_KEY)||'';
   async function api(url,opt={}){
