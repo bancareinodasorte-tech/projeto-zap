@@ -34,8 +34,8 @@ ${marker}
      const phone=normalizeBR(req.params.phone);if(!validBRPhone(phone))throw new Error('WhatsApp inválido.');
      const c=await one('rds10_contacts','select=id,name,phone,group_name,validated,city,tags&phone=eq.'+encodeURIComponent(phone));
      const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&phone=eq.'+encodeURIComponent(phone)+'&order=created_at.asc&limit=500');
-     res.json({connected,number:connectedNumber,contact:c||{name:phone,phone},messages});
-   }catch(e){res.status(400).json({error:e.message});}
+     res.json({ok:true,connected,number:connectedNumber,contact:c||{name:phone,phone},messages});
+   }catch(e){console.error('[RDS WA PANEL] chat:',e.message);res.status(400).json({ok:false,error:e.message});}
  });
  app.post('/api/whatsapp/chat/:phone/send',async(req,res)=>{
    try{
