@@ -8,6 +8,8 @@ const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 const pos=server.indexOf(catchAll);
 if(pos<0)throw new Error('catch-all não localizado para admin auth.');
 
+server=server.replaceAll("if(!rdsOpAdmin(req))return res.status(403).json({success:false,error:'Acesso administrativo não autorizado.'});","if(!(await rdsAdminRequire(req,res)))return;");
+
 const block=String.raw`// RDS ADMIN AUTH V1
 const RDS_ADMIN_EMAIL=String(process.env.RDS_OPERATOR_ADMIN_EMAIL||'bancareinodasorte@gmail.com').trim().toLowerCase();
 const RDS_ADMIN_SESSION_DAYS=Math.max(1,Math.min(90,Number(process.env.RDS_ADMIN_SESSION_DAYS||30)));
@@ -39,8 +41,6 @@ async function rdsAdminSession(req){
 }
 async function rdsAdminRequire(req,res){const s=await rdsAdminSession(req);if(!s){res.status(401).json({success:false,error:'Sessão administrativa inválida, expirada ou encerrada.'});return null;}return s;}
 function rdsAdminPublic(a){return {id:a.id,email:a.email,createdAt:a.created_at,updatedAt:a.updated_at};}
-server=server.replaceAll("if(!rdsOpAdmin(req))return res.status(403).json({success:false,error:'Acesso administrativo não autorizado.'});","if(!(await rdsAdminRequire(req,res)))return;");
-
 app.post('/api/operator/admin/login',async(req,res)=>{try{
  const email=String(req.body?.email||'').trim().toLowerCase(),password=String(req.body?.password||'');
  if(!email||!password)throw new Error('Informe e-mail e senha.');
