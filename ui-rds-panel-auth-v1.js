@@ -52,7 +52,7 @@
     </div>`;document.body.appendChild(d);
     $('#rdsAuthForm').onsubmit=async e=>{
       e.preventDefault();const msg=$('#rdsAuthMsg');msg.className='auth-msg';msg.textContent='Autenticando...';
-      try{const d=await api('/api/operator/login',{method:'POST',body:JSON.stringify({phone:phone($('#rdsAuthPhone').value),password:$('#rdsAuthPassword').value,platform:platform(),deviceId:deviceId()})});if(d.token)localStorage.setItem(TOKEN_KEY,d.token);msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Carregando painel...';setTimeout(()=>{d.remove();location.reload();},250);}catch(err){msg.className='auth-msg bad';msg.textContent=err.message;}
+      try{const d=await api('/api/operator/login',{method:'POST',body:JSON.stringify({phone:phone($('#rdsAuthPhone').value),password:$('#rdsAuthPassword').value,platform:platform(),deviceId:deviceId()})});if(d.token)localStorage.setItem(TOKEN_KEY,d.token);msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Carregando painel...';setTimeout(()=>{document.getElementById('rdsAuthGate')?.remove();location.reload();},250);}catch(err){msg.className='auth-msg bad';msg.textContent=err.message;}
     };
     $('#rdsAuthRegister').onclick=()=>{location.href='/operador';};
   }
