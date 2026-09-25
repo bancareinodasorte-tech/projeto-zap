@@ -25,6 +25,7 @@ const block=String.raw`
  const META_APP_SECRET=String(process.env.META_APP_SECRET||'').trim();
  const META_APP_ID=String(process.env.META_APP_ID||'').trim();
  const META_CONFIG_ID=String(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID||'').trim();
+ const META_WABA_ID=String(process.env.META_WHATSAPP_WABA_ID||process.env.WHATSAPP_WABA_ID||'').trim();
  const META_API='https://graph.facebook.com/'+META_GRAPH_VERSION;
 
  function metaConfigured(){return Boolean(META_ACCESS_TOKEN&&META_PHONE_NUMBER_ID);}
@@ -112,7 +113,8 @@ const block=String.raw`
      webhookPath:'/api/whatsapp/meta/webhook',
      appId:META_APP_ID||null,
      configId:META_CONFIG_ID||null,
-     phoneNumberId:META_PHONE_NUMBER_ID||null
+     phoneNumberId:META_PHONE_NUMBER_ID||null,
+     wabaId:META_WABA_ID||null
    });
  });
  app.get('/api/whatsapp/meta/status',async(req,res)=>{
@@ -161,6 +163,40 @@ const block=String.raw`
      const waId=data?.messages?.[0]?.id||'';
      await insert('rds10_messages',{phone,direction:'OUT',message_type:'text',body,status:'SENT',wa_message_id:waId||null,created_at:nowISO()});
      res.json({ok:true,provider:'meta_cloud',id:waId,data});
+   }catch(e){res.status(400).json({ok:false,error:e.message});}
+ });
+ app.post('/api/whatsapp/meta/verification/request',async(req,res)=>{
+   try{
+     const s=metaTenant(req,res);if(!s)return;
+     if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
+     const method=String(req.body?.method||'SMS').toUpperCase();
+     if(!['SMS','VOICE'].includes(method))throw new Error('Método inválido. Use SMS ou VOICE.');
+     const data=await metaFetch('/'+encodeURIComponent(META_PHONE_NUMBER_ID)+'/request_code',{method:'POST',body:JSON.stringify({code_method:method,locale:'pt_BR'})});
+     res.json({ok:true,success:Boolean(data?.success??true),method});
+   }catch(e){res.status(400).json({ok:false,error:e.message});}
+ });
+ app.post('/api/whatsapp/meta/verification/verify',async(req,res)=>{
+   try{
+     const s=metaTenant(req,res);if(!s)return;
+     if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
+     const code=String(req.body?.code||'').replace(/\D/g,'');
+     if(!/^\d{6}$/.test(code))throw new Error('Informe o código de 6 dígitos recebido por SMS.');
+     const data=await metaFetch('/'+encodeURIComponent(META_PHONE_NUMBER_ID)+'/verify_code',{method:'POST',body:JSON.stringify({code})});
+     res.json({ok:true,success:Boolean(data?.success??true)});
+   }catch(e){res.status(400).json({ok:false,error:e.message});}
+ });
+ app.post('/api/whatsapp/meta/register',async(req,res)=>{
+   try{
+     const s=metaTenant(req,res);if(!s)return;
+     if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
+     const pin=String(req.body?.pin||'').replace(/\D/g,'');
+     if(!/^\d{6}$/.test(pin))throw new Error('Crie um PIN de 6 dígitos para a proteção em duas etapas.');
+     const data=await metaFetch('/'+encodeURIComponent(META_PHONE_NUMBER_ID)+'/register',{method:'POST',body:JSON.stringify({messaging_product:'whatsapp',pin})});
+     let subscribed=null;
+     if(META_WABA_ID){
+       try{subscribed=await metaFetch('/'+encodeURIComponent(META_WABA_ID)+'/subscribed_apps',{method:'POST'});}catch(e){subscribed={success:false,error:e.message};}
+     }
+     res.json({ok:true,success:Boolean(data?.success??true),subscribed});
    }catch(e){res.status(400).json({ok:false,error:e.message});}
  });
  app.post('/api/whatsapp/meta/onboard',(req,res)=>{
