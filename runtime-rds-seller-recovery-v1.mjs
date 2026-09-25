@@ -18,7 +18,9 @@ app.post('/api/operator/forgot-password',async(req,res)=>{
   try{
     const email=String(req.body?.email||'').trim().toLowerCase();
     if(!email)return res.status(400).json({success:false,error:'Informe o e-mail cadastrado.'});
-    const seller=await one('rds10_sellers','select=id,email,status&email=eq.'+encodeURIComponent(email));
+    const sellers=await list('rds10_sellers','select=id,email,status,role&email=eq.'+encodeURIComponent(email)+'&order=created_at.desc&limit=2');
+    if(!Array.isArray(sellers)||sellers.length!==1)return res.json({success:true,message:rdsSellerResetPublicMessage()});
+    const seller=sellers[0];
     if(!seller||!seller.email)return res.json({success:true,message:rdsSellerResetPublicMessage()});
     const key=String(process.env.RDS_RESEND_API_KEY||'').trim();
     if(!key)throw new Error('Recuperação por e-mail ainda não configurada no servidor.');
@@ -38,6 +40,11 @@ app.post('/api/operator/reset-password',async(req,res)=>{
     if(!row||Date.parse(row.expires_at)<=Date.now())throw new Error('Link expirado ou inválido.');
     const h=rdsOpNewHash(password);
     await patch('rds10_sellers','id=eq.'+row.seller_id,{password_hash:h.hash,password_salt:h.salt,updated_at:nowISO()});
+    const linkedAdmin=await one('rds10_admin','select=id&seller_id=eq.'+row.seller_id).catch(()=>null);
+    if(linkedAdmin){
+      await patch('rds10_admin','id=eq.'+linkedAdmin.id,{password_hash:h.hash,password_salt:h.salt,updated_at:nowISO()}).catch(()=>{});
+      await patch('rds10_admin_sessions','admin_id=eq.'+linkedAdmin.id+'&revoked_at=is.null',{revoked_at:nowISO()}).catch(()=>{});
+    }
     await patch('rds10_seller_reset_tokens','id=eq.'+row.id,{used_at:nowISO()});
     await patch('rds10_seller_sessions','seller_id=eq.'+row.seller_id+'&revoked_at=is.null',{revoked_at:nowISO()}).catch(()=>{});
     return res.json({success:true,message:'Senha alterada. Entre novamente com sua nova senha.'});
@@ -47,7 +54,7 @@ app.post('/api/operator/change-password',async(req,res)=>{
   try{
     const s=await rdsOpRequire(req,res);if(!s)return;
     const current=String(req.body?.currentPassword||''),next=String(req.body?.newPassword||'');
-    const row=await one('rds10_sellers','select=id,password_hash,password_salt& id=eq.'+s.seller.id);
+    const row=await one('rds10_sellers','select=id,password_hash,password_salt&id=eq.'+s.seller.id);
     if(!row||rdsOpHash(current,row.password_salt)!==row.password_hash)throw new Error('Senha atual inválida.');
     if(next.length<8)throw new Error('A nova senha deve ter pelo menos 8 caracteres.');
     const h=rdsOpNewHash(next);
