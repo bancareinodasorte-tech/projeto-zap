@@ -5,7 +5,7 @@ let activePhone='',pollTimer=null,searchText='',lastData=null;
 function statusCard(s){
  const connected=Boolean(s?.connected),err=String(s?.lastError||'').trim();
  if(connected)return '<div class="rds-wa-connect-card connected"><div class="rds-wa-connect-icon">✓</div><div><b>WhatsApp conectado</b><small>'+E(s.number||'Número conectado')+'</small></div><span>ATIVO</span></div>';
- return '<div class="rds-wa-connect-card offline"><div class="rds-wa-connect-icon">!</div><div><b>WhatsApp desconectado</b><small>O painel usa a conexão WhatsApp do servidor (Baileys) com sessão persistida.'+(err?' Último estado: '+E(err):'')+'</small></div><span>OFFLINE</span></div>';
+ return '<div class="rds-wa-connect-card offline"><div class="rds-wa-connect-icon">!</div><div><b>WhatsApp desconectado</b><small>O servidor perdeu o vínculo do dispositivo. A sessão antiga continua preservada, mas o WhatsApp precisa ser vinculado novamente.</small><div class="rds-wa-pair"><input id="rdsWaPairPhone" inputmode="numeric" placeholder="Número do WhatsApp com DDD" maxlength="15"><button class="btn primary" onclick="rdsWaPair()">Gerar código de vinculação</button></div><small>Use o WhatsApp no celular: Configurações → Aparelhos conectados → Conectar aparelho → Vincular com número de telefone. Não é necessário QR.</small>'+(err?'<small>Último estado: '+E(err)+'</small>':'')+'</div><span>OFFLINE</span></div>';
 }
 function shell(d){
  lastData=d;const s=d.status||{};
@@ -22,7 +22,7 @@ function dataKey(d){return JSON.stringify({connected:d?.status?.connected,number
 function startPolling(){
  clearInterval(pollTimer);pollTimer=setInterval(async()=>{if(page!=='whatsapp'||activePhone)return;try{const before=lastData,key=dataKey(before);const d=await loadData();if(key!==dataKey(d))shell(d)}catch{}},3000);
 }
-window.rdsWaReload=()=>{activePhone='';searchText='';waPage()};
+window.rdsWaReload=()=>{activePhone='';searchText='';waPage()};window.rdsWaPair=async()=>{const input=document.querySelector('#rdsWaPairPhone');const phone=String(input?.value||'').replace(/\\D/g,'');if(phone.length<12)return toast('Informe o número completo com DDD e código do país.');try{toast('Gerando código de vinculação...');const d=await F('/api/whatsapp/pairing-code',{method:'POST',body:JSON.stringify({phone})});prompt('Código de vinculação do WhatsApp',d.code);toast('Código gerado. Conclua a vinculação no aplicativo WhatsApp.');setTimeout(()=>waPage(),2000)}catch(e){toast(e.message)}};
 window.rdsWaOpen=async phone=>{
  activePhone=phone;document.querySelector('.rds-wa-app')?.classList.add('rds-wa-open');
  const box=$('#rdsWaConversation');box.hidden=false;$('#rdsWaEmpty').hidden=true;box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()">‹</button><div><b>Abrindo conversa...</b><small>'+E(phone)+'</small></div></div></header><div class="rds-wa-open-error">Carregando...</div>';
