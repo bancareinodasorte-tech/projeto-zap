@@ -12,7 +12,7 @@ if(server.includes(marker)){
   const block=String.raw`
 ${marker}
 const RDS_SELLER_EMAIL_FROM=String(process.env.RDS_SELLER_EMAIL_FROM||process.env.RDS_ADMIN_EMAIL_FROM||'onboarding@resend.dev').trim();
-const RDS_PUBLIC_BASE_URL_SELLER=String(process.env.RDS_PUBLIC_BASE_URL||'https://projeto-zap-4tyg.onrender.com').replace(/\\/+$/,'');
+const RDS_PUBLIC_BASE_URL_SELLER=String(process.env.RDS_PUBLIC_BASE_URL||'https://projeto-zap-4tyg.onrender.com').replace(/\/+$/,'');
 function rdsSellerResetPublicMessage(){return 'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.';}
 app.post('/api/operator/forgot-password',async(req,res)=>{
   try{
