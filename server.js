@@ -9,7 +9,8 @@ const {
   initAuthCreds,
   proto,
   fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore
+  makeCacheableSignalKeyStore,
+  downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
 const app = express();
@@ -269,7 +270,14 @@ async function logHistoryMessages(messages=[]){
       body:extracted.text||null,
       status:m.key?.fromMe?'ENVIADA':'RECEBIDA',
       wa_message_id:m.key.id,
-      raw_payload:{remoteJid:m.key?.remoteJid||null,fromMe:Boolean(m.key?.fromMe),history:true,media:Boolean(extracted.media),createdAt},
+      raw_payload:{
+        remoteJid:m.key?.remoteJid||null,
+        fromMe:Boolean(m.key?.fromMe),
+        history:true,
+        media:Boolean(extracted.media),
+        createdAt,
+        rawMessage: extracted.media ? JSON.parse(JSON.stringify(m, BufferJSON.replacer)) : null
+      },
       created_at:createdAt
     });
   }
@@ -604,7 +612,24 @@ async function handleInbound(m){
   const identity = resolveInboundIdentity(m);
   const inbound = extractInbound(m);
   const pushName = cleanText(m?.pushName || '');
-  await logMessage({phone:identity.phone||null,lid:identity.lid||null,direction:'IN',type:inbound.type,body:inbound.text||null,status:'RECEBIDA',waId:m?.key?.id,raw:{remoteJid:identity.remoteJid,remoteJidAlt:m?.key?.remoteJidAlt||null,senderPn:m?.key?.senderPn||null,pushName,rawKeys:inbound.rawKeys}});
+  await logMessage({
+    phone:identity.phone||null,
+    lid:identity.lid||null,
+    direction:'IN',
+    type:inbound.type,
+    body:inbound.text||null,
+    status:'RECEBIDA',
+    waId:m?.key?.id,
+    raw:{
+      remoteJid:identity.remoteJid,
+      remoteJidAlt:m?.key?.remoteJidAlt||null,
+      senderPn:m?.key?.senderPn||null,
+      pushName,
+      rawKeys:inbound.rawKeys,
+      media:Boolean(inbound.media),
+      rawMessage:inbound.media ? JSON.parse(JSON.stringify(m, BufferJSON.replacer)) : null
+    }
+  });
 
   if(!identity.phone && identity.lid){
     await addAlert('LID_SEM_PN','Mensagem recebida com LID sem número real; contato não foi criado.',{lid:identity.lid,pushName,text:inbound.text});
