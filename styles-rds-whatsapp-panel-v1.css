@@ -145,3 +145,7 @@
   .rds-wa-full-messages{padding-top:12px!important}
   .rds-wa-full-action{min-height:36px;padding:7px 11px;font-size:10px}
 }
+
+/* RDS WhatsApp V8 - mídia com abertura controlada e erro amigável */
+.rds-wa-media-open{display:block;padding:0;border:0;background:transparent;text-align:left;color:inherit;cursor:pointer}
+.rds-wa-media-document{cursor:pointer}
