@@ -2,7 +2,7 @@ import fs from 'node:fs';
 const path='server.js';
 let server=fs.readFileSync(path,'utf8');
 const marker='// RDS WHATSAPP PANEL V1';
-if(server.includes(marker)){console.log('[RDS] painel WhatsApp V1 já aplicado');process.exit(0);}
+const mediaMarker='// RDS WHATSAPP PANEL MEDIA V1';
 const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 const pos=server.indexOf(catchAll);
 if(pos<0)throw new Error('catch-all não localizado para painel WhatsApp.');
@@ -64,6 +64,16 @@ ${marker}
  });
 })();
 `;
-server=server.slice(0,pos)+block+'\n'+server.slice(pos);
+if(!server.includes(marker)){
+  server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+  console.log('[RDS] painel WhatsApp V1 instalado');
+}
+if(!server.includes(mediaMarker)){
+  const chatRoute=server.indexOf("app.get('/api/whatsapp/chat/:phone'");
+  if(chatRoute<0) throw new Error('rota de conversa WhatsApp não localizada para mídia.');
+  server=server.slice(0,chatRoute)+mediaBlock+'\\n'+server.slice(chatRoute);
+  console.log('[RDS] mídia do painel WhatsApp instalada');
+}
+fs.writeFileSync(path,server,'utf8');
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] painel WhatsApp V1 instalado');
