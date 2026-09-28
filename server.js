@@ -205,18 +205,39 @@ function resolveInboundIdentity(m){
 }
 function unwrapMessageContent(m){
   let x = m?.message || {};
-  if(x.ephemeralMessage?.message) x = x.ephemeralMessage.message;
-  if(x.viewOnceMessage?.message) x = x.viewOnceMessage.message;
-  if(x.viewOnceMessageV2?.message) x = x.viewOnceMessageV2.message;
-  if(x.documentWithCaptionMessage?.message) x = x.documentWithCaptionMessage.message;
+  for(let i=0;i<8;i++){
+    const next =
+      x.ephemeralMessage?.message ||
+      x.viewOnceMessage?.message ||
+      x.viewOnceMessageV2?.message ||
+      x.viewOnceMessageV2Extension?.message ||
+      x.documentWithCaptionMessage?.message ||
+      x.deviceSentMessage?.message ||
+      x.editedMessage?.message ||
+      x.keepInChatMessage?.message;
+    if(!next || next===x) break;
+    x=next;
+  }
   return x;
 }
 function extractInbound(m){
   const x = unwrapMessageContent(m);
   const text = cleanText(
-    x.conversation || x.extendedTextMessage?.text || x.imageMessage?.caption || x.videoMessage?.caption ||
-    x.documentMessage?.caption || x.buttonsResponseMessage?.selectedDisplayText || x.listResponseMessage?.title ||
-    x.templateButtonReplyMessage?.selectedDisplayText || ''
+    x.conversation ||
+    x.extendedTextMessage?.text ||
+    x.imageMessage?.caption ||
+    x.videoMessage?.caption ||
+    x.documentMessage?.caption ||
+    x.buttonsResponseMessage?.selectedDisplayText ||
+    x.buttonsResponseMessage?.selectedButtonId ||
+    x.listResponseMessage?.title ||
+    x.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    x.templateButtonReplyMessage?.selectedDisplayText ||
+    x.interactiveResponseMessage?.body?.text ||
+    x.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson ||
+    x.pollUpdateMessage?.name ||
+    x.reactionMessage?.text ||
+    ''
   );
   let type = 'text';
   let media = false;
@@ -225,6 +246,8 @@ function extractInbound(m){
   else if(x.videoMessage){ type='video'; media=true; }
   else if(x.audioMessage){ type='audio'; media=true; }
   else if(x.stickerMessage){ type='sticker'; media=true; }
+  else if(x.pollCreationMessageV3 || x.pollCreationMessage){ type='poll'; }
+  else if(x.reactionMessage){ type='reaction'; }
   return { text, type, media, rawKeys:Object.keys(x) };
 }
 async function closeSocket(){ try{ sock?.ws?.close?.(); }catch{} sock=null; connected=false; connectedNumber=''; qrDataUrl=''; qrUpdatedAt=null; qrExpiresAt=null; }
