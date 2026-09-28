@@ -99,13 +99,13 @@ const mediaBlock=String.raw`
 })();
 `;
 if(!server.includes(marker)){
-  server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+  server=server.slice(0,pos)+block+'\n'+server.slice(pos);
   console.log('[RDS] painel WhatsApp V1 instalado');
 }
 if(!server.includes(mediaMarker)){
   const chatRoute=server.indexOf("app.get('/api/whatsapp/chat/:phone'");
   if(chatRoute<0) throw new Error('rota de conversa WhatsApp não localizada para mídia.');
-  server=server.slice(0,chatRoute)+mediaBlock+'\\n'+server.slice(chatRoute);
+  server=server.slice(0,chatRoute)+mediaBlock+'\n'+server.slice(chatRoute);
   console.log('[RDS] mídia do painel WhatsApp instalada');
 }
 fs.writeFileSync(path,server,'utf8');
