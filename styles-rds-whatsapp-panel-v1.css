@@ -79,3 +79,34 @@
     min-height:32px!important;
   }
 }
+
+
+/* RDS WhatsApp V6 - tela de conversa independente */
+.rds-wa-conversation-screen{position:fixed;inset:0;z-index:10000;background:#f2f7fb;display:flex;flex-direction:column}
+.rds-wa-conversation-top{flex:0 0 auto;min-height:72px;background:#fff;border-bottom:1px solid #dce6ef;display:flex;align-items:center;gap:10px;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top))}
+.rds-wa-full-head-left{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.rds-wa-full-back{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:88px;height:42px;border:1px solid #d5e2ee;border-radius:12px;background:#f8fbfe;color:#24547f;font-size:18px;font-weight:900;cursor:pointer;padding:0 10px}
+.rds-wa-full-back span{font-size:12px}
+.rds-wa-full-title{display:flex;flex-direction:column;min-width:0}
+.rds-wa-full-title b{font-size:16px;color:#173e69;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rds-wa-full-title small{font-size:11px;color:#71839a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rds-wa-full-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.rds-wa-full-action{border:1px solid #d4e1ed;background:#fff;color:#24547f;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:800;cursor:pointer}
+.rds-wa-full-action.danger{color:#a33a43;border-color:#ebcbd0;background:#fff5f6}
+.rds-wa-full-messages{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 14px 24px;display:flex;flex-direction:column;gap:8px}
+.rds-wa-full-bubble{max-width:min(82%,520px);padding:9px 11px;border-radius:13px;box-shadow:0 1px 2px rgba(20,55,85,.08);font-size:14px;line-height:1.4;word-break:break-word}
+.rds-wa-full-bubble.in{align-self:flex-start;background:#fff;border:1px solid #dfe8ef;color:#233d58;border-top-left-radius:4px}
+.rds-wa-full-bubble.out{align-self:flex-end;background:#dff5e7;border:1px solid #c7e8d2;color:#234b35;border-top-right-radius:4px}
+.rds-wa-full-bubble small{display:block;margin-top:4px;font-size:9px;color:#8291a2;text-align:right}
+.rds-wa-full-no-message,.rds-wa-full-loading{margin:auto;text-align:center;color:#71839a;font-size:15px;line-height:1.5;padding:25px}
+.rds-wa-full-compose{flex:0 0 auto;display:flex;gap:8px;align-items:flex-end;background:#fff;border-top:1px solid #dce6ef;padding:9px 12px;padding-bottom:max(9px,env(safe-area-inset-bottom))}
+.rds-wa-full-compose textarea{flex:1;resize:none;min-height:46px;max-height:110px;border:1px solid #ccdbe8;border-radius:22px;padding:12px 15px;font:inherit;outline:none;background:#f9fbfd}
+.rds-wa-full-send{width:48px;height:48px;border:0;border-radius:50%;background:#1768bd;color:#fff;font-size:20px;font-weight:900;cursor:pointer}
+@media(max-width:760px){
+ .rds-wa-conversation-top{min-height:68px;padding-left:8px;padding-right:8px}
+ .rds-wa-full-head-left{gap:6px}
+ .rds-wa-full-back{min-width:76px;padding:0 7px}
+ .rds-wa-full-actions{position:absolute;top:calc(68px + env(safe-area-inset-top));left:0;right:0;background:#fff;padding:6px 10px;border-bottom:1px solid #e1e8ef;justify-content:flex-start}
+ .rds-wa-full-messages{padding-top:58px}
+ .rds-wa-full-title b{font-size:14px}
+}
