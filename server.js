@@ -452,7 +452,7 @@ async function sendTextPhone(phone, text){
   const body = cleanText(text);
   if(!body) throw new Error('Mensagem vazia bloqueada.');
   const r = await sendToJid(jid,{text:body});
-  await logMessage({phone:n,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid}});
+  await logMessage({phone:n,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid,rawMessage:r ? JSON.parse(JSON.stringify(r, BufferJSON.replacer)) : null}});
   return {id:r?.key?.id,phone:n,jid};
 }
 async function replyInbound(identity, text){
@@ -463,7 +463,7 @@ async function replyInbound(identity, text){
     try{ jid = (await ensureTargetJid(identity.phone)).jid; }catch{ /* resposta pelo chat original */ }
   }
   const r = await sendToJid(jid,{text:body});
-  await logMessage({phone:identity.phone || null,lid:identity.lid || null,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid}});
+  await logMessage({phone:identity.phone || null,lid:identity.lid || null,direction:'OUT',type:'text',body,status:'ENVIADA',waId:r?.key?.id,raw:{jid,rawMessage:r ? JSON.parse(JSON.stringify(r, BufferJSON.replacer)) : null}});
   return r;
 }
 
