@@ -110,3 +110,38 @@
  .rds-wa-full-messages{padding-top:58px}
  .rds-wa-full-title b{font-size:14px}
 }
+
+/* RDS WhatsApp V7 - cabeçalho da conversa estável + mídia abrível */
+.rds-wa-full-action{position:relative;z-index:3;touch-action:manipulation}
+.rds-wa-media-open{display:block;text-decoration:none;color:inherit}
+.rds-wa-media-image{display:block;max-width:min(320px,100%);max-height:360px;border-radius:10px;object-fit:contain;background:#eef3f7;cursor:zoom-in}
+.rds-wa-media-video{display:block;width:min(360px,100%);max-height:360px;border-radius:10px;background:#000}
+.rds-wa-media-audio{display:block;width:min(360px,100%);max-width:100%}
+.rds-wa-media-document{display:inline-flex;align-items:center;gap:7px;margin-bottom:4px;padding:10px 12px;border:1px solid #c9d9e7;border-radius:10px;background:#f8fbfe;color:#205985;font-weight:800;text-decoration:none}
+.rds-wa-media-open.failed{display:none}
+@media(max-width:760px){
+  .rds-wa-conversation-top{
+    flex-wrap:wrap;
+    align-items:center;
+    min-height:auto!important;
+    padding-top:max(8px,env(safe-area-inset-top));
+    padding-bottom:7px;
+  }
+  .rds-wa-full-head-left{
+    flex:1 1 100%;
+    width:100%;
+  }
+  .rds-wa-full-actions{
+    position:static!important;
+    flex:1 1 100%;
+    width:100%;
+    margin:0!important;
+    padding:5px 2px 2px!important;
+    background:#fff!important;
+    border:0!important;
+    border-top:1px solid #eef2f6!important;
+    justify-content:flex-start!important;
+  }
+  .rds-wa-full-messages{padding-top:12px!important}
+  .rds-wa-full-action{min-height:36px;padding:7px 11px;font-size:10px}
+}
