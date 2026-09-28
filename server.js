@@ -403,8 +403,13 @@ async function startWhatsApp(force=false){
       await persistHistorySet(history||{});
     });
     sock.ev.on('messages.upsert', async ({messages, type, requestId}) => {
-      // Segurança: ignore payloads de sincronização/solicitação que não sejam novas notificações.
-      if(type !== 'notify' || requestId) return;
+      // 'notify' inclui mensagens novas recebidas enquanto o dispositivo estava
+      // online e também notificações pendentes entregues após uma reconexão.
+      // Não descartamos requestId: o próprio Baileys informa que ele pode
+      // representar mensagens que estavam pendentes enquanto o telefone estava
+      // indisponível.
+      if(type !== 'notify') return;
+      console.log('[RDS WA] messages.upsert', {type,requestId:requestId||null,count:(messages||[]).length});
       for(const m of messages || []){
         rememberMessage(m);
         if(!m?.message || m.key?.fromMe) continue;
