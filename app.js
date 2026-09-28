@@ -18,7 +18,17 @@ async function refreshStatus(){try{const s=await api('/api/status'),txt=s.connec
 setInterval(refreshStatus,10000);refreshStatus();
 
 async function render(){app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
- if(page==='home')await home(); else if(page==='contacts')await contacts(); else if(page==='campaigns')await campaigns(); else if(page==='execution')await automation(); else if(page==='returns')await returnsPage(); else if(page==='orders')await orders(); else if(page==='settings')await settings();
+ if(page==='home')await home();
+ else if(page==='contacts')await contacts();
+ else if(page==='whatsapp'){
+   if(typeof window.__rdsWaPage==='function') await window.__rdsWaPage();
+   else if(typeof window.rdsWaReload==='function') await window.rdsWaReload();
+ }
+ else if(page==='campaigns')await campaigns();
+ else if(page==='execution')await automation();
+ else if(page==='returns')await returnsPage();
+ else if(page==='orders')await orders();
+ else if(page==='settings')await settings();
 }catch(e){app.innerHTML=`<div class=card><h2>Não foi possível carregar</h2><p>${esc(e.message)}</p></div>`}}
 
 async function home(){
