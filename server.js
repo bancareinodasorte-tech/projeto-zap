@@ -83,7 +83,7 @@ async function list(table, query='select=*'){
 }
 
 // ---------------- WhatsApp / Baileys ----------------
-let sock = null, starting = false, connected = false, qrDataUrl = '', connectedNumber = '', lastError = '', lastConnectionAt = null;
+let sock = null, starting = false, connected = false, qrDataUrl = '', connectedNumber = '', lastError = '', lastConnectionAt = null, qrUpdatedAt = null, waManualDisconnect = false, waControlLoaded = false;
 const messageCache = new Map(); // key.id -> full message, usado para reenvio/recuperação de mensagem
 const retryCounterCache = new Map(); // mantém o ciclo de retry de descriptografia durante reconexões do socket
 const signalLogger = pino({level:'silent'});
@@ -99,6 +99,30 @@ async function authWrite(id, value){
   await sb('/rest/v1/zap_auth?on_conflict=id', { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({ id, value:safe, updated_at:nowISO() }) });
 }
 async function authDelete(id){ await del('zap_auth', `id=eq.${encodeURIComponent(id)}`); }
+async function loadWaControl(){
+  if(waControlLoaded) return waManualDisconnect;
+  waControlLoaded=true;
+  try{
+    const row=await one('zap_auth','select=value&id=eq.rds_whatsapp_control');
+    waManualDisconnect=Boolean(row?.value?.manualDisconnect);
+  }catch{}
+  return waManualDisconnect;
+}
+async function setWaManualDisconnect(value){
+  waManualDisconnect=Boolean(value);
+  waControlLoaded=true;
+  try{
+    await authWrite('rds_whatsapp_control',{manualDisconnect:waManualDisconnect,updated_at:nowISO()});
+  }catch{}
+}
+async function clearWaAuthState(){
+  try{
+    const rows=await list('zap_auth','select=id&limit=5000');
+    for(const row of rows||[]){
+      if(row?.id && row.id!=='rds_whatsapp_control') await authDelete(row.id).catch(()=>{});
+    }
+  }catch{}
+}
 async function useSupabaseAuthState(){
   const creds = (await authRead('creds')) || initAuthCreds();
   return {
@@ -206,10 +230,12 @@ function extractInbound(m){
 async function closeSocket(){ try{ sock?.ws?.close?.(); }catch{} sock=null; connected=false; connectedNumber=''; }
 
 async function startWhatsApp(force=false){
+  await loadWaControl();
+  if(waManualDisconnect && !force) return;
   if(starting) return;
   if(sock && !force) return;
   starting = true;
-  if(force) await closeSocket();
+  if(force){ await setWaManualDisconnect(false); await closeSocket(); }
   try{
     const { state, saveCreds } = await useSupabaseAuthState();
     const { version } = await fetchLatestBaileysVersion();
@@ -234,20 +260,26 @@ async function startWhatsApp(force=false){
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', async update => {
       const { connection, lastDisconnect, qr } = update;
-      if(qr){ qrDataUrl = await QRCode.toDataURL(qr,{margin:2,width:420}); connected=false; lastError=''; }
+      if(qr){ qrDataUrl = await QRCode.toDataURL(qr,{margin:2,width:520}); qrUpdatedAt=nowISO(); connected=false; lastError=''; }
       if(connection === 'open'){
-        connected = true; qrDataUrl='';
+        connected = true; qrDataUrl=''; qrUpdatedAt=null;
         connectedNumber = normalizeBR(String(sock.user?.id || '').split(':')[0].split('@')[0]);
         lastConnectionAt = nowISO(); lastError='';
+        await setWaManualDisconnect(false);
         try{ await sock.sendPresenceUpdate('unavailable'); }catch{}
       }
       if(connection === 'close'){
         connected=false;
         const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode || 0;
         const loggedOut = code === DisconnectReason.loggedOut;
-        lastError = loggedOut ? 'WhatsApp desconectado pelo usuário.' : cleanText(lastDisconnect?.error?.message || 'Conexão encerrada.');
+        const manual = waManualDisconnect;
+        lastError = loggedOut ? (manual ? 'Conexão encerrada manualmente.' : 'O WhatsApp encerrou a sessão. Um novo QR será disponibilizado.') : cleanText(lastDisconnect?.error?.message || 'Conexão encerrada.');
+        qrDataUrl=''; qrUpdatedAt=null;
         await closeSocket();
-        if(!loggedOut) setTimeout(()=>startWhatsApp(false).catch(()=>{}), 2500);
+        if(!manual){
+          if(loggedOut) await clearWaAuthState();
+          setTimeout(()=>startWhatsApp(false).catch(()=>{}), 1800);
+        }
       }
     });
     sock.ev.on('messages.upsert', async ({messages, type, requestId}) => {
@@ -583,9 +615,9 @@ setInterval(()=>{
 
 // ---------------- API ----------------
 app.get('/health',(req,res)=>res.json({ok:true,service:'CANAL DE VENDAS RDS V10 FINAL',version:'10.3',connected,lastConnectionAt,lastError}));
-app.get('/api/status',(req,res)=>res.json({ok:true,connected,number:connectedNumber||null,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size}));
-app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await startWhatsApp(Boolean(req.body?.force)); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
-app.post('/api/whatsapp/logout',async(req,res)=>{ try{ if(sock) try{await sock.logout();}catch{}; await closeSocket(); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
+app.get('/api/status',async(req,res)=>{ try{ await loadWaControl(); res.json({ok:true,connected,number:connectedNumber||null,starting,manualDisconnect:waManualDisconnect,qrAvailable:Boolean(qrDataUrl),qrDataUrl,qrUpdatedAt,lastError,lastConnectionAt,cacheMessages:messageCache.size,lidMappings:lidToPn.size,provider:'baileys-linked-device'}); }catch(e){res.status(500).json({ok:false,error:e.message});} });
+app.post('/api/whatsapp/connect',async(req,res)=>{ try{ await setWaManualDisconnect(false); await startWhatsApp(true); res.json({ok:true}); }catch(e){res.status(500).json({error:e.message});} });
+app.post('/api/whatsapp/logout',async(req,res)=>{ try{ await setWaManualDisconnect(true); if(sock) try{await sock.logout();}catch{}; await closeSocket(); qrDataUrl=''; qrUpdatedAt=null; connected=false; connectedNumber=''; await clearWaAuthState(); lastError='Conexão encerrada manualmente pelo painel.'; res.json({ok:true,manualDisconnect:true}); }catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/whatsapp/test',async(req,res)=>{ try{ const r=await sendTextPhone(req.body.phone, req.body.text || '✅ Teste CANAL DE VENDAS RDS V10 FINAL'); res.json({ok:true,...r}); }catch(e){res.status(400).json({error:e.message});} });
 
 app.get('/api/dashboard',async(req,res)=>{
@@ -758,5 +790,5 @@ app.get('/api/diagnostic',async(req,res)=>{
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 app.listen(PORT,async()=>{
   console.log(`CANAL DE VENDAS RDS V10 FINAL 10.3 — porta ${PORT}`);
-  try{ await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
+  try{ await loadWaControl(); await startWhatsApp(false); }catch(e){ console.error('WhatsApp aguardando:',e.message); }
 });
