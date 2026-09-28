@@ -110,20 +110,32 @@ window.rdsWaLogout=async()=>{
 };
 window.rdsWaReload=()=>{activePhone='';searchText='';waPage()};
 window.rdsWaOpen=async phone=>{
- activePhone=String(phone||'');document.querySelector('.rds-wa-app')?.classList.add('rds-wa-open');document.body.classList.add('rds-wa-mobile-open');
- const box=$('#rdsWaConversation');box.hidden=false;$('#rdsWaEmpty').hidden=true;
- box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()" title="Voltar para conversas">‹ <span>Voltar</span></button><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><div class="rds-wa-open-error">Carregando...</div>';
+ activePhone=String(phone||'');
+ document.body.classList.add('rds-wa-mobile-open');
+ app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div class="rds-wa-full-title"><span class="rds-wa-avatar">•</span><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><main id="rdsWaMessages" class="rds-wa-full-messages"><div class="rds-wa-full-loading">Carregando conversa...</div></main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="Digite uma mensagem..."></textarea><button class="rds-wa-full-send" type="submit">➤</button></form></section>';
  try{
   const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{},messages=d.messages||[];
-  const managed=Boolean(c?.id);
   const contactName=c?.name||phone;
-  const contactActions=managed
-    ? '<button class="rds-wa-contact-action" onclick="rdsWaEditContact(\''+E(phone)+'\')">Editar contato</button>'
-    : '<button class="rds-wa-contact-action" onclick="rdsWaSaveContact(\''+E(phone)+'\')">Salvar contato</button>';
-  box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()" title="Voltar para conversas">‹</button><span class="rds-wa-avatar">'+E((contactName||phone).slice(0,1).toUpperCase())+'</span><div><b>'+E(contactName)+'</b><small>'+E(fmtPhone(c?.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div><div class="rds-wa-conv-actions">'+contactActions+'<button class="rds-wa-contact-action danger" onclick="rdsWaDeleteConversation(\''+E(phone)+'\')">Excluir conversa</button></div></header><div id="rdsWaMessages" class="rds-wa-messages">'+(messages.length?messages.map(m=>'<div class="rds-wa-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(m.body||('['+(m.message_type||'mensagem')+']'))+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>').join(''):'<div class="rds-wa-nochat">Nenhuma mensagem registrada nesta conversa.</div>')+'</div><form id="rdsWaSend" class="rds-wa-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="btn primary" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form>';
-  $('#rdsWaSend').onsubmit=async e=>{e.preventDefault();const text=$('#rdsWaText').value.trim();if(!text)return;try{await F('/api/whatsapp/chat/'+encodeURIComponent(activePhone)+'/send',{method:'POST',body:JSON.stringify({text})});$('#rdsWaText').value='';await rdsWaOpen(activePhone)}catch(err){toast(err.message)}};
-  $('#rdsWaMessages').scrollTop=$('#rdsWaMessages').scrollHeight;
- }catch(e){box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()">‹</button><div><b>Não foi possível abrir a conversa</b><small>'+E(e.message)+'</small></div></div></header><div class="rds-wa-open-error"><b>Erro ao carregar a conversa.</b><span>'+E(e.message)+'</span><button class="btn primary" onclick="rdsWaOpen(\''+E(phone)+'\')">Tentar novamente</button></div>'}
+  const managed=Boolean(c?.id);
+  const contactAction=managed
+   ? '<button class="rds-wa-full-action" onclick="rdsWaEditContact(\''+E(phone)+'\')">Editar contato</button>'
+   : '<button class="rds-wa-full-action" onclick="rdsWaSaveContact(\''+E(phone)+'\')">Salvar contato</button>';
+  const messageHtml=messages.length
+   ? messages.map(m=>{
+      const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[m.message_type] || 'Mensagem sem conteúdo disponível');
+      return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(body)+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
+    }).join('')
+   : '<div class="rds-wa-full-no-message">Nenhuma mensagem registrada nesta conversa.</div>';
+  app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><div class="rds-wa-full-head-left"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><span class="rds-wa-avatar">'+E((contactName||phone).slice(0,1).toUpperCase())+'</span><div class="rds-wa-full-title"><b>'+E(contactName)+'</b><small>'+E(fmtPhone(c?.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div><div class="rds-wa-full-actions">'+contactAction+'<button class="rds-wa-full-action danger" onclick="rdsWaDeleteConversation(\''+E(phone)+'\')">Excluir</button></div></header><main id="rdsWaMessages" class="rds-wa-full-messages">'+messageHtml+'</main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="rds-wa-full-send" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form></section>';
+  $('#rdsWaSend').onsubmit=async e=>{
+   e.preventDefault();const text=$('#rdsWaText').value.trim();if(!text)return;
+   try{await F('/api/whatsapp/chat/'+encodeURIComponent(activePhone)+'/send',{method:'POST',body:JSON.stringify({text})});$('#rdsWaText').value='';await rdsWaOpen(activePhone);}
+   catch(err){toast(err.message)}
+  };
+  const box=$('#rdsWaMessages');if(box)box.scrollTop=box.scrollHeight;
+ }catch(e){
+  app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div><b>Erro ao abrir conversa</b><small>'+E(e.message)+'</small></div></header><main class="rds-wa-full-messages"><div class="rds-wa-full-no-message">Não foi possível carregar esta conversa.<br><button class="btn primary" onclick="rdsWaOpen(\''+E(phone)+'\')">Tentar novamente</button></div></main></section>';
+ }
 };
 window.rdsWaSaveContact=async phone=>{
  try{const name=prompt('Nome do cliente:', '');if(name===null)return;const clean=String(name||'').trim();if(!clean){toast('Informe o nome do cliente.');return;}await F('/api/contacts',{method:'POST',body:JSON.stringify({name:clean,phone,group_name:'NOVOS',status:'ATIVO'})});toast('Contato salvo na agenda de Clientes.');await rdsWaOpen(phone);}catch(e){toast(e.message)}};
@@ -133,7 +145,7 @@ window.rdsWaDeleteConversation=async phone=>{
  if(!confirm('Excluir esta conversa do painel?\\n\\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
  if(!confirm('CONFIRMAÇÃO FINAL\\n\\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
  try{await F('/api/whatsapp/chat/'+encodeURIComponent(phone),{method:'DELETE',body:'{}'});toast('Conversa excluída do painel.');rdsWaBack();const d=await F('/api/whatsapp/chats');lastData={...lastData,chats:d.chats||[]};drawChats(lastData.chats);}catch(e){toast(e.message)}};
-window.rdsWaBack=()=>{activePhone='';document.body.classList.remove('rds-wa-mobile-open');document.querySelector('.rds-wa-app')?.classList.remove('rds-wa-open');$('#rdsWaConversation').hidden=true;$('#rdsWaEmpty').hidden=false};
+window.rdsWaBack=async()=>{activePhone='';document.body.classList.remove('rds-wa-mobile-open');await waPage();};
 async function waPage(){
  try{clearInterval(pollTimer);const d=await loadData();shell(d);
    if(!d.status?.connected&&!d.status?.manualDisconnect&&!d.status?.starting&&!d.status?.qrAvailable&&!autoStartIssued){
