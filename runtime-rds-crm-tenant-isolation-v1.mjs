@@ -41,7 +41,7 @@ server=replaceRoute(server,"app.get('/api/contacts/:id/profile'","app.get('/api/
 
 const markerPos=server.indexOf("app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));");
 if(markerPos<0)throw new Error('catch-all não localizado.');
-server=server.slice(0,markerPos)+"console.log('[RDS] CRM isolado por vendedor: clientes, grupos e perfis por tenant.');\\n"+server.slice(markerPos);
+server=server.slice(0,markerPos)+"console.log('[RDS] CRM isolado por vendedor: clientes, grupos e perfis por tenant.');\n"+server.slice(markerPos);
 
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] isolamento do CRM por vendedor aplicado');
