@@ -229,6 +229,87 @@ function extractInbound(m){
 }
 async function closeSocket(){ try{ sock?.ws?.close?.(); }catch{} sock=null; connected=false; connectedNumber=''; qrDataUrl=''; qrUpdatedAt=null; qrExpiresAt=null; }
 
+async function logHistoryMessages(messages=[]){
+  const rows=[];
+  for(const m of messages||[]){
+    if(!m?.key?.id) continue;
+    const identity=resolveInboundIdentity(m);
+    if(!identity.phone) continue;
+    const extracted=extractInbound(m);
+    const ts=Number(m.messageTimestamp||0);
+    const createdAt=ts>0 ? new Date(ts*1000).toISOString() : nowISO();
+    rows.push({
+      phone:identity.phone,
+      lid:identity.lid||null,
+      direction:m.key?.fromMe?'OUT':'IN',
+      message_type:extracted.type||'text',
+      body:extracted.text||null,
+      status:m.key?.fromMe?'ENVIADA':'RECEBIDA',
+      wa_message_id:m.key.id,
+      raw_payload:{remoteJid:m.key?.remoteJid||null,fromMe:Boolean(m.key?.fromMe),history:true,media:Boolean(extracted.media),createdAt},
+      created_at:createdAt
+    });
+  }
+  // Deduplicate inside the sync batch.
+  const unique=[...new Map(rows.map(x=>[x.wa_message_id,x])).values()];
+  for(let i=0;i<unique.length;i+=100){
+    const batch=unique.slice(i,i+100);
+    try{
+      await insert('rds10_messages',batch,'minimal');
+    }catch(e){
+      // A replayed history chunk may contain messages already persisted.
+      // Fall back to one-by-one only for this small failed batch.
+      for(const row of batch){
+        try{
+          const exists=await one('rds10_messages',`select=id&wa_message_id=eq.${encodeURIComponent(row.wa_message_id)}`);
+          if(!exists) await insert('rds10_messages',row,'minimal');
+        }catch{}
+      }
+    }
+  }
+  return unique.length;
+}
+async function persistHistoryContacts(contacts=[]){
+  let saved=0;
+  for(const contact of contacts||[]){
+    const jid=String(contact?.id||'');
+    let phone='';
+    if(jid.endsWith('@s.whatsapp.net')) phone=normalizeBR(jid.split('@')[0]);
+    else if(lidToPn.has(jid)) phone=lidToPn.get(jid);
+    if(!validBRPhone(phone)) continue;
+    try{
+      await saveOrMergeContact({
+        name:cleanText(contact.name||contact.notify||contact.verifiedName)||`Cliente ${phone.slice(-4)}`,
+        phone,
+        lid:jid.endsWith('@lid')?jid:null,
+        group_name:'WHATSAPP',
+        origin:'WHATSAPP_HISTORICO',
+        validated:true,
+        last_seen_at:nowISO()
+      });
+      saved++;
+    }catch{}
+  }
+  return saved;
+}
+async function persistHistorySet(data={}){
+  try{
+    for(const mapping of data.lidPnMappings||[]){
+      const lid=String(mapping?.lid||mapping?.lidJid||mapping?.lidUser||'');
+      const pn=String(mapping?.pn||mapping?.pnJid||mapping?.phoneNumber||'');
+      if(lid && pn){
+        const n=normalizeBR(pn.replace(/@s\\.whatsapp\\.net$/,'').replace(/@s\\.whatsapp\\.net$/,''));
+        if(validBRPhone(n)) lidToPn.set(lid.includes('@')?lid:`${lid}@lid`,n);
+      }
+    }
+    const contactsSaved=await persistHistoryContacts(data.contacts||[]);
+    const messagesSaved=await logHistoryMessages(data.messages||[]);
+    console.log('[RDS WA] histórico sincronizado',{chats:(data.chats||[]).length,contacts:contactsSaved,messages:messagesSaved,isLatest:Boolean(data.isLatest),progress:data.progress,syncType:String(data.syncType||'')});
+  }catch(e){
+    console.error('[RDS WA] falha ao persistir histórico:',e.message);
+  }
+}
+
 async function startWhatsApp(force=false){
   await loadWaControl();
   if(waManualDisconnect && !force) return;
@@ -249,8 +330,8 @@ async function startWhatsApp(force=false){
       logger:pino({level:'silent'}),
       browser:['CANAL DE VENDAS RDS','Chrome','10.3'],
       markOnlineOnConnect:false,
-      syncFullHistory:false,
-      shouldSyncHistoryMessage:()=>false,
+      syncFullHistory:true,
+      shouldSyncHistoryMessage:()=>true,
       generateHighQualityLinkPreview:false,
       maxMsgRetryCount:12,
       retryRequestDelayMs:350,
@@ -286,6 +367,9 @@ async function startWhatsApp(force=false){
           setTimeout(()=>startWhatsApp(false).catch(e=>console.error('[RDS WA] reconexão:',e.message)), delay);
         }
       }
+    });
+    sock.ev.on('messaging-history.set', async history => {
+      await persistHistorySet(history||{});
     });
     sock.ev.on('messages.upsert', async ({messages, type, requestId}) => {
       // Segurança: ignore payloads de sincronização/solicitação que não sejam novas notificações.
