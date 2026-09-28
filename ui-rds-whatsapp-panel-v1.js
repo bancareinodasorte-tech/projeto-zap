@@ -103,7 +103,7 @@ window.rdsWaConnect=async()=>{
 window.rdsWaRefreshQr=async()=>{if(waBusy)return;waBusy=true;try{toast('Gerando um novo QR Code...');await F('/api/whatsapp/connect',{method:'POST',body:JSON.stringify({force:true})});}catch(e){toast(e.message)}finally{waBusy=false;}};
 window.rdsWaLogout=async()=>{
  if(waBusy)return;
- if(!confirm('Desconectar o WhatsApp deste painel? A sessão salva será encerrada e será necessário vincular novamente para voltar a operar.'))return;
+ if(!confirm('ATENÇÃO\n\nVocê realmente deseja sair e desconectar o WhatsApp deste painel?\n\nA sessão salva no servidor será encerrada e o WhatsApp precisará ser vinculado novamente por QR Code.\n\nToque em OK somente se tiver certeza.'))return;
  waBusy=true;
  try{await F('/api/whatsapp/logout',{method:'POST',body:'{}'});toast('WhatsApp desconectado pelo painel.');await waPage();}catch(e){toast(e.message)}finally{waBusy=false;}
 };
@@ -114,11 +114,24 @@ window.rdsWaOpen=async phone=>{
  box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()">‹</button><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><div class="rds-wa-open-error">Carregando...</div>';
  try{
   const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{},messages=d.messages||[];
-  box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()">‹</button><span class="rds-wa-avatar">'+E((c.name||phone).slice(0,1).toUpperCase())+'</span><div><b>'+E(c.name||phone)+'</b><small>'+E(fmtPhone(c.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div></header><div id="rdsWaMessages" class="rds-wa-messages">'+(messages.length?messages.map(m=>'<div class="rds-wa-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(m.body||('['+(m.message_type||'mensagem')+']'))+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>').join(''):'<div class="rds-wa-nochat">Nenhuma mensagem registrada nesta conversa.</div>')+'</div><form id="rdsWaSend" class="rds-wa-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="btn primary" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form>';
+  const managed=Boolean(c?.id);
+  const contactName=c?.name||phone;
+  const contactActions=managed
+    ? '<button class="rds-wa-contact-action" onclick="rdsWaEditContact(\\''+E(phone)+'\\')">Editar contato</button>'
+    : '<button class="rds-wa-contact-action" onclick="rdsWaSaveContact(\\''+E(phone)+'\\')">Salvar contato</button>';
+  box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()" title="Voltar para conversas">‹</button><span class="rds-wa-avatar">'+E((contactName||phone).slice(0,1).toUpperCase())+'</span><div><b>'+E(contactName)+'</b><small>'+E(fmtPhone(c?.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div><div class="rds-wa-conv-actions">'+contactActions+'<button class="rds-wa-contact-action danger" onclick="rdsWaDeleteConversation(\\''+E(phone)+'\\')">Excluir conversa</button></div></header><div id="rdsWaMessages" class="rds-wa-messages">'+(messages.length?messages.map(m=>'<div class="rds-wa-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(m.body||('['+(m.message_type||'mensagem')+']'))+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>').join(''):'<div class="rds-wa-nochat">Nenhuma mensagem registrada nesta conversa.</div>')+'</div><form id="rdsWaSend" class="rds-wa-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="btn primary" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form>';
   $('#rdsWaSend').onsubmit=async e=>{e.preventDefault();const text=$('#rdsWaText').value.trim();if(!text)return;try{await F('/api/whatsapp/chat/'+encodeURIComponent(activePhone)+'/send',{method:'POST',body:JSON.stringify({text})});$('#rdsWaText').value='';await rdsWaOpen(activePhone)}catch(err){toast(err.message)}};
   $('#rdsWaMessages').scrollTop=$('#rdsWaMessages').scrollHeight;
  }catch(e){box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()">‹</button><div><b>Não foi possível abrir a conversa</b><small>'+E(e.message)+'</small></div></div></header><div class="rds-wa-open-error"><b>Erro ao carregar a conversa.</b><span>'+E(e.message)+'</span><button class="btn primary" onclick="rdsWaOpen(\''+E(phone)+'\')">Tentar novamente</button></div>'}
 };
+window.rdsWaSaveContact=async phone=>{
+ try{const name=prompt('Nome do cliente:', '');if(name===null)return;const clean=String(name||'').trim();if(!clean){toast('Informe o nome do cliente.');return;}await F('/api/contacts',{method:'POST',body:JSON.stringify({name:clean,phone,group_name:'NOVOS',status:'ATIVO'})});toast('Contato salvo na agenda de Clientes.');await rdsWaOpen(phone);}catch(e){toast(e.message)}};
+window.rdsWaEditContact=async phone=>{
+ try{const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{};const name=prompt('Nome do cliente:',c.name&&c.name!==phone?c.name:'');if(name===null)return;const clean=String(name||'').trim();if(!clean){toast('Informe o nome do cliente.');return;}if(c.id)await F('/api/contacts/'+encodeURIComponent(c.id),{method:'PUT',body:JSON.stringify({name:clean,phone,group_name:c.group_name||'NOVOS'})});else await F('/api/contacts',{method:'POST',body:JSON.stringify({name:clean,phone,group_name:'NOVOS',status:'ATIVO'})});toast('Contato atualizado na agenda de Clientes.');await rdsWaOpen(phone);}catch(e){toast(e.message)}};
+window.rdsWaDeleteConversation=async phone=>{
+ if(!confirm('Excluir esta conversa do painel?\\n\\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
+ if(!confirm('CONFIRMAÇÃO FINAL\\n\\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
+ try{await F('/api/whatsapp/chat/'+encodeURIComponent(phone),{method:'DELETE',body:'{}'});toast('Conversa excluída do painel.');rdsWaBack();const d=await F('/api/whatsapp/chats');lastData={...lastData,chats:d.chats||[]};drawChats(lastData.chats);}catch(e){toast(e.message)}};
 window.rdsWaBack=()=>{activePhone='';document.querySelector('.rds-wa-app')?.classList.remove('rds-wa-open');$('#rdsWaConversation').hidden=true;$('#rdsWaEmpty').hidden=false};
 async function waPage(){
  try{clearInterval(pollTimer);const d=await loadData();shell(d);
@@ -129,5 +142,6 @@ async function waPage(){
    startPolling();
  }catch(e){app.innerHTML='<div class="rds-panel rds-error"><h2>WhatsApp</h2><p>'+E(e.message)+'</p><button class="btn primary" onclick="go(\'whatsapp\')">Tentar novamente</button></div>'}
 }
+if(!document.getElementById('rdsWaPanelOverrides')){const st=document.createElement('style');st.id='rdsWaPanelOverrides';st.textContent='.rds-wa-back{display:grid!important;place-items:center;width:35px;height:40px;border:0;background:transparent;font-size:30px;color:#55708f;cursor:pointer}.rds-wa-conv-actions{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rds-wa-contact-action{border:1px solid #d6e2ed;background:#fff;color:#24547f;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:800;cursor:pointer}.rds-wa-contact-action.danger{color:#a33a43;border-color:#ebcbd0;background:#fff5f6}@media(max-width:760px){.rds-wa-conv-head{height:auto;min-height:70px;padding:8px;flex-wrap:wrap}.rds-wa-conv-head>div:first-child{min-width:0}.rds-wa-conv-actions{width:100%;margin-left:45px;justify-content:flex-start}.rds-wa-contact-action{font-size:9px;padding:6px 8px}}';document.head.appendChild(st)}
 const oldRender=window.render;window.render=async function(){clearInterval(pollTimer);if(page==='whatsapp')return waPage();return oldRender.apply(this,arguments)};
 })();
