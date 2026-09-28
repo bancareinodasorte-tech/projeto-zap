@@ -64,6 +64,40 @@ ${marker}
  });
 })();
 `;
+const mediaBlock=String.raw`
+// RDS WHATSAPP PANEL MEDIA V1
+(()=>{
+ app.get('/api/whatsapp/media/:messageId',async(req,res)=>{
+   try{
+     const s=await waPanelSession(req,res);if(!s)return;
+     if(!sock || !connected) throw new Error('WhatsApp não está conectado.');
+     const messageId=cleanText(req.params.messageId);
+     if(!messageId) throw new Error('Mensagem inválida.');
+     const row=await one('rds10_messages','select=wa_message_id,message_type,raw_payload&wa_message_id=eq.'+encodeURIComponent(messageId));
+     if(!row?.raw_payload?.rawMessage) throw new Error('A mídia desta mensagem ainda não está disponível para abertura.');
+     const raw=JSON.parse(JSON.stringify(row.raw_payload.rawMessage),BufferJSON.reviver);
+     if(!raw?.message) throw new Error('Conteúdo de mídia indisponível.');
+     const wamessage=proto.WebMessageInfo.fromObject(raw);
+     const node=unwrapMessageContent(wamessage);
+     const mediaNode=node?.imageMessage||node?.videoMessage||node?.audioMessage||node?.documentMessage||node?.stickerMessage;
+     if(!mediaNode) throw new Error('Esta mensagem não contém mídia abrível.');
+     const buffer=await downloadMediaMessage(wamessage,'buffer',{}, {logger:signalLogger,reuploadRequest:sock.updateMediaMessage});
+     const type=String(row.message_type||'').toLowerCase();
+     const fallback={image:'image/jpeg',video:'video/mp4',audio:'audio/ogg',document:'application/pdf',sticker:'image/webp'}[type]||'application/octet-stream';
+     const mime=String(mediaNode.mimetype||fallback);
+     const ext={image:'jpg',video:'mp4',audio:'ogg',document:'pdf',sticker:'webp'}[type]||'bin';
+     const filename=cleanText(mediaNode.fileName||('rds-'+messageId+'.'+ext)).replace(/["\\\r\n]/g,'_');
+     res.setHeader('Content-Type',mime);
+     res.setHeader('Content-Disposition','inline; filename="'+filename+'"');
+     res.setHeader('Cache-Control','private, max-age=300');
+     res.send(buffer);
+   }catch(e){
+     console.error('[RDS WA PANEL] media:',e.message);
+     res.status(404).send(e.message||'Mídia indisponível.');
+   }
+ });
+})();
+`;
 if(!server.includes(marker)){
   server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
   console.log('[RDS] painel WhatsApp V1 instalado');
@@ -75,5 +109,3 @@ if(!server.includes(mediaMarker)){
   console.log('[RDS] mídia do painel WhatsApp instalada');
 }
 fs.writeFileSync(path,server,'utf8');
-fs.writeFileSync(path,server,'utf8');
-console.log('[RDS] painel WhatsApp V1 instalado');
