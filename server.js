@@ -463,6 +463,9 @@ function phoneKey(v){
 function isAutoContactName(name=''){
   return /^(SEM NOME|Cliente \d{4}|WhatsApp \d{4})$/i.test(cleanText(name));
 }
+function isWhatsAppOnlyContact(c){
+  return ['WHATSAPP','WHATSAPP_HISTORICO'].includes(String(c?.origin||'').trim().toUpperCase());
+}
 async function findContact(phone){
   const key = phoneKey(phone);
   if(!key) return null;
@@ -486,6 +489,7 @@ async function saveOrMergeContact(data, {preferExisting=true}={}){
     if(data.lid && !existing.lid) patchData.lid = data.lid;
     if(data.last_seen_at) patchData.last_seen_at = data.last_seen_at;
     if(data.validated === true) patchData.validated = true;
+    if(['MANUAL','IMPORTACAO'].includes(String(data.origin||'').trim().toUpperCase())) patchData.origin=String(data.origin).trim().toUpperCase();
     const rows = await patch('rds10_contacts',`id=eq.${existing.id}`,patchData);
     return {contact:rows?.[0] || {...existing,...patchData}, merged:true};
   }
@@ -712,7 +716,7 @@ app.post('/api/whatsapp/test',async(req,res)=>{ try{ const r=await sendTextPhone
 app.get('/api/dashboard',async(req,res)=>{
   try{
     const [contacts,campaigns,queue,sent,returns,orders,alerts,failed] = await Promise.all([
-      list('rds10_contacts','select=id&status=eq.ATIVO'),
+      list('rds10_contacts','select=id,origin&status=eq.ATIVO'),
       list('rds10_campaigns','select=id,status&status=neq.EXCLUIDA'),
       list('rds10_deliveries','select=id,scheduled_at&status=eq.AGENDADA'),
       list('rds10_deliveries','select=id&status=eq.ENVIADA'),
@@ -721,10 +725,11 @@ app.get('/api/dashboard',async(req,res)=>{
       list('rds10_alerts','select=id&is_read=eq.false'),
       list('rds10_deliveries','select=id&status=eq.FALHA')
     ]);
+    const crmContacts=contacts.filter(c=>!isWhatsAppOnlyContact(c));
     const purchases=orders.filter(x=>x.status==='CONCLUIDO');
     const revenue=purchases.reduce((s,x)=>s+Number(x.total_amount||0),0);
     res.json({
-      contacts:contacts.length,campaigns:campaigns.length,queue:queue.length,sent:sent.length,
+      contacts:crmContacts.length,campaigns:campaigns.length,queue:queue.length,sent:sent.length,
       returns:returns.length,orders:orders.length,purchases:purchases.length,revenue,
       alerts:alerts.length,failed:failed.length,connected,number:connectedNumber,
       proofReview:orders.filter(x=>x.status==='AGUARDANDO_CONFERENCIA').length,
