@@ -17,7 +17,8 @@ ${marker}
    try{
      const s=await waPanelSession(req,res);if(!s)return;
      const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&order=created_at.desc&limit=500');
-     const contacts=await list('rds10_contacts','select=id,name,phone,group_name,validated&order=updated_at.desc&limit=500');
+     const contactsAll=await list('rds10_contacts','select=id,name,phone,group_name,validated,origin&order=updated_at.desc&limit=500');
+     const contacts=contactsAll.filter(c=>!['WHATSAPP','WHATSAPP_HISTORICO'].includes(String(c?.origin||'').trim().toUpperCase()));
      const cm=new Map(contacts.map(c=>[String(c.phone||''),c]));
      const map=new Map();
      for(const m of messages){
@@ -25,6 +26,7 @@ ${marker}
        if(!map.has(phone))map.set(phone,{phone,name:cm.get(phone)?.name||phone,group_name:cm.get(phone)?.group_name||'',validated:Boolean(cm.get(phone)?.validated),messages:[]});
        const c=map.get(phone);if(c.messages.length<1)c.messages.push(m);
      }
+     for(const c of map.values()) if(!cm.has(c.phone)) c.name=c.phone;
      res.json({connected,number:connectedNumber,starting,qrAvailable:Boolean(qrDataUrl),qrDataUrl,lastError,chats:[...map.values()].sort((a,b)=>new Date(b.messages[0]?.created_at||0)-new Date(a.messages[0]?.created_at||0)).slice(0,200)});
    }catch(e){res.status(500).json({error:e.message});}
  });
@@ -32,10 +34,19 @@ ${marker}
    try{
      const s=await waPanelSession(req,res);if(!s)return;
      const phone=normalizeBR(req.params.phone);if(!validBRPhone(phone))throw new Error('WhatsApp inválido.');
-     const c=await one('rds10_contacts','select=id,name,phone,group_name,validated,city,tags&phone=eq.'+encodeURIComponent(phone));
+     const allContacts=await list('rds10_contacts','select=id,name,phone,group_name,validated,city,tags,origin&phone=eq.'+encodeURIComponent(phone));
+     const c=allContacts.find(x=>!['WHATSAPP','WHATSAPP_HISTORICO'].includes(String(x?.origin||'').trim().toUpperCase()))||null;
      const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&phone=eq.'+encodeURIComponent(phone)+'&order=created_at.asc&limit=500');
      res.json({ok:true,connected,number:connectedNumber,contact:c||{name:phone,phone},messages});
    }catch(e){console.error('[RDS WA PANEL] chat:',e.message);res.status(400).json({ok:false,error:e.message});}
+ });
+ app.delete('/api/whatsapp/chat/:phone',async(req,res)=>{
+   try{
+     const s=await waPanelSession(req,res);if(!s)return;
+     const phone=normalizeBR(req.params.phone);if(!validBRPhone(phone))throw new Error('WhatsApp inválido.');
+     await del('rds10_messages',`phone=eq.${encodeURIComponent(phone)}`);
+     res.json({ok:true,phone});
+   }catch(e){res.status(400).json({ok:false,error:e.message});}
  });
  app.post('/api/whatsapp/chat/:phone/send',async(req,res)=>{
    try{
