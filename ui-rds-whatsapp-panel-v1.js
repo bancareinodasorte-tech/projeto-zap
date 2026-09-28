@@ -122,8 +122,20 @@ window.rdsWaOpen=async phone=>{
    : '<button class="rds-wa-full-action" onclick="rdsWaSaveContact(\''+E(phone)+'\')">Salvar contato</button>';
   const messageHtml=messages.length
    ? messages.map(m=>{
-      const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[m.message_type] || 'Mensagem sem conteúdo disponível');
-      return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(body)+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
+      const type=String(m.message_type||'text').toLowerCase();
+      const mediaUrl='/api/whatsapp/media/'+encodeURIComponent(m.wa_message_id||'');
+      const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[type] || 'Mensagem sem conteúdo disponível');
+      let mediaHtml='';
+      if(m.wa_message_id && ['image','sticker'].includes(type)){
+        mediaHtml='<a class="rds-wa-media-open" href="'+mediaUrl+'" target="_blank" rel="noopener"><img class="rds-wa-media-image" src="'+mediaUrl+'" alt="'+E(type==='image'?'Foto':'Figurinha')+'" loading="lazy" onerror="this.closest(\'.rds-wa-media-open\').classList.add(\'failed\')"></a>';
+      }else if(m.wa_message_id && type==='video'){
+        mediaHtml='<video class="rds-wa-media-video" controls preload="metadata" src="'+mediaUrl+'"></video>';
+      }else if(m.wa_message_id && type==='audio'){
+        mediaHtml='<audio class="rds-wa-media-audio" controls preload="metadata" src="'+mediaUrl+'"></audio>';
+      }else if(m.wa_message_id && type==='document'){
+        mediaHtml='<a class="rds-wa-media-document" href="'+mediaUrl+'" target="_blank" rel="noopener">📄 Abrir documento / PDF</a>';
+      }
+      return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'">'+mediaHtml+(body?'<div>'+E(body)+'</div>':'')+'<small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
     }).join('')
    : '<div class="rds-wa-full-no-message">Nenhuma mensagem registrada nesta conversa.</div>';
   app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><div class="rds-wa-full-head-left"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><span class="rds-wa-avatar">'+E((contactName||phone).slice(0,1).toUpperCase())+'</span><div class="rds-wa-full-title"><b>'+E(contactName)+'</b><small>'+E(fmtPhone(c?.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div><div class="rds-wa-full-actions">'+contactAction+'<button class="rds-wa-full-action danger" onclick="rdsWaDeleteConversation(\''+E(phone)+'\')">Excluir</button></div></header><main id="rdsWaMessages" class="rds-wa-full-messages">'+messageHtml+'</main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="rds-wa-full-send" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form></section>';
