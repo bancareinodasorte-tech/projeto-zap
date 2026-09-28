@@ -482,8 +482,9 @@ async function saveOrMergeContact(data, {preferExisting=true}={}){
   const name = cleanText(data.name);
   if(existing){
     const patchData = { updated_at:nowISO() };
-    if(name && (isAutoContactName(existing.name) || data.force_name)) patchData.name = name;
-    if(data.group_name && (!existing.group_name || existing.group_name==='ENTRADA WHATSAPP' || data.force_group)) patchData.group_name = cleanText(data.group_name);
+    const crmOrigin=['MANUAL','IMPORTACAO'].includes(String(data.origin||'').trim().toUpperCase());
+    if(name && (isAutoContactName(existing.name) || data.force_name || crmOrigin)) patchData.name = name;
+    if(data.group_name && (!existing.group_name || existing.group_name==='ENTRADA WHATSAPP' || data.force_group || crmOrigin)) patchData.group_name = cleanText(data.group_name);
     if(data.city) patchData.city = cleanText(data.city);
     if(data.tags) patchData.tags = cleanText(data.tags);
     if(data.lid && !existing.lid) patchData.lid = data.lid;
@@ -769,8 +770,8 @@ app.post('/api/contacts/import',async(req,res)=>{
     for(const item of items){
       const phone=normalizeBR(item.phone); if(!validBRPhone(phone)){invalid.push(item);continue;}
       const existing=await findContact(phone);
-      if(existing){duplicates.push(item);continue;}
-      const r=await saveOrMergeContact({name:item.name,phone,group_name:item.group_name||'IMPORTADOS',origin:'IMPORTACAO',status:'ATIVO',validated:false});
+      if(existing && !isWhatsAppOnlyContact(existing)){duplicates.push(item);continue;}
+      const r=await saveOrMergeContact({name:item.name,phone,group_name:item.group_name||'IMPORTADOS',origin:'IMPORTACAO',status:'ATIVO',validated:false,force_name:true,force_group:true});
       if(r.contact) saved.push(r.contact);
     }
     res.json({saved:saved.length,duplicates:duplicates.length,invalid:invalid.length});
