@@ -52,7 +52,8 @@ ${marker}
      const waContact=allContacts[0]||null;
      const displayContact=crmContact||waContact;
      const c=displayContact ? {...displayContact,id:crmContact?.id||null} : null;
-     const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id,raw_payload&phone=eq.'+encodeURIComponent(phone)+'&order=created_at.asc&limit=500');
+     const messagesDesc=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id,raw_payload&phone=eq.'+encodeURIComponent(phone)+'&order=created_at.desc&limit=1000');
+     const messages=messagesDesc.reverse();
      res.json({ok:true,connected,number:connectedNumber,contact:c||{name:phone,phone},messages});
    }catch(e){console.error('[RDS WA PANEL] chat:',e.message);res.status(400).json({ok:false,error:e.message});}
  });
