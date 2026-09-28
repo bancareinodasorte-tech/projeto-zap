@@ -13,7 +13,7 @@ function replaceRoute(source,startMarker,nextMarker,newText,label){
   if(a<0)throw new Error('Trecho não localizado: '+label);
   const b=source.indexOf(nextMarker,a);
   if(b<0)throw new Error('Fim não localizado: '+label);
-  return source.slice(0,a)+newText+'\\n'+source.slice(b);
+  return source.slice(0,a)+newText+'\n'+source.slice(b);
 }
 
 const groupsGetNew="app.get('/api/groups',async(req,res)=>{ try{ const s=await rdsOpRequire(req,res); if(!s)return; const sid=encodeURIComponent(s.seller.id); let rows=await list('rds10_groups','select=*&seller_id=eq.'+sid+'&order=name.asc'); const defaults=['NOVOS','IMPORTADOS','CLIENTES','INTERESSADOS']; const have=new Set(rows.map(x=>String(x.name||'').toUpperCase())); for(const name of defaults){ if(!have.has(name)){ const normalized=name.normalize('NFD').replace(/[\\\\u0300-\\\\u036f]/g,''); const ins=await insert('rds10_groups',{seller_id:s.seller.id,name,normalized_name:normalized,is_system:true,created_at:nowISO()}); if(ins?.[0])rows.push(ins[0]); } } rows.sort((a,b)=>String(a.name).localeCompare(String(b.name),'pt-BR')); res.json(rows); }catch(e){res.status(500).json({error:e.message});} });";
