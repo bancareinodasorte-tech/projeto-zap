@@ -16,8 +16,8 @@ ${marker}
  app.get('/api/whatsapp/chats',async(req,res)=>{
    try{
      const s=await waPanelSession(req,res);if(!s)return;
-     const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&order=created_at.desc&limit=2000');
-     const contacts=await list('rds10_contacts','select=id,name,phone,group_name,validated&order=updated_at.desc&limit=2000');
+     const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&order=created_at.desc&limit=500');
+     const contacts=await list('rds10_contacts','select=id,name,phone,group_name,validated&order=updated_at.desc&limit=500');
      const cm=new Map(contacts.map(c=>[String(c.phone||''),c]));
      const map=new Map();
      for(const m of messages){
