@@ -44,7 +44,7 @@ ${marker}
    try{
      const s=await waPanelSession(req,res);if(!s)return;
      const phone=normalizeBR(req.params.phone);if(!validBRPhone(phone))throw new Error('WhatsApp inválido.');
-     await del('rds10_messages',`phone=eq.${encodeURIComponent(phone)}`);
+     await del('rds10_messages','phone=eq.'+encodeURIComponent(phone));
      res.json({ok:true,phone});
    }catch(e){res.status(400).json({ok:false,error:e.message});}
  });
