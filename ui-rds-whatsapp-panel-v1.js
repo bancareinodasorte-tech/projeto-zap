@@ -36,6 +36,7 @@ function statusCard(s){
  return '<div class="rds-wa-connect-card offline"><div class="rds-wa-connect-icon">'+(starting?'…':'↻')+'</div><div><b>'+(starting?'Preparando o QR Code':'WhatsApp aguardando conexão')+'</b><small>'+(starting?'O servidor está abrindo o canal seguro e aguardando o QR Code do WhatsApp.':'A sessão ainda não está vinculada. Inicie a conexão para gerar o QR Code.')+'</small><div class="rds-wa-connect-buttons"><button class="btn primary" onclick="rdsWaConnect()" '+(waBusy?'disabled':'')+'>'+ (waBusy?'Iniciando...':(starting?'Atualizar status':'Conectar por QR Code')) +'</button></div>'+(err?'<small class="rds-wa-pair-error">'+E(err)+'</small>':'')+'</div><span>OFFLINE</span></div>';
 }
 function shell(d){
+ if(activePhone) return;
  lastData=d;const s=d.status||{};
  app.innerHTML='<section class="rds-wa-app"><header class="rds-wa-top"><div><span class="eyebrow">ATENDIMENTO • DISPOSITIVO RDS</span><h1>WhatsApp</h1><p>Central de conversas conectada ao número do CANAL DE VENDAS RDS.</p></div><div class="rds-wa-top-actions"><span class="rds-wa-state '+(s.connected?'on':'off')+'">● '+(s.connected?'Conectado':'Aguardando conexão')+'</span>'+(s.connected?'<span class="rds-wa-provider">DISPOSITIVO VINCULADO</span>':'')+'</div></header><div id="rdsWaStatus">'+statusCard(s)+'</div><div class="rds-wa-layout"><aside class="rds-wa-list"><div class="rds-wa-list-head"><b>Conversas</b><span id="rdsWaCount"></span></div><div class="rds-wa-search"><span>⌕</span><input id="rdsWaSearch" placeholder="Pesquisar nome ou número..."></div><div id="rdsWaChats"></div></aside><section class="rds-wa-chat"><div id="rdsWaEmpty" class="rds-wa-empty"><div class="rds-wa-logo">◉</div><h2>Central de conversas</h2><p>Selecione uma conversa à esquerda.</p><small>Mensagens recebidas e enviadas pelo dispositivo conectado ficam organizadas aqui.</small></div><div id="rdsWaConversation" hidden></div></section></div></section>';
  $('#rdsWaSearch').value=searchText;$('#rdsWaSearch').oninput=()=>{searchText=$('#rdsWaSearch').value;drawChats(d.chats||[])};drawChats(d.chats||[]);
@@ -109,7 +110,7 @@ window.rdsWaLogout=async()=>{
 };
 window.rdsWaReload=()=>{activePhone='';searchText='';waPage()};
 window.rdsWaOpen=async phone=>{
- activePhone=phone;document.querySelector('.rds-wa-app')?.classList.add('rds-wa-open');
+ activePhone=String(phone||'');document.querySelector('.rds-wa-app')?.classList.add('rds-wa-open');document.body.classList.add('rds-wa-mobile-open');
  const box=$('#rdsWaConversation');box.hidden=false;$('#rdsWaEmpty').hidden=true;
  box.innerHTML='<header class="rds-wa-conv-head"><div><button class="rds-wa-back" onclick="rdsWaBack()" title="Voltar para conversas">‹ <span>Voltar</span></button><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><div class="rds-wa-open-error">Carregando...</div>';
  try{
@@ -132,7 +133,7 @@ window.rdsWaDeleteConversation=async phone=>{
  if(!confirm('Excluir esta conversa do painel?\\n\\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
  if(!confirm('CONFIRMAÇÃO FINAL\\n\\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
  try{await F('/api/whatsapp/chat/'+encodeURIComponent(phone),{method:'DELETE',body:'{}'});toast('Conversa excluída do painel.');rdsWaBack();const d=await F('/api/whatsapp/chats');lastData={...lastData,chats:d.chats||[]};drawChats(lastData.chats);}catch(e){toast(e.message)}};
-window.rdsWaBack=()=>{activePhone='';document.querySelector('.rds-wa-app')?.classList.remove('rds-wa-open');$('#rdsWaConversation').hidden=true;$('#rdsWaEmpty').hidden=false};
+window.rdsWaBack=()=>{activePhone='';document.body.classList.remove('rds-wa-mobile-open');document.querySelector('.rds-wa-app')?.classList.remove('rds-wa-open');$('#rdsWaConversation').hidden=true;$('#rdsWaEmpty').hidden=false};
 async function waPage(){
  try{clearInterval(pollTimer);const d=await loadData();shell(d);
    if(!d.status?.connected&&!d.status?.manualDisconnect&&!d.status?.starting&&!d.status?.qrAvailable&&!autoStartIssued){
