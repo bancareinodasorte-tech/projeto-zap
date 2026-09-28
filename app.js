@@ -1,6 +1,6 @@
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], app=$('#app');
-let page='home', state={contacts:[],groups:[],campaigns:[],orders:[],settings:null,returns:[],automation:null};
+let page=localStorage.getItem('rds_current_page')||'home', state={contacts:[],groups:[],campaigns:[],orders:[],settings:null,returns:[],automation:null};
 const api=async(url,opt={})=>{const r=await fetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha na operação');return d};
 const post=(u,b={})=>api(u,{method:'POST',body:JSON.stringify(b)}),put=(u,b={})=>api(u,{method:'PUT',body:JSON.stringify(b)}),del=u=>api(u,{method:'DELETE'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -10,9 +10,22 @@ function btn(t,onclick,cls='btn'){return `<button class="${cls}" onclick="${oncl
 function badge(s){const x=String(s||'').toUpperCase(),c=/CONCLUIDO|ENVIADA|ATIVO|VALIDADO/.test(x)?'ok':/FALHA|CANCELADO/.test(x)?'bad':/AGUARDANDO|COLETANDO|AGENDADA|RASCUNHO/.test(x)?'warn':'';return `<span class="badge ${c}">${esc(x||'—')}</span>`}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><div class=row style="justify-content:flex-end">${btn('✕',"this.closest('.modal').remove()")}</div>${html}</div>`;document.body.appendChild(m)}
 function setNav(){[...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
-function go(p){page=p;setNav();render();scrollTo(0,0)}
+function go(p){page=p;localStorage.setItem('rds_current_page',page);setNav();render();scrollTo(0,0)}
 [...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.onclick=()=>go(b.dataset.page));
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR')},1000);
+
+async function refreshCurrentPage(){
+ localStorage.setItem('rds_current_page',page);
+ try{
+  const b=document.getElementById('rdsRefreshBtn');
+  if(b){b.disabled=true;b.textContent='↻ Atualizando…';}
+  await render();
+ }finally{
+  const b=document.getElementById('rdsRefreshBtn');
+  if(b){b.disabled=false;b.textContent='↻ Atualizar';}
+ }
+}
+window.rdsRefreshCurrentPage=refreshCurrentPage;
 
 async function refreshStatus(){try{const s=await api('/api/status'),txt=s.connected?`WhatsApp conectado • ${s.number||''}`:'WhatsApp desconectado';$('#waStatus').textContent=txt;$('#waStatusMobile').textContent=s.connected?'WhatsApp conectado':'WhatsApp offline'}catch{}}
 setInterval(refreshStatus,10000);refreshStatus();
