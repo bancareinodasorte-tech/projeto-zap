@@ -44,7 +44,7 @@ function shell(d){
 function drawChats(chats){
  const q=searchText.toLowerCase().trim(),list=(chats||[]).filter(c=>(String(c.name||'')+' '+String(c.phone||'')+' '+String(c.group_name||'')).toLowerCase().includes(q));
  $('#rdsWaCount').textContent=list.length+' conversa'+(list.length===1?'':'s');
- $('#rdsWaChats').innerHTML=list.map(c=>'<button class="rds-wa-chat-row" onclick="rdsWaOpen(\''+E(c.phone||'')+'\')"><span class="rds-wa-avatar">'+E((c.name||c.phone||'?').slice(0,1).toUpperCase())+'</span><span class="rds-wa-chat-main"><b>'+E(c.name||c.phone)+'</b><small>'+E(c.messages?.[0]?.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha'}[c.messages?.[0]?.message_type] || 'Mensagem sem conteúdo disponível'))+'</small></span><time>'+((c.messages?.[0]?.created_at)?new Date(c.messages[0].created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'')+'</time></button>').join('')||'<div class="rds-wa-nochat">Nenhuma conversa encontrada.</div>';
+ $('#rdsWaChats').innerHTML=list.map(c=>'<button class="rds-wa-chat-row" onclick="rdsWaOpen(\''+E(c.phone||'')+'\')"><span class="rds-wa-avatar">'+E((c.name||c.phone||'?').slice(0,1).toUpperCase())+'</span><span class="rds-wa-chat-main"><b>'+E(c.name||c.phone)+'</b><small>'+E(c.messages?.[0]?.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha'}[c.messages?.[0]?.message_type] || 'Mensagem sem conteúdo disponível'))+'</small></span><span class="rds-wa-chat-meta"><time>'+((c.messages?.[0]?.created_at)?new Date(c.messages[0].created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'')+'</time>'+(Number(c.unread_count||0)>0?'<b class="rds-wa-unread-badge">'+(Number(c.unread_count)>99?'99+':Number(c.unread_count))+'</b>':'')+'</span></button>').join('')||'<div class="rds-wa-nochat">Nenhuma conversa encontrada.</div>';
 }
 async function loadData(){const [status,chats]=await Promise.all([F('/api/status'),F('/api/whatsapp/chats')]);return {status,chats:chats.chats||[]}}
 function dataKey(d){return JSON.stringify({connected:d?.status?.connected,number:d?.status?.number,starting:d?.status?.starting,manual:d?.status?.manualDisconnect,qr:d?.status?.qrDataUrl,qrAt:d?.status?.qrUpdatedAt,qrExp:d?.status?.qrExpiresAt,lastError:d?.status?.lastError,code:d?.status?.lastDisconnectCode,retries:d?.status?.reconnectAttempts,chats:(d?.chats||[]).map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body])})}
@@ -109,11 +109,35 @@ window.rdsWaLogout=async()=>{
  try{await F('/api/whatsapp/logout',{method:'POST',body:'{}'});toast('WhatsApp desconectado pelo painel.');await waPage();}catch(e){toast(e.message)}finally{waBusy=false;}
 };
 window.rdsWaReload=()=>{activePhone='';searchText='';waPage()};
+async function refreshOpenConversation(phone){
+ try{
+  const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone));
+  if(String(activePhone)!==String(phone))return;
+  const messages=d.messages||[],box=$('#rdsWaMessages');if(!box)return;
+  const html=messages.length?messages.map(m=>{
+    const type=String(m.message_type||'text').toLowerCase(),mediaUrl='/api/whatsapp/media/'+encodeURIComponent(m.wa_message_id||'');
+    const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[type] || 'Mensagem sem conteúdo disponível');
+    let mediaHtml='';
+    if(m.wa_message_id && ['image','sticker'].includes(type)) mediaHtml='<button type="button" class="rds-wa-media-open" onclick="rdsWaOpenMedia(\\''+E(mediaUrl)+'\\',\\''+E(type)+'\\')"><img class="rds-wa-media-image" src="'+mediaUrl+'" alt="'+E(type==='image'?'Foto':'Figurinha')+'" loading="lazy"></button>';
+    else if(m.wa_message_id && type==='video') mediaHtml='<video class="rds-wa-media-video" controls preload="metadata" src="'+mediaUrl+'"></video>';
+    else if(m.wa_message_id && type==='audio') mediaHtml='<audio class="rds-wa-media-audio" controls preload="metadata" src="'+mediaUrl+'"></audio>';
+    else if(m.wa_message_id && type==='document') mediaHtml='<button type="button" class="rds-wa-media-document" onclick="rdsWaOpenMedia(\\''+E(mediaUrl)+'\\',\\'document\\')">📄 Abrir documento / PDF</button>';
+    return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'">'+mediaHtml+(body?'<div>'+E(body)+'</div>':'')+'<small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
+  }).join(''):'<div class="rds-wa-full-no-message">Nenhuma mensagem registrada nesta conversa.</div>';
+  const wasBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<80;
+  box.innerHTML=html;if(wasBottom)box.scrollTop=box.scrollHeight;
+ }catch{}
+}
+function startConversationPolling(phone){
+ clearInterval(chatPollTimer);
+ chatPollTimer=setInterval(()=>{if(page==='whatsapp'&&activePhone===String(phone))refreshOpenConversation(phone);},2000);
+}
 window.rdsWaOpen=async phone=>{
  activePhone=String(phone||'');
  document.body.classList.add('rds-wa-mobile-open');
  app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div class="rds-wa-full-title"><span class="rds-wa-avatar">•</span><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><main id="rdsWaMessages" class="rds-wa-full-messages"><div class="rds-wa-full-loading">Carregando conversa...</div></main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="Digite uma mensagem..."></textarea><button class="rds-wa-full-send" type="submit">➤</button></form></section>';
  try{
+  await F('/api/whatsapp/chat/'+encodeURIComponent(phone)+'/read',{method:'POST',body:JSON.stringify({})}).catch(()=>{});
   const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{},messages=d.messages||[];
   const contactName=c?.name||phone;
   const managed=Boolean(c?.id);
@@ -145,6 +169,7 @@ window.rdsWaOpen=async phone=>{
    catch(err){toast(err.message)}
   };
   const box=$('#rdsWaMessages');if(box)box.scrollTop=box.scrollHeight;
+  startConversationPolling(phone);
  }catch(e){
   app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div><b>Erro ao abrir conversa</b><small>'+E(e.message)+'</small></div></header><main class="rds-wa-full-messages"><div class="rds-wa-full-no-message">Não foi possível carregar esta conversa.<br><button class="btn primary" onclick="rdsWaOpen(\''+E(phone)+'\')">Tentar novamente</button></div></main></section>';
  }
@@ -173,7 +198,7 @@ window.rdsWaDeleteConversation=async phone=>{
  if(!confirm('Excluir esta conversa do painel?\n\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
  if(!confirm('CONFIRMAÇÃO FINAL\n\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
  try{await F('/api/whatsapp/chat/'+encodeURIComponent(phone),{method:'DELETE',body:'{}'});toast('Conversa excluída do painel.');rdsWaBack();const d=await F('/api/whatsapp/chats');lastData={...lastData,chats:d.chats||[]};drawChats(lastData.chats);}catch(e){toast(e.message)}};
-window.rdsWaBack=async()=>{activePhone='';document.body.classList.remove('rds-wa-mobile-open');await waPage();};
+window.rdsWaBack=async()=>{activePhone='';clearInterval(chatPollTimer);document.body.classList.remove('rds-wa-mobile-open');await waPage();};
 async function waPage(){
  try{clearInterval(pollTimer);const d=await loadData();shell(d);
    if(!d.status?.connected&&!d.status?.manualDisconnect&&!d.status?.starting&&!d.status?.qrAvailable&&!autoStartIssued){
@@ -183,6 +208,7 @@ async function waPage(){
    startPolling();
  }catch(e){app.innerHTML='<div class="rds-panel rds-error"><h2>WhatsApp</h2><p>'+E(e.message)+'</p><button class="btn primary" onclick="go(\'whatsapp\')">Tentar novamente</button></div>'}
 }
+if(!document.getElementById('rdsWaUnreadStyle')){const st=document.createElement('style');st.id='rdsWaUnreadStyle';st.textContent='.rds-wa-chat-meta{display:flex;flex-direction:column;align-items:flex-end;gap:5px;min-width:28px}.rds-wa-unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#1fb56a;color:#fff;font-size:10px;font-weight:900;line-height:20px}.rds-wa-chat-row:has(.rds-wa-unread-badge){background:#fbfdff}';document.head.appendChild(st)}
 if(!document.getElementById('rdsWaPanelOverrides')){const st=document.createElement('style');st.id='rdsWaPanelOverrides';st.textContent='.rds-wa-back{display:grid!important;place-items:center;width:35px;height:40px;border:0;background:transparent;font-size:30px;color:#55708f;cursor:pointer}.rds-wa-conv-actions{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rds-wa-contact-action{border:1px solid #d6e2ed;background:#fff;color:#24547f;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:800;cursor:pointer}.rds-wa-contact-action.danger{color:#a33a43;border-color:#ebcbd0;background:#fff5f6}@media(max-width:760px){.rds-wa-conv-head{height:auto;min-height:70px;padding:8px;flex-wrap:wrap}.rds-wa-conv-head>div:first-child{min-width:0}.rds-wa-conv-actions{width:100%;margin-left:45px;justify-content:flex-start}.rds-wa-contact-action{font-size:9px;padding:6px 8px}}';document.head.appendChild(st)}
 const oldRender=window.render;window.render=async function(){clearInterval(pollTimer);if(page==='whatsapp')return waPage();return oldRender.apply(this,arguments)};
 })();
