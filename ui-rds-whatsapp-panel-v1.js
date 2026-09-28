@@ -1,7 +1,7 @@
 (()=> {
 const E=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const F=async(u,o={})=>{const r=await fetch(u,{...o,headers:{'Content-Type':'application/json',...(o.headers||{})},cache:'no-store'});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||d.message||'Falha');return d;};
-let activePhone='',pollTimer=null,searchText='',lastData=null,waBusy=false,autoStartIssued=false;
+let activePhone='',pollTimer=null,chatPollTimer=null,searchText='',lastData=null,waBusy=false,autoStartIssued=false;
 
 function fmtPhone(v){
  const n=String(v||'').replace(/\D/g,'');
@@ -48,14 +48,52 @@ function drawChats(chats){
 async function loadData(){const [status,chats]=await Promise.all([F('/api/status'),F('/api/whatsapp/chats')]);return {status,chats:chats.chats||[]}}
 function dataKey(d){return JSON.stringify({connected:d?.status?.connected,number:d?.status?.number,starting:d?.status?.starting,manual:d?.status?.manualDisconnect,qr:d?.status?.qrDataUrl,qrAt:d?.status?.qrUpdatedAt,qrExp:d?.status?.qrExpiresAt,lastError:d?.status?.lastError,code:d?.status?.lastDisconnectCode,retries:d?.status?.reconnectAttempts,chats:(d?.chats||[]).map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body])})}
 function startPolling(){
- clearInterval(pollTimer);
+ clearInterval(pollTimer);clearInterval(chatPollTimer);
+ // Status/QR polling is lightweight. Do not reload the full conversation list
+ // every second: that was unnecessarily expensive and could freeze the panel
+ // immediately after linking the WhatsApp device.
  pollTimer=setInterval(async()=>{
   if(page!=='whatsapp'||activePhone)return;
   try{
-   const before=lastData,key=dataKey(before),d=await loadData();
-   if(key!==dataKey(d))shell(d);
+   const d=await F('/api/status');
+   const before=lastData?.status||{};
+   const changed=JSON.stringify({
+     connected:before.connected,number:before.number,starting:before.starting,
+     manualDisconnect:before.manualDisconnect,qrDataUrl:before.qrDataUrl,
+     qrUpdatedAt:before.qrUpdatedAt,qrExpiresAt:before.qrExpiresAt,
+     lastError:before.lastError,lastDisconnectCode:before.lastDisconnectCode,
+     reconnectAttempts:before.reconnectAttempts
+   })!==JSON.stringify({
+     connected:d.connected,number:d.number,starting:d.starting,
+     manualDisconnect:d.manualDisconnect,qrDataUrl:d.qrDataUrl,
+     qrUpdatedAt:d.qrUpdatedAt,qrExpiresAt:d.qrExpiresAt,
+     lastError:d.lastError,lastDisconnectCode:d.lastDisconnectCode,
+     reconnectAttempts:d.reconnectAttempts
+   });
+   if(changed){
+     const chats=(lastData?.chats||[]);
+     shell({status:d,chats});
+     if(d.connected && !before.connected) {
+       try{ const c=await F('/api/whatsapp/chats'); shell({status:d,chats:c.chats||[]}); }catch{}
+     }
+   } else if(lastData) {
+     lastData={...lastData,status:d};
+   }
   }catch{}
- },sConnected()?3500:1200);
+ },1200);
+
+ const refreshChats=async()=>{
+   if(page!=='whatsapp'||activePhone||!lastData?.status?.connected)return;
+   try{
+     const d=await F('/api/whatsapp/chats');
+     const chats=d.chats||[];
+     const before=lastData?.chats||[];
+     const same=JSON.stringify(chats.map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]))
+       ===JSON.stringify(before.map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]));
+     if(!same){ lastData={...lastData,chats}; drawChats(chats); }
+   }catch{}
+ };
+ chatPollTimer=setInterval(refreshChats,5000);
 }
 function sConnected(){return Boolean(lastData?.status?.connected)}
 window.rdsWaConnect=async()=>{
