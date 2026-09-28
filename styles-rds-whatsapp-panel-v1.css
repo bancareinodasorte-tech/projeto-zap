@@ -19,3 +19,9 @@
 .rds-settings-qr img{width:min(300px,78vw);height:min(300px,78vw);object-fit:contain;background:#fff;padding:9px;border-radius:14px;box-shadow:0 8px 25px #173b7012}
 .rds-settings-qr small,.rds-settings-qr-empty small{display:block;color:#718198;font-size:10px;line-height:1.45}
 .rds-settings-qr-empty b{display:block;color:#173b70;font-size:12px;margin-bottom:4px}
+
+/* RDS WhatsApp V4 - navegação móvel */
+.rds-wa-security-strip{display:none!important}
+.rds-wa-back{display:inline-flex!important;align-items:center;justify-content:center;gap:3px;min-width:72px;width:auto!important;height:40px!important;padding:0 7px!important;font-size:16px!important;font-weight:800!important}
+.rds-wa-back span{font-size:10px;font-weight:900}
+@media(max-width:760px){.rds-wa-back{display:inline-flex!important}.rds-wa-conv-head>div:first-child{width:100%}}
