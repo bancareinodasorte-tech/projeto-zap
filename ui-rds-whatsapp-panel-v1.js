@@ -127,13 +127,13 @@ window.rdsWaOpen=async phone=>{
       const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[type] || 'Mensagem sem conteúdo disponível');
       let mediaHtml='';
       if(m.wa_message_id && ['image','sticker'].includes(type)){
-        mediaHtml='<a class="rds-wa-media-open" href="'+mediaUrl+'" target="_blank" rel="noopener"><img class="rds-wa-media-image" src="'+mediaUrl+'" alt="'+E(type==='image'?'Foto':'Figurinha')+'" loading="lazy" onerror="this.closest(\'.rds-wa-media-open\').classList.add(\'failed\')"></a>';
+        mediaHtml='<button type="button" class="rds-wa-media-open" onclick="rdsWaOpenMedia(\''+E(mediaUrl)+'\',\''+E(type)+'\')"><img class="rds-wa-media-image" src="'+mediaUrl+'" alt="'+E(type==='image'?'Foto':'Figurinha')+'" loading="lazy"></button>';
       }else if(m.wa_message_id && type==='video'){
         mediaHtml='<video class="rds-wa-media-video" controls preload="metadata" src="'+mediaUrl+'"></video>';
       }else if(m.wa_message_id && type==='audio'){
         mediaHtml='<audio class="rds-wa-media-audio" controls preload="metadata" src="'+mediaUrl+'"></audio>';
       }else if(m.wa_message_id && type==='document'){
-        mediaHtml='<a class="rds-wa-media-document" href="'+mediaUrl+'" target="_blank" rel="noopener">📄 Abrir documento / PDF</a>';
+        mediaHtml='<button type="button" class="rds-wa-media-document" onclick="rdsWaOpenMedia(\''+E(mediaUrl)+'\',\'document\')">📄 Abrir documento / PDF</button>';
       }
       return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'">'+mediaHtml+(body?'<div>'+E(body)+'</div>':'')+'<small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
     }).join('')
@@ -149,13 +149,29 @@ window.rdsWaOpen=async phone=>{
   app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div><b>Erro ao abrir conversa</b><small>'+E(e.message)+'</small></div></header><main class="rds-wa-full-messages"><div class="rds-wa-full-no-message">Não foi possível carregar esta conversa.<br><button class="btn primary" onclick="rdsWaOpen(\''+E(phone)+'\')">Tentar novamente</button></div></main></section>';
  }
 };
+window.rdsWaOpenMedia=async(url,type)=>{
+ try{
+  const r=await fetch(url,{credentials:'same-origin'});
+  if(!r.ok){const msg=await r.text();throw new Error(msg||'Mídia indisponível.');}
+  const blob=await r.blob();
+  const objectUrl=URL.createObjectURL(blob);
+  if(type==='image'||type==='sticker'){
+    const w=window.open('','_blank');
+    if(w){w.document.write('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>RDS • Mídia</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+objectUrl+'" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>');w.document.close();}
+    else window.location.href=objectUrl;
+  }else{
+    const w=window.open(objectUrl,'_blank');
+    if(!w) window.location.href=objectUrl;
+  }
+ }catch(e){toast(e.message||'Mídia indisponível.');}
+};
 window.rdsWaSaveContact=async phone=>{
  try{const name=prompt('Nome do cliente:', '');if(name===null)return;const clean=String(name||'').trim();if(!clean){toast('Informe o nome do cliente.');return;}await F('/api/contacts',{method:'POST',body:JSON.stringify({name:clean,phone,group_name:'NOVOS',status:'ATIVO'})});toast('Contato salvo na agenda de Clientes.');await rdsWaOpen(phone);}catch(e){toast(e.message)}};
 window.rdsWaEditContact=async phone=>{
  try{const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{};const name=prompt('Nome do cliente:',c.name&&c.name!==phone?c.name:'');if(name===null)return;const clean=String(name||'').trim();if(!clean){toast('Informe o nome do cliente.');return;}if(c.id)await F('/api/contacts/'+encodeURIComponent(c.id),{method:'PUT',body:JSON.stringify({name:clean,phone,group_name:c.group_name||'NOVOS'})});else await F('/api/contacts',{method:'POST',body:JSON.stringify({name:clean,phone,group_name:'NOVOS',status:'ATIVO'})});toast('Contato atualizado na agenda de Clientes.');await rdsWaOpen(phone);}catch(e){toast(e.message)}};
 window.rdsWaDeleteConversation=async phone=>{
- if(!confirm('Excluir esta conversa do painel?\\n\\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
- if(!confirm('CONFIRMAÇÃO FINAL\\n\\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
+ if(!confirm('Excluir esta conversa do painel?\n\nAs mensagens serão removidas do histórico local do painel. O contato da agenda não será excluído.'))return;
+ if(!confirm('CONFIRMAÇÃO FINAL\n\nExcluir definitivamente o histórico desta conversa deste painel?'))return;
  try{await F('/api/whatsapp/chat/'+encodeURIComponent(phone),{method:'DELETE',body:'{}'});toast('Conversa excluída do painel.');rdsWaBack();const d=await F('/api/whatsapp/chats');lastData={...lastData,chats:d.chats||[]};drawChats(lastData.chats);}catch(e){toast(e.message)}};
 window.rdsWaBack=async()=>{activePhone='';document.body.classList.remove('rds-wa-mobile-open');await waPage();};
 async function waPage(){
