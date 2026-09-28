@@ -545,19 +545,12 @@ async function saveOrMergeContact(data, {preferExisting=true}={}){
   });
   return {contact:rows?.[0], merged:false};
 }
+// RDS CRM ISOLATION V1
+// Mensagens recebidas pelo WhatsApp NÃO criam clientes no CRM automaticamente.
+// O CRM é alimentado somente por cadastro/importação e pelo fluxo comercial
+// que efetivamente cria um cliente/pedido.
 async function upsertInboundContact(identity, pushName=''){
-  if(!identity.phone) return null; // NUNCA grava LID como número.
-  const r = await saveOrMergeContact({
-    name:cleanText(pushName) || `Cliente ${identity.phone.slice(-4)}`,
-    phone:identity.phone,
-    lid:identity.lid || null,
-    group_name:'ENTRADA WHATSAPP',
-    origin:'WHATSAPP',
-    status:'ATIVO',
-    validated:true,
-    last_seen_at:nowISO()
-  });
-  return r.contact || null;
+  return null;
 }
 async function activeOrder(phone){
   return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);
@@ -639,7 +632,9 @@ async function handleInbound(m){
   if(!identity.phone && identity.lid){
     await addAlert('LID_SEM_PN','Mensagem recebida com LID sem número real; contato não foi criado.',{lid:identity.lid,pushName,text:inbound.text});
   }
-  const contact = await upsertInboundContact(identity,pushName);
+  // WhatsApp e CRM são caixas separadas. A mensagem permanece no WhatsApp;
+  // nenhum contato é criado no CRM apenas por receber uma mensagem.
+  const contact = null;
   const settings = await getSettings();
   if(!settings.bot_enabled) return;
 
@@ -796,7 +791,12 @@ app.get('/api/dashboard',async(req,res)=>{
 app.get('/api/groups',async(req,res)=>{ try{res.json(await list('rds10_groups','select=*&order=name.asc'));}catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/groups',async(req,res)=>{ try{ const name=cleanText(req.body.name).toUpperCase(); if(!name) throw new Error('Nome obrigatório.'); const rows=await insert('rds10_groups',{name,created_at:nowISO()}); res.json(rows[0]);}catch(e){res.status(400).json({error:e.message});} });
 
-app.get('/api/contacts',async(req,res)=>{ try{res.json(await list('rds10_contacts','select=*&order=created_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
+app.get('/api/contacts',async(req,res)=>{ try{
+  // O CRM não deve listar a agenda/histórico do WhatsApp como clientes.
+  // Registros antigos de WhatsApp permanecem preservados para a aba WhatsApp.
+  const rows=await list('rds10_contacts','select=*&origin=not.in.(WHATSAPP,WHATSAPP_HISTORICO)&order=created_at.desc');
+  res.json(rows);
+}catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/contacts',async(req,res)=>{
   try{
     const phone=phoneKey(req.body.phone);
