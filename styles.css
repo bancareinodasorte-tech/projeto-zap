@@ -4,5 +4,13 @@
 @media(max-width:760px){body{padding-bottom:74px}.app-shell{display:block}.sidebar{display:none}.workspace{min-width:0}.top{height:72px;padding:0 14px}.top b{font-size:14px}.top small{font-size:10px}.top-actions #clock{display:none}main{padding:20px 12px 35px}.grid{grid-template-columns:1fr 1fr;gap:10px}.metric{font-size:25px}.card{padding:15px;border-radius:15px}.mobile-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:70;background:#fff;border-top:1px solid var(--line);overflow-x:auto;padding-bottom:env(safe-area-inset-bottom)}.mobile-nav button{min-width:78px;border:0;background:#fff;color:#5c6d83;padding:8px 5px;font-size:17px}.mobile-nav button.active{color:var(--blue);background:#f1f7fd}.mobile-nav small{display:block;font-size:8px;margin-top:2px}.page-title{align-items:flex-start;flex-direction:column}.toolbar input,.toolbar select{max-width:none}.funnel{grid-template-columns:1fr 1fr}.modal{padding:5px}.modal>div{width:calc(100vw - 10px);max-width:calc(100vw - 10px);border-radius:16px;padding:16px}.modal .step p{font-size:14px;line-height:1.4}.modal .table{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}}
 
 /* RDS manual refresh */
-.rds-refresh-btn{border:1px solid #c9d7ea;background:#fff;color:#173f70;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer;box-shadow:0 2px 8px rgba(12,48,90,.08)}.rds-refresh-btn:disabled{opacity:.65;cursor:wait}
-@media(max-width:700px){.rds-refresh-btn{padding:7px 9px;font-size:11px}.top-actions{gap:6px}}
+.top{position:relative}
+.top .top-actions{display:flex!important;align-items:center!important;gap:8px!important;flex-shrink:0!important;width:auto!important;justify-content:flex-end!important}
+.top .top-actions .rds-refresh-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:20!important;min-height:34px!important;white-space:nowrap!important;border:1px solid #c9d7ea!important;background:#fff!important;color:#173f70!important;border-radius:10px!important;padding:7px 11px!important;font-weight:800!important;font-size:12px!important;line-height:1!important;cursor:pointer!important;box-shadow:0 2px 8px rgba(12,48,90,.08)!important}
+.top .top-actions .rds-refresh-btn:disabled{opacity:.65!important;cursor:wait!important}
+@media(max-width:700px){
+ .top{display:flex!important;align-items:center!important;justify-content:space-between!important}
+ .top>div:first-child{min-width:0!important;flex:1 1 auto!important}
+ .top .top-actions{width:auto!important;flex:0 0 auto!important;gap:5px!important}
+ .top .top-actions .rds-refresh-btn{min-height:32px!important;padding:7px 9px!important;font-size:11px!important}
+}
