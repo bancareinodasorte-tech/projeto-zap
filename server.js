@@ -794,7 +794,7 @@ app.post('/api/groups',async(req,res)=>{ try{ const name=cleanText(req.body.name
 app.get('/api/contacts',async(req,res)=>{ try{
   // O CRM não deve listar a agenda/histórico do WhatsApp como clientes.
   // Registros antigos de WhatsApp permanecem preservados para a aba WhatsApp.
-  const rows=await list('rds10_contacts','select=*&origin=eq.IMPORTACAO&order=created_at.desc');
+  const rows=await list('rds10_contacts','select=*&origin=in.(IMPORTACAO,MANUAL)&order=created_at.desc');
   res.json(rows);
 }catch(e){res.status(500).json({error:e.message});} });
 app.post('/api/contacts',async(req,res)=>{
