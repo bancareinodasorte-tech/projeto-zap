@@ -64,5 +64,5 @@ async function commandContacts(){
  }catch(e){app.innerHTML='<div class="rds-panel rds-error"><h2>Falha ao carregar Clientes</h2><p>'+E(e.message)+'</p></div>'}
 }
 window.home=commandHome;window.contacts=commandContacts;
-window.render=async function(){if(page==='home')return commandHome();if(page==='contacts')return commandContacts();return oldRender.apply(this,arguments)};
+window.render=async function(){if(page==='home')return commandHome();if(page==='contacts')return (typeof window.contacts==='function'?window.contacts():commandContacts());return oldRender.apply(this,arguments)};
 })();
