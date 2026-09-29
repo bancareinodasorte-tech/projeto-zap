@@ -21,7 +21,7 @@
       app.innerHTML=`
         <div class="page-title rds-crm-head">
           <div><span class="eyebrow">CRM • BASE COMERCIAL</span><h1>Clientes</h1><p class="mut">Carteira comercial independente do histórico do WhatsApp.</p></div>
-          <div class="row rds-crm-head-actions">${btn('↻ Atualizar','window.rdsRefreshCurrentPage()','btn')}${btn('Importar contatos','importModal()')}${btn('+ Novo cliente','newContact()','btn primary')}</div>
+          <div class="row rds-crm-head-actions">${btn('Importar contatos','importModal()')}${btn('+ Novo cliente','newContact()','btn primary')}</div>
         </div>
         <div class="rds-crm-metrics">
           <div class="rds-crm-metric"><span>CLIENTES CADASTRADOS</span><strong id="crmMTotal">${st.total}</strong><small>na base comercial</small></div>
