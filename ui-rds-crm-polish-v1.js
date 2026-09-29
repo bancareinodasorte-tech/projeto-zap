@@ -21,7 +21,7 @@
       app.innerHTML=`
         <div class="page-title rds-crm-head">
           <div><span class="eyebrow">CRM • BASE COMERCIAL</span><h1>Clientes</h1><p class="mut">Carteira comercial independente do histórico do WhatsApp.</p></div>
-          <div class="row rds-crm-head-actions">${btn('Importar contatos','importModal()')}${btn('+ Novo cliente','newContact()','btn primary')}</div>
+          <div class="row rds-crm-head-actions">${btn('↻ Atualizar','window.rdsRefreshCurrentPage()','btn')}${btn('Importar contatos','importModal()')}${btn('+ Novo cliente','newContact()','btn primary')}</div>
         </div>
         <div class="rds-crm-metrics">
           <div class="rds-crm-metric"><span>CLIENTES CADASTRADOS</span><strong id="crmMTotal">${st.total}</strong><small>na base comercial</small></div>
@@ -90,7 +90,7 @@
   const style=document.createElement('style');
   style.textContent=`
     .rds-crm-head{align-items:flex-end}
-    .rds-crm-head-actions{gap:8px}
+    .rds-crm-head-actions{gap:8px;flex-wrap:wrap}.rds-crm-head-actions .btn{white-space:nowrap}
     .rds-crm-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 14px}
     .rds-crm-metric{background:#fff;border:1px solid #d8e2ef;border-radius:16px;padding:15px 16px;box-shadow:0 5px 18px rgba(12,45,86,.05)}
     .rds-crm-metric span{display:block;font-size:10px;font-weight:800;letter-spacing:.12em;color:#71829a}
