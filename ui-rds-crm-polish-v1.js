@@ -69,7 +69,7 @@
       const initial=E(String(c.name||'?').trim().charAt(0).toUpperCase());
       const valid=c.validated===true;
       const status=String(c.status||'ATIVO').toUpperCase();
-      return `<article class="rds-crm-client">
+      return `<article class="rds-crm-client" onclick="window.rdsCrmToggle(this,event)">
         <div class="rds-crm-avatar">${initial}</div>
         <div class="rds-crm-main"><strong>${E(c.name||'Sem nome')}</strong><span>${E(c.phone||'')}</span><small>${E(c.group_name||'SEM GRUPO')}</small></div>
         <div class="rds-crm-state ${valid?'ok':'pending'}">${valid?'WhatsApp OK':'Validar WhatsApp'}</div>
@@ -136,14 +136,12 @@
   `;
   document.head.appendChild(style);
   window.rdsCrmPage=window.contacts;
+  window.rdsCrmToggle=function(row,event){
+    if(event && event.target && event.target.closest('button'))return;
+    document.querySelectorAll('.rds-crm-client.rds-open').forEach(x=>{if(x!==row)x.classList.remove('rds-open')});
+    row.classList.toggle('rds-open');
+  };
   const crmStyle=document.createElement('style');
   crmStyle.textContent='.rds-crm-client{cursor:pointer}.rds-crm-client .rds-crm-actions{display:none}.rds-crm-client.rds-open .rds-crm-actions{display:flex}.rds-crm-client.rds-open{background:#fbfdff;border-radius:12px}.rds-crm-client.rds-open .rds-crm-actions{grid-column:1/-1;justify-content:flex-end;margin-top:2px}.rds-crm-client.rds-open .rds-crm-actions button{min-width:86px}@media(max-width:760px){.rds-crm-client.rds-open .rds-crm-actions{display:flex;justify-content:stretch}.rds-crm-client.rds-open .rds-crm-actions button{flex:1}}';
   document.head.appendChild(crmStyle);
-  document.addEventListener('click',event=>{
-    const row=event.target.closest('.rds-crm-client');
-    if(!row)return;
-    if(event.target.closest('button'))return;
-    document.querySelectorAll('.rds-crm-client.rds-open').forEach(x=>{if(x!==row)x.classList.remove('rds-open')});
-    row.classList.toggle('rds-open');
-  });
 })();
