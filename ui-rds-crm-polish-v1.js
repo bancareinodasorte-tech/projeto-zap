@@ -70,17 +70,22 @@
     body.innerHTML=shown.map(c=>{
       const initial=E(String(c.name||'?').trim().charAt(0).toUpperCase());
       const valid=c.validated===true;
-      const status=String(c.status||'ATIVO').toUpperCase();
-      return `<article class="rds-crm-client">
-        <div class="rds-crm-avatar">${initial}</div>
-        <div class="rds-crm-main"><strong>${E(c.name||'Sem nome')}</strong><span>${E(c.phone||'')}</span><small>${E(c.group_name||'SEM GRUPO')}</small></div>
-        <div class="rds-crm-state ${valid?'ok':'pending'}">${valid?'WhatsApp OK':'Validar WhatsApp'}</div>
-        <div class="rds-crm-actions">
-          <button type="button" onclick="contactProfile('${E(c.id)}')">Perfil</button>
-          <button type="button" onclick="editContact('${E(c.id)}')">Editar</button>
-          ${valid?'':`<button type="button" class="primary" onclick="validateContact('${E(c.id)}')">Validar</button>`}
+      return `<details class="rds-crm-client">
+        <summary>
+          <div class="rds-crm-avatar">${initial}</div>
+          <div class="rds-crm-main"><strong>${E(c.name||'Sem nome')}</strong><span>${E(c.phone||'')}</span><small>${E(c.group_name||'SEM GRUPO')}</small></div>
+          <div class="rds-crm-state ${valid?'ok':'pending'}">${valid?'WhatsApp OK':'Validar WhatsApp'}</div>
+          <span class="rds-crm-chevron">⌄</span>
+        </summary>
+        <div class="rds-crm-client-body">
+          <div class="rds-crm-client-meta"><span><b>Grupo:</b> ${E(c.group_name||'SEM GRUPO')}</span><span><b>Status:</b> ${E(String(c.status||'ATIVO'))}</span></div>
+          <div class="rds-crm-actions">
+            <button type="button" onclick="event.preventDefault();contactProfile('${E(c.id)}')">Perfil</button>
+            <button type="button" onclick="event.preventDefault();editContact('${E(c.id)}')">Editar</button>
+            ${valid?'':`<button type="button" class="primary" onclick="event.preventDefault();validateContact('${E(c.id)}')">Validar</button>`}
+          </div>
         </div>
-      </article>`;
+      </details>`;
     }).join('')||'<div class="rds-crm-empty">Nenhum cliente encontrado para os filtros atuais.</div>';
     const count=Q('#crmResultCount'); if(count)count.textContent=`${rows.length} cliente(s)`;
     const more=Q('#crmMore'); if(more){more.style.display=shown.length<rows.length?'block':'none';more.textContent=`Mostrar mais ${Math.min(size,rows.length-shown.length)}`;}
@@ -108,7 +113,14 @@
     .rds-crm-list-head{display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px;border-bottom:1px solid #edf1f6}
     .rds-crm-list-head h2{margin:2px 0 0}
     .rds-crm-list-head>strong{font-size:13px;color:#728198}
-    .rds-crm-client{display:grid;grid-template-columns:42px minmax(0,1fr) 120px auto;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid #edf1f6}
+    .rds-crm-client{border-bottom:1px solid #edf1f6;padding:0}
+    .rds-crm-client>summary{display:grid;grid-template-columns:42px minmax(0,1fr) 120px 20px;gap:12px;align-items:center;padding:12px 2px;cursor:pointer;list-style:none}
+    .rds-crm-client>summary::-webkit-details-marker{display:none}
+    .rds-crm-client>summary:focus{outline:2px solid #1768bb;outline-offset:-2px;border-radius:10px}
+    .rds-crm-chevron{font-size:18px;color:#627892;transition:transform .18s ease;text-align:center}
+    .rds-crm-client[open] .rds-crm-chevron{transform:rotate(180deg)}
+    .rds-crm-client-body{padding:0 2px 12px 56px}
+    .rds-crm-client-meta{display:flex;gap:14px;flex-wrap:wrap;color:#627892;font-size:12px;margin:0 0 9px}
     .rds-crm-avatar{width:42px;height:42px;border-radius:13px;background:#eaf2fb;color:#1762a9;display:grid;place-items:center;font-weight:800}
     .rds-crm-main{min-width:0;display:flex;flex-direction:column}
     .rds-crm-main strong{color:#163d6f;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -129,10 +141,11 @@
       .rds-crm-metric{padding:12px 13px;border-radius:14px}
       .rds-crm-metric strong{font-size:25px}
       .rds-crm-tools{grid-template-columns:1fr;gap:8px}
-      .rds-crm-client{grid-template-columns:38px minmax(0,1fr);gap:9px;padding:12px 0}
+      .rds-crm-client>summary{grid-template-columns:38px minmax(0,1fr) auto 18px;gap:9px;padding:12px 0}
       .rds-crm-avatar{width:38px;height:38px}
-      .rds-crm-state{grid-column:2;justify-self:start;padding:5px 9px}
-      .rds-crm-actions{grid-column:1/-1;justify-content:stretch}
+      .rds-crm-state{justify-self:start;padding:5px 9px}
+      .rds-crm-client-body{padding:0 0 12px 47px}
+      .rds-crm-actions{display:flex;justify-content:stretch}
       .rds-crm-actions button{flex:1}
     }
   `;
