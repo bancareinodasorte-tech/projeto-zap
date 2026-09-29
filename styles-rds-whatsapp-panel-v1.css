@@ -149,3 +149,75 @@
 /* RDS WhatsApp V8 - mídia com abertura controlada e erro amigável */
 .rds-wa-media-open{display:block;padding:0;border:0;background:transparent;text-align:left;color:inherit;cursor:pointer}
 .rds-wa-media-document{cursor:pointer}
+
+/* RDS WhatsApp V9 - conversa mobile: acabamento final e isolamento de estilos */
+.rds-wa-conversation-screen,
+.rds-wa-conversation-screen *{box-sizing:border-box}
+.rds-wa-conversation-screen{font-family:inherit!important;color:#173b70!important}
+.rds-wa-conversation-top{background:#fff!important}
+.rds-wa-full-back{
+  appearance:none!important;-webkit-appearance:none!important;
+  border:1px solid #d5e2ee!important;
+  background:#f7faff!important;
+  color:#24547f!important;
+  box-shadow:0 1px 3px rgba(20,55,85,.06)!important;
+}
+.rds-wa-full-action{
+  appearance:none!important;-webkit-appearance:none!important;
+  border:1px solid #cfddea!important;
+  background:#fff!important;
+  color:#24547f!important;
+  border-radius:10px!important;
+  min-height:36px!important;
+  padding:8px 12px!important;
+  font:800 11px/1 inherit!important;
+  box-shadow:0 1px 3px rgba(20,55,85,.05)!important;
+}
+.rds-wa-full-action.danger{
+  color:#a33a43!important;
+  border-color:#ebcbd0!important;
+  background:#fff6f7!important;
+}
+.rds-wa-full-messages{
+  background:#f2f7fb!important;
+}
+.rds-wa-full-bubble{
+  position:relative!important;
+  min-width:52px;
+  box-shadow:0 2px 7px rgba(20,55,85,.07)!important;
+}
+.rds-wa-full-bubble.in{background:#fff!important;border-color:#d9e5ee!important}
+.rds-wa-full-bubble.out{background:#e5f6eb!important;border-color:#c7e8d3!important}
+.rds-wa-full-compose{background:#fff!important}
+.rds-wa-full-compose textarea{
+  appearance:none!important;-webkit-appearance:none!important;
+  color:#173b70!important;
+  background:#f8fafc!important;
+}
+.rds-wa-full-send{
+  appearance:none!important;-webkit-appearance:none!important;
+  background:#1768bd!important;
+  box-shadow:0 3px 9px rgba(23,104,189,.2)!important;
+}
+@media(max-width:760px){
+  .rds-wa-conversation-top{
+    padding-left:10px!important;padding-right:10px!important;
+  }
+  .rds-wa-full-head-left{min-height:48px!important}
+  .rds-wa-full-actions{
+    display:flex!important;
+    gap:7px!important;
+    overflow-x:auto!important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .rds-wa-full-actions::-webkit-scrollbar{display:none}
+  .rds-wa-full-action{flex:0 0 auto!important}
+  .rds-wa-full-messages{
+    padding:14px 12px 20px!important;
+  }
+  .rds-wa-full-bubble{
+    max-width:88%!important;
+    font-size:15px!important;
+  }
+}
