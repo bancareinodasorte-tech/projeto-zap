@@ -19,7 +19,7 @@ async function refreshCurrentPage(){
  try{
   const b=document.getElementById('rdsRefreshBtn');
   if(b){b.disabled=true;b.textContent='↻ Atualizando…';}
-  await render();
+  if(page==='contacts' && typeof window.rdsCrmPage==='function') await window.rdsCrmPage(); else await render();
  }finally{
   const b=document.getElementById('rdsRefreshBtn');
   if(b){b.disabled=false;b.textContent='↻ Atualizar';}
