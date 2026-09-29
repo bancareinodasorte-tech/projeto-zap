@@ -44,6 +44,8 @@
     }catch(e){app.innerHTML=`<div class="card"><h2>Não foi possível carregar Clientes</h2><p class="mut">${E(e.message)}</p></div>`;}
   };
 
+  window.rdsCrmPage=window.contacts;
+
   window.rdsCrmFiltered=function(){
     const q=norm(Q('#contactSearch')?.value), g=Q('#contactGroup')?.value||'', st=Q('#contactStatus')?.value||'';
     return crmRows.filter(c=>{
