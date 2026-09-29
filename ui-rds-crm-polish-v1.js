@@ -44,8 +44,6 @@
     }catch(e){app.innerHTML=`<div class="card"><h2>Não foi possível carregar Clientes</h2><p class="mut">${E(e.message)}</p></div>`;}
   };
 
-  window.rdsCrmPage=window.contacts;
-
   window.rdsCrmFiltered=function(){
     const q=norm(Q('#contactSearch')?.value), g=Q('#contactGroup')?.value||'', st=Q('#contactStatus')?.value||'';
     return crmRows.filter(c=>{
@@ -70,22 +68,17 @@
     body.innerHTML=shown.map(c=>{
       const initial=E(String(c.name||'?').trim().charAt(0).toUpperCase());
       const valid=c.validated===true;
-      return `<details class="rds-crm-client">
-        <summary>
-          <div class="rds-crm-avatar">${initial}</div>
-          <div class="rds-crm-main"><strong>${E(c.name||'Sem nome')}</strong><span>${E(c.phone||'')}</span><small>${E(c.group_name||'SEM GRUPO')}</small></div>
-          <div class="rds-crm-state ${valid?'ok':'pending'}">${valid?'WhatsApp OK':'Validar WhatsApp'}</div>
-          <span class="rds-crm-chevron">⌄</span>
-        </summary>
-        <div class="rds-crm-client-body">
-          <div class="rds-crm-client-meta"><span><b>Grupo:</b> ${E(c.group_name||'SEM GRUPO')}</span><span><b>Status:</b> ${E(String(c.status||'ATIVO'))}</span></div>
-          <div class="rds-crm-actions">
-            <button type="button" onclick="event.preventDefault();contactProfile('${E(c.id)}')">Perfil</button>
-            <button type="button" onclick="event.preventDefault();editContact('${E(c.id)}')">Editar</button>
-            ${valid?'':`<button type="button" class="primary" onclick="event.preventDefault();validateContact('${E(c.id)}')">Validar</button>`}
-          </div>
+      const status=String(c.status||'ATIVO').toUpperCase();
+      return `<article class="rds-crm-client">
+        <div class="rds-crm-avatar">${initial}</div>
+        <div class="rds-crm-main"><strong>${E(c.name||'Sem nome')}</strong><span>${E(c.phone||'')}</span><small>${E(c.group_name||'SEM GRUPO')}</small></div>
+        <div class="rds-crm-state ${valid?'ok':'pending'}">${valid?'WhatsApp OK':'Validar WhatsApp'}</div>
+        <div class="rds-crm-actions">
+          <button type="button" onclick="contactProfile('${E(c.id)}')">Perfil</button>
+          <button type="button" onclick="editContact('${E(c.id)}')">Editar</button>
+          ${valid?'':`<button type="button" class="primary" onclick="validateContact('${E(c.id)}')">Validar</button>`}
         </div>
-      </details>`;
+      </article>`;
     }).join('')||'<div class="rds-crm-empty">Nenhum cliente encontrado para os filtros atuais.</div>';
     const count=Q('#crmResultCount'); if(count)count.textContent=`${rows.length} cliente(s)`;
     const more=Q('#crmMore'); if(more){more.style.display=shown.length<rows.length?'block':'none';more.textContent=`Mostrar mais ${Math.min(size,rows.length-shown.length)}`;}
@@ -97,7 +90,7 @@
   const style=document.createElement('style');
   style.textContent=`
     .rds-crm-head{align-items:flex-end}
-    .rds-crm-head-actions{gap:8px;flex-wrap:wrap}.rds-crm-head-actions .btn{white-space:nowrap}
+    .rds-crm-head-actions{gap:8px}
     .rds-crm-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 14px}
     .rds-crm-metric{background:#fff;border:1px solid #d8e2ef;border-radius:16px;padding:15px 16px;box-shadow:0 5px 18px rgba(12,45,86,.05)}
     .rds-crm-metric span{display:block;font-size:10px;font-weight:800;letter-spacing:.12em;color:#71829a}
@@ -113,14 +106,7 @@
     .rds-crm-list-head{display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px;border-bottom:1px solid #edf1f6}
     .rds-crm-list-head h2{margin:2px 0 0}
     .rds-crm-list-head>strong{font-size:13px;color:#728198}
-    .rds-crm-client{border-bottom:1px solid #edf1f6;padding:0}
-    .rds-crm-client>summary{display:grid;grid-template-columns:42px minmax(0,1fr) 120px 20px;gap:12px;align-items:center;padding:12px 2px;cursor:pointer;list-style:none}
-    .rds-crm-client>summary::-webkit-details-marker{display:none}
-    .rds-crm-client>summary:focus{outline:2px solid #1768bb;outline-offset:-2px;border-radius:10px}
-    .rds-crm-chevron{font-size:18px;color:#627892;transition:transform .18s ease;text-align:center}
-    .rds-crm-client[open] .rds-crm-chevron{transform:rotate(180deg)}
-    .rds-crm-client-body{padding:0 2px 12px 56px}
-    .rds-crm-client-meta{display:flex;gap:14px;flex-wrap:wrap;color:#627892;font-size:12px;margin:0 0 9px}
+    .rds-crm-client{display:grid;grid-template-columns:42px minmax(0,1fr) 120px auto;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid #edf1f6}
     .rds-crm-avatar{width:42px;height:42px;border-radius:13px;background:#eaf2fb;color:#1762a9;display:grid;place-items:center;font-weight:800}
     .rds-crm-main{min-width:0;display:flex;flex-direction:column}
     .rds-crm-main strong{color:#163d6f;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -141,13 +127,23 @@
       .rds-crm-metric{padding:12px 13px;border-radius:14px}
       .rds-crm-metric strong{font-size:25px}
       .rds-crm-tools{grid-template-columns:1fr;gap:8px}
-      .rds-crm-client>summary{grid-template-columns:38px minmax(0,1fr) auto 18px;gap:9px;padding:12px 0}
+      .rds-crm-client{grid-template-columns:38px minmax(0,1fr);gap:9px;padding:12px 0}
       .rds-crm-avatar{width:38px;height:38px}
-      .rds-crm-state{justify-self:start;padding:5px 9px}
-      .rds-crm-client-body{padding:0 0 12px 47px}
-      .rds-crm-actions{display:flex;justify-content:stretch}
+      .rds-crm-state{grid-column:2;justify-self:start;padding:5px 9px}
+      .rds-crm-actions{grid-column:1/-1;justify-content:stretch}
       .rds-crm-actions button{flex:1}
     }
   `;
   document.head.appendChild(style);
+  window.rdsCrmPage=window.contacts;
+  const crmStyle=document.createElement('style');
+  crmStyle.textContent='.rds-crm-client{cursor:pointer}.rds-crm-client .rds-crm-actions{display:none}.rds-crm-client.rds-open .rds-crm-actions{display:flex}.rds-crm-client.rds-open{background:#fbfdff;border-radius:12px}.rds-crm-client.rds-open .rds-crm-actions{grid-column:1/-1;justify-content:flex-end;margin-top:2px}.rds-crm-client.rds-open .rds-crm-actions button{min-width:86px}@media(max-width:760px){.rds-crm-client.rds-open .rds-crm-actions{display:flex;justify-content:stretch}.rds-crm-client.rds-open .rds-crm-actions button{flex:1}}';
+  document.head.appendChild(crmStyle);
+  document.addEventListener('click',event=>{
+    const row=event.target.closest('.rds-crm-client');
+    if(!row)return;
+    if(event.target.closest('button'))return;
+    document.querySelectorAll('.rds-crm-client.rds-open').forEach(x=>{if(x!==row)x.classList.remove('rds-open')});
+    row.classList.toggle('rds-open');
+  });
 })();
