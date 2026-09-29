@@ -63,6 +63,6 @@ async function commandContacts(){
   $('#rdsCrmSearch').oninput=()=>{shown=10;draw()};$('#rdsCrmGroup').onchange=()=>{shown=10;draw()};$('#rdsCrmStatus').onchange=()=>{shown=10;draw()};$('#rdsCrmLimit').onchange=()=>{const v=$('#rdsCrmLimit').value;shown=v==='all'?filtered.length:Number(v)||10;draw()};$('#rdsCrmClear').onclick=()=>{$('#rdsCrmSearch').value='';shown=10;draw()};$('#rdsCrmMore').onclick=()=>{const v=$('#rdsCrmLimit').value;const step=v==='all'?filtered.length:Number(v)||10;shown=Math.min(shown+step,filtered.length);draw()};$('#rdsCrmCollapse').onclick=()=>{const v=$('#rdsCrmLimit').value;shown=v==='all'?filtered.length:Number(v)||10;draw();};draw();
  }catch(e){app.innerHTML='<div class="rds-panel rds-error"><h2>Falha ao carregar Clientes</h2><p>'+E(e.message)+'</p></div>'}
 }
-window.home=commandHome;window.contacts=commandContacts;
-window.render=async function(){if(page==='home')return commandHome();if(page==='contacts')return (typeof window.contacts==='function'?window.contacts():commandContacts());return oldRender.apply(this,arguments)};
+window.home=commandHome;
+window.render=async function(){if(page==='home')return commandHome();if(page==='contacts')return (typeof window.rdsCrmPage==='function'?window.rdsCrmPage():commandContacts());return oldRender.apply(this,arguments)};
 })();
