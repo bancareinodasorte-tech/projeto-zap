@@ -21,9 +21,38 @@ const MERCADOPAGO_PAYER_EMAIL=String(process.env.MERCADOPAGO_PAYER_EMAIL||'test_
 const MERCADOPAGO_WEBHOOK_SECRET=String(process.env.MERCADOPAGO_WEBHOOK_SECRET||'').trim();
 const MERCADOPAGO_PIX_EXPIRATION_HOURS=Math.min(24,Math.max(0.5,Number(process.env.MERCADOPAGO_PIX_EXPIRATION_HOURS||3)));
 function rdsMercadoPagoConfigured(){return Boolean(MERCADOPAGO_ACCESS_TOKEN);}
-async function rdsMercadoPagoRequest(endpoint,opt={}){
-  if(!rdsMercadoPagoConfigured())throw new Error('Mercado Pago não configurado no Render. Defina MERCADOPAGO_ACCESS_TOKEN.');
-  const response=await fetch(MERCADOPAGO_BASE+endpoint,{...opt,headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+MERCADOPAGO_ACCESS_TOKEN,...(opt.headers||{})}});
+function rdsMercadoPagoKey(){
+  const raw=String(process.env.RDS_OPERATOR_CREDENTIALS_KEY||'').trim();
+  if(!raw)throw new Error('Chave de proteção dos dados dos vendedores não configurada.');
+  const key=Buffer.from(raw,'base64');
+  if(key.length!==32)throw new Error('Chave de proteção dos dados dos vendedores inválida.');
+  return key;
+}
+function rdsMercadoPagoDecrypt(v){
+  const p=String(v||'').split('.');
+  if(p.length!==3)throw new Error('Credencial Mercado Pago protegida inválida.');
+  const d=crypto.createDecipheriv('aes-256-gcm',rdsMercadoPagoKey(),Buffer.from(p[0],'base64'));
+  d.setAuthTag(Buffer.from(p[1],'base64'));
+  return Buffer.concat([d.update(Buffer.from(p[2],'base64')),d.final()]).toString('utf8');
+}
+async function rdsMercadoPagoTenantConfig(orderOrSeller){
+  const sellerId=cleanText(orderOrSeller?.seller_id||orderOrSeller?.sellerId);
+  if(!sellerId)return {token:MERCADOPAGO_ACCESS_TOKEN,environment:MERCADOPAGO_ENV,payerEmail:MERCADOPAGO_PAYER_EMAIL,tenant:false};
+  const settings=await one('rds10_seller_settings','select=seller_id,mp_access_token_enc,mp_environment,official_email&seller_id=eq.'+encodeURIComponent(sellerId));
+  if(!settings?.mp_access_token_enc)throw new Error('Mercado Pago não configurado para este vendedor.');
+  const token=rdsMercadoPagoDecrypt(settings.mp_access_token_enc);
+  if(!token)throw new Error('Credencial Mercado Pago do vendedor inválida.');
+  return {
+    token,
+    environment:String(settings.mp_environment||'production').toLowerCase()==='sandbox'?'sandbox':'production',
+    payerEmail:String(settings.official_email||MERCADOPAGO_PAYER_EMAIL).trim(),
+    tenant:true,
+    sellerId
+  };
+}
+async function rdsMercadoPagoRequest(endpoint,opt={},accessToken=MERCADOPAGO_ACCESS_TOKEN){
+  if(!accessToken)throw new Error('Mercado Pago não configurado.');
+  const response=await fetch(MERCADOPAGO_BASE+endpoint,{...opt,headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+accessToken,...(opt.headers||{})}});
   const raw=await response.text();
   let data={};try{data=raw?JSON.parse(raw):{};}catch{data={raw};}
   if(!response.ok){const detail=data?.message||data?.error||data?.cause?.[0]?.description||raw||('HTTP '+response.status);throw new Error('Mercado Pago '+response.status+': '+detail);}
@@ -41,9 +70,10 @@ async function rdsMercadoPagoCreatePix(order){
   if(['CONCLUIDO','CANCELADO','PAGO_AGUARDANDO_BILHETES'].includes(String(order.status||'').toUpperCase()))throw new Error('Este pedido não está aguardando pagamento.');
   const existing=rdsMercadoPagoExisting(order);if(existing)return existing;
   const total=Number(order.total_amount||0);if(!Number.isFinite(total)||total<=0)throw new Error('Valor do pedido inválido para PIX.');
-  if(!MERCADOPAGO_PAYER_EMAIL||!/@/.test(MERCADOPAGO_PAYER_EMAIL))throw new Error('MERCADOPAGO_PAYER_EMAIL inválido.');
-  const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration()}]},payer:{email:MERCADOPAGO_PAYER_EMAIL,...(MERCADOPAGO_ENV==='sandbox'?{first_name:'APRO'}:{})}};
-  const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(payload)});
+  const cfg=await rdsMercadoPagoTenantConfig(order);
+  if(!cfg.payerEmail||!/@/.test(cfg.payerEmail))throw new Error('E-mail operacional do Mercado Pago inválido.');
+  const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration()}]},payer:{email:cfg.payerEmail,...(cfg.environment==='sandbox'?{first_name:'APRO'}:{})}};
+  const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(payload)},cfg.token);
   const qr=rdsMercadoPagoQR(data);if(!qr?.text)throw new Error('Mercado Pago não retornou o PIX copia e cola.');
   const createdAt=data?.created_date?new Date(data.created_date).getTime():Date.now();
   const expiresAt=new Date(createdAt+MERCADOPAGO_PIX_EXPIRATION_HOURS*3600000).toISOString();
@@ -76,13 +106,22 @@ function rdsMercadoPagoWebhookValid(req){
   try{return Boolean(v1)&&v1.length===expected.length&&crypto.timingSafeEqual(Buffer.from(v1),Buffer.from(expected));}catch{return false;}
 }
 async function rdsMercadoPagoAutoReconcile(){
-  if(!rdsMercadoPagoConfigured())return;
-  const orders=await list('rds10_orders','select=*&status=eq.AGUARDANDO_PAGAMENTO&pagbank_order_id=not.is.null&order=created_at.asc&limit=20');
-  for(const order of orders){try{const data=await rdsMercadoPagoRequest('/v1/orders/'+encodeURIComponent(order.pagbank_order_id));await rdsMercadoPagoApplyResult(order,data,'auto_reconcile');}catch(e){await patch('rds10_orders','id=eq.'+order.id,{payment_last_error:String(e?.message||e),payment_updated_at:nowISO(),updated_at:nowISO()}).catch(()=>{});}}
+  const orders=await list('rds10_orders','select=*&status=eq.AGUARDANDO_PAGAMENTO&pagbank_order_id=not.is.null&order=created_at.asc&limit=50');
+  for(const order of orders){
+    try{
+      const cfg=await rdsMercadoPagoTenantConfig(order);
+      const data=await rdsMercadoPagoRequest('/v1/orders/'+encodeURIComponent(order.pagbank_order_id),{},cfg.token);
+      await rdsMercadoPagoApplyResult(order,data,'auto_reconcile');
+    }catch(e){
+      await patch('rds10_orders','id=eq.'+order.id,{payment_last_error:String(e?.message||e),payment_updated_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+    }
+  }
 }
 
 rdsPagBankConfigured=rdsMercadoPagoConfigured;
 rdsPagBankRequest=rdsMercadoPagoRequest;
+rdsPagBankRequestForOrder=async(order,endpoint,opt={})=>{const cfg=await rdsMercadoPagoTenantConfig(order);return rdsMercadoPagoRequest(endpoint,opt,cfg.token);};
+rdsPagBankTenantConfig=async(sellerId)=>rdsMercadoPagoTenantConfig({seller_id:sellerId});
 rdsPagBankStatus=rdsMercadoPagoStatus;
 rdsPagBankAmount=rdsMercadoPagoAmount;
 rdsPagBankPaid=rdsMercadoPagoPaid;
