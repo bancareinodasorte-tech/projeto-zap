@@ -14,16 +14,16 @@ if(pos<0)throw new Error('app.listen não localizado para OAuth Mercado Pago.');
 
 const block=String.raw`
 ${marker}
-const MERCADOPAGO_OAUTH_CLIENT_ID=String(process.env.MERCADOPAGO_CLIENT_ID||'').trim();
-const MERCADOPAGO_OAUTH_CLIENT_SECRET=String(process.env.MERCADOPAGO_CLIENT_SECRET||'').trim();
-const MERCADOPAGO_OAUTH_REDIRECT_URI='https://projeto-zap-4tyg.onrender.com/api/mercadopago/oauth/callback';
+function rdsMpOAuthClientId(){return String(process.env.MERCADOPAGO_CLIENT_ID||process.env.MERCADOPAGO_OAUTH_CLIENT_ID||process.env.MP_CLIENT_ID||'').trim();}
+function rdsMpOAuthClientSecret(){return String(process.env.MERCADOPAGO_CLIENT_SECRET||process.env.MERCADOPAGO_OAUTH_CLIENT_SECRET||process.env.MP_CLIENT_SECRET||'').trim();}
+function rdsMpOAuthRedirectUri(){return String(process.env.MERCADOPAGO_REDIRECT_URI||((process.env.PUBLIC_URL||process.env.RENDER_EXTERNAL_URL||'').replace(/\\/+$/,'')+'/api/mercadopago/oauth/callback')).trim()||'https://projeto-zap-4tyg.onrender.com/api/mercadopago/oauth/callback';}
 const MERCADOPAGO_OAUTH_AUTH_URL='https://auth.mercadopago.com/authorization';
 const MERCADOPAGO_OAUTH_TOKEN_URL='https://api.mercadopago.com/oauth/token';
 const MERCADOPAGO_OAUTH_PKCE=String(process.env.MERCADOPAGO_OAUTH_PKCE||'false').toLowerCase()==='true';
 function rdsMpOAuthHash(v){return crypto.createHash('sha256').update(String(v)).digest('hex');}
 function rdsMpOAuthVerifier(){return crypto.randomBytes(48).toString('base64url');}
 function rdsMpOAuthChallenge(v){return crypto.createHash('sha256').update(String(v)).digest('base64url');}
-function rdsMpOAuthConfigured(){return Boolean(MERCADOPAGO_OAUTH_CLIENT_ID&&MERCADOPAGO_OAUTH_CLIENT_SECRET);}
+function rdsMpOAuthConfigured(){return Boolean(rdsMpOAuthClientId()&&rdsMpOAuthClientSecret());}
 async function rdsMpOAuthStart(req,res){
   const session=await rdsOpRequire(req,res);if(!session)return;
   if(!rdsMpOAuthConfigured())return res.status(503).json({success:false,error:'OAuth do Mercado Pago ainda não está configurado no servidor.'});
@@ -32,11 +32,11 @@ async function rdsMpOAuthStart(req,res){
   const expires=new Date(Date.now()+10*60*1000).toISOString();
   await insert('rds10_mercadopago_oauth_states',{seller_id:session.seller.id,state_hash:rdsMpOAuthHash(state),code_verifier:verifier,expires_at:expires,created_at:nowISO()},'minimal');
   const q=new URLSearchParams({
-    client_id:MERCADOPAGO_OAUTH_CLIENT_ID,
+    client_id:rdsMpOAuthClientId(),
     response_type:'code',
     platform_id:'mp',
     state,
-    redirect_uri:MERCADOPAGO_OAUTH_REDIRECT_URI
+    redirect_uri:rdsMpOAuthRedirectUri()
   });
   if(verifier){q.set('code_challenge',rdsMpOAuthChallenge(verifier));q.set('code_challenge_method','S256');}
   return res.json({success:true,url:MERCADOPAGO_OAUTH_AUTH_URL+'?'+q.toString(),expiresAt:expires,pkce:MERCADOPAGO_OAUTH_PKCE});
@@ -53,7 +53,7 @@ async function rdsMpOAuthCallback(req,res){
     if(!rdsMpOAuthConfigured())throw new Error('OAuth do Mercado Pago não configurado no servidor.');
     const form=new URLSearchParams({
       client_id:MERCADOPAGO_OAUTH_CLIENT_ID,
-      client_secret:MERCADOPAGO_OAUTH_CLIENT_SECRET,
+      client_secret:rdsMpOAuthClientSecret(),
       grant_type:'authorization_code',
       code,
       redirect_uri:MERCADOPAGO_OAUTH_REDIRECT_URI
@@ -109,6 +109,7 @@ app.post('/api/operator/mercadopago/oauth/disconnect',async(req,res)=>{
   }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
 console.log('[RDS] OAuth Mercado Pago V1 aplicado');
+console.log('[RDS] MP OAuth env: client='+Boolean(rdsMpOAuthClientId())+' secret='+Boolean(rdsMpOAuthClientSecret())+' redirect='+rdsMpOAuthRedirectUri());
 `;
 
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
