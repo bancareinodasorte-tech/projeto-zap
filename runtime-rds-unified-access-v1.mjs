@@ -11,9 +11,11 @@ const block=String.raw`
  // RDS UNIFIED ACCESS V1
 async function rdsUnifiedContext(req){
   let seller=null,admin=null;
-  try{seller=await rdsOpSession(req);}catch{}
+  const sellerToken=rdsOpBearer(req)||rdsOpCookie(req);
+  const adminToken=rdsAdminBearer(req)||rdsAdminCookie(req);
+  if(sellerToken){try{seller=await rdsOpSession(req);}catch{}}
   if(seller)return {authenticated:true,role:'VENDEDOR',seller:rdsOpPublic(seller.seller),admin:null};
-  try{admin=await rdsAdminSession(req);}catch{}
+  if(adminToken){try{admin=await rdsAdminSession(req);}catch{}}
   if(admin)return {authenticated:true,role:'ADMINISTRADOR',seller:null,admin:rdsAdminPublic(admin.admin)};
   return {authenticated:false,role:null,seller:null,admin:null};
 }
