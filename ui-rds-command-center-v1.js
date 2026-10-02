@@ -2,7 +2,7 @@
 (()=> {
 const E=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const M=v=>typeof money==='function'?money(v):Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const F=async u=>{const r=await fetch(u,{headers:{'Content-Type':'application/json'}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Falha na operação');return d};
+const F=async u=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);try{const r=await fetch(u,{headers:{'Content-Type':'application/json'},signal:controller.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Falha na operação');return d}catch(e){if(e?.name==='AbortError')throw Error('O servidor demorou para responder.');throw e}finally{clearTimeout(timer)}};
 const B=(t,f,c)=>typeof btn==='function'?btn(t,f,c||'btn'):'<button class="'+(c||'btn')+'" onclick="'+f+'">'+E(t)+'</button>';
 const oldRender=window.render;
 async function commandHome(){
