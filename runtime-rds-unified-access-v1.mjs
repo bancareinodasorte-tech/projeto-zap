@@ -70,6 +70,6 @@ app.post('/api/rds/unified/logout',async(req,res)=>{
 });
 console.log('[RDS] acesso unificado V1 instalado');
 `;
-server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] acesso unificado V1 instalado');
