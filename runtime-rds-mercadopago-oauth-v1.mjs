@@ -16,7 +16,7 @@ const block=String.raw`
 ${marker}
 function rdsMpOAuthClientId(){return String(process.env.MERCADOPAGO_CLIENT_ID||process.env.MERCADOPAGO_OAUTH_CLIENT_ID||process.env.MP_CLIENT_ID||'').trim();}
 function rdsMpOAuthClientSecret(){return String(process.env.MERCADOPAGO_CLIENT_SECRET||process.env.MERCADOPAGO_OAUTH_CLIENT_SECRET||process.env.MP_CLIENT_SECRET||'').trim();}
-function rdsMpOAuthRedirectUri(){return String(process.env.MERCADOPAGO_REDIRECT_URI||((process.env.PUBLIC_URL||process.env.RENDER_EXTERNAL_URL||'').replace(/\\/+$/,'')+'/api/mercadopago/oauth/callback')).trim()||'https://projeto-zap-4tyg.onrender.com/api/mercadopago/oauth/callback';}
+function rdsMpOAuthRedirectUri(){const base=String(process.env.MERCADOPAGO_REDIRECT_URI||'').trim();if(base)return base;const origin=String(process.env.PUBLIC_URL||process.env.RENDER_EXTERNAL_URL||'').trim().replace(/\/+$/,'');return (origin?origin:'https://projeto-zap-4tyg.onrender.com')+'/api/mercadopago/oauth/callback';}
 const MERCADOPAGO_OAUTH_AUTH_URL='https://auth.mercadopago.com/authorization';
 const MERCADOPAGO_OAUTH_TOKEN_URL='https://api.mercadopago.com/oauth/token';
 const MERCADOPAGO_OAUTH_PKCE=String(process.env.MERCADOPAGO_OAUTH_PKCE||'false').toLowerCase()==='true';
