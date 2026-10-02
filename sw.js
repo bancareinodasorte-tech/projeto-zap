@@ -1,1 +1,15 @@
-const CACHE='rds-v11-1-final';const ASSETS=['/','/styles.css','/styles-rds-premium.css','/styles-rds-interface-final.css','/styles-rds-v11-polish.css','/app.js','/ui-rds-v11-polish.js','/manifest.webmanifest'];self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{}))});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))));self.clients.claim()});self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).pathname.startsWith('/api/'))return;e.respondWith(fetch(e.request).then(r=>{const x=r.clone();caches.open(CACHE).then(c=>c.put(e.request,x));return r}).catch(()=>caches.match(e.request)))})
+// RDS SERVICE WORKER V12 — cache reset for unified access
+const CACHE='rds-v12-unified';
+self.addEventListener('install',event=>{
+  self.skipWaiting();
+  event.waitUntil(Promise.resolve());
+});
+self.addEventListener('activate',event=>{
+  event.waitUntil((async()=>{
+    const keys=await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+// Intentionally no fetch handler: during the unified-access rollout,
+// HTML/JS must always come directly from the server without stale cache.
