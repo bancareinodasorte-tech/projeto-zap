@@ -50,8 +50,12 @@ function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
 async function sb(path, opt={}){
   if(!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase não configurado no Render.');
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  try{
   const r = await fetch(SUPABASE_URL + path, {
     ...opt,
+    signal:controller.signal,
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -64,6 +68,10 @@ async function sb(path, opt={}){
   try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
   if(!r.ok) throw new Error(data?.message || data?.details || data?.hint || `Supabase ${r.status}`);
   return data;
+  }catch(e){
+    if(e?.name==='AbortError') throw new Error('Supabase demorou mais de 12 segundos para responder.');
+    throw e;
+  }finally{clearTimeout(timeout);}
 }
 async function insert(table, row, returning='representation'){
   return sb(`/rest/v1/${table}`, { method:'POST', headers:{Prefer:`return=${returning}`}, body:JSON.stringify(row) });
