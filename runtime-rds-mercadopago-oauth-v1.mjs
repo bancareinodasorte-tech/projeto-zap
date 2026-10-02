@@ -44,7 +44,7 @@ async function rdsMpOAuthStart(req,res){
 async function rdsMpOAuthCallback(req,res){
   try{
     const code=cleanText(req.query?.code),state=cleanText(req.query?.state),error=cleanText(req.query?.error),errorDescription=cleanText(req.query?.error_description);
-    if(error)return res.status(400).send('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Mercado Pago</title><style>body{font-family:Arial;padding:32px;color:#17325c} .card{max-width:620px;margin:auto;padding:28px;border:1px solid #dbe6f7;border-radius:18px}</style><div class="card"><h2>Conexão Mercado Pago não concluída</h2><p>'+String(errorDescription||error).replace(/[<>&]/g,'')+'</p><p>Você pode fechar esta janela e tentar novamente pelo RDS.</p></div></html>');
+    if(error)return res.redirect(303,'/?rds=account&mp=error');
     if(!code||!state)throw new Error('Retorno OAuth incompleto.');
     const row=await one('rds10_mercadopago_oauth_states','select=id,seller_id,code_verifier,expires_at,used_at&state_hash=eq.'+encodeURIComponent(rdsMpOAuthHash(state)));
     if(!row)throw new Error('Solicitação OAuth inválida ou expirada.');
@@ -52,11 +52,11 @@ async function rdsMpOAuthCallback(req,res){
     if(new Date(row.expires_at).getTime()<=Date.now())throw new Error('A autorização expirou. Inicie uma nova conexão.');
     if(!rdsMpOAuthConfigured())throw new Error('OAuth do Mercado Pago não configurado no servidor.');
     const form=new URLSearchParams({
-      client_id:MERCADOPAGO_OAUTH_CLIENT_ID,
+      client_id:rdsMpOAuthClientId(),
       client_secret:rdsMpOAuthClientSecret(),
       grant_type:'authorization_code',
       code,
-      redirect_uri:MERCADOPAGO_OAUTH_REDIRECT_URI
+      redirect_uri:rdsMpOAuthRedirectUri()
     });
     if(row.code_verifier)form.set('code_verifier',row.code_verifier);
     const tokenResponse=await fetch(MERCADOPAGO_OAUTH_TOKEN_URL,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},body:form.toString()});
@@ -79,7 +79,7 @@ async function rdsMpOAuthCallback(req,res){
       updated_at:nowISO()
     })});
     await patch('rds10_mercadopago_oauth_states','id=eq.'+encodeURIComponent(row.id),{used_at:nowISO()});
-    return res.send('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mercado Pago conectado</title><style>body{font-family:Arial;background:#f3f7ff;padding:28px;color:#17325c}.card{max-width:620px;margin:40px auto;background:white;padding:30px;border-radius:20px;box-shadow:0 8px 30px #17325c14;text-align:center}.ok{color:#146b35;font-size:20px;font-weight:800}button{padding:12px 18px;border:0;border-radius:12px;background:#0b3f86;color:white;font-weight:800}</style><div class="card"><div class="ok">✓ Mercado Pago conectado com sucesso</div><p>A conta do vendedor foi vinculada ao RDS e as credenciais foram protegidas no servidor.</p><button onclick="window.close()">Fechar</button></div></html>');
+    return res.redirect(303,'/?rds=account&mp=connected');
   }catch(e){
     console.error('[RDS MP OAuth] callback:',e.message);
     return res.status(400).send('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Mercado Pago</title><style>body{font-family:Arial;padding:32px;color:#17325c}.card{max-width:620px;margin:auto;padding:28px;border:1px solid #dbe6f7;border-radius:18px}</style><div class="card"><h2>Não foi possível conectar o Mercado Pago</h2><p>'+String(e?.message||e).replace(/[<>&]/g,'')+'</p><p>Feche esta janela e tente novamente pelo RDS.</p></div></html>');
