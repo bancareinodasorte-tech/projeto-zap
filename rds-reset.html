@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atualizando CANAL DE VENDAS RDS</title>
+<style>
+body{font-family:Arial,sans-serif;background:#eef5fc;margin:0;display:grid;place-items:center;min-height:100vh;color:#123}
+.card{background:#fff;padding:32px;border-radius:16px;box-shadow:0 8px 30px #0001;max-width:560px;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+<h2>Atualizando o CANAL DE VENDAS RDS…</h2>
+<p id="msg">Limpando a versão antiga do aplicativo.</p>
+</div>
+<script>
+(async()=>{
+ try{
+   if('serviceWorker' in navigator){
+     const regs=await navigator.serviceWorker.getRegistrations();
+     await Promise.all(regs.map(r=>r.unregister()));
+   }
+   if('caches' in window){
+     const keys=await caches.keys();
+     await Promise.all(keys.map(k=>caches.delete(k)));
+   }
+   document.getElementById('msg').textContent='Atualização concluída. Abrindo o acesso…';
+ }catch(e){
+   document.getElementById('msg').textContent='Abrindo a versão atual…';
+ }
+ setTimeout(()=>{
+   location.replace('/?rds=account&cache_reset=20261002');
+ },700);
+})();
+</script>
+</body>
+</html>
