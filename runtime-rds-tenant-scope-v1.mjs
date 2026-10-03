@@ -41,10 +41,10 @@ const newList = "async function list(table, query='select=*'){\n  const sellerId
 if(!server.includes(oldList))throw new Error('função list não localizada para substituição.');
 server=server.replace(oldList,newList);
 
-const importAnchor="import express from 'express';";
+const importAnchor="const express = require('express');";
 if(!server.includes("const rdsRequestScope=new AsyncLocalStorage()")){
   if(!server.includes(importAnchor))throw new Error('import express não localizado.');
-  server=server.replace(importAnchor,importAnchor+"\nimport { AsyncLocalStorage } from 'node:async_hooks';\nconst rdsRequestScope=new AsyncLocalStorage();");
+  server=server.replace(importAnchor,importAnchor+"\nconst { AsyncLocalStorage } = require('node:async_hooks');\nconst rdsRequestScope=new AsyncLocalStorage();");
 }
 const jsonAnchor="app.use(express.json({ limit:'15mb' }));";
 const jp=server.indexOf(jsonAnchor);if(jp<0)throw new Error('express.json não localizado.');
