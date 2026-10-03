@@ -54,8 +54,9 @@ async function rdsExpireOneOrder(order){
   const created=Date.parse(order.created_at||'');
   const hours=await rdsOrderExpirationHours();
   if(!Number.isFinite(created)||Date.now()-created < hours*3600000)return false;
-  await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',updated_at:nowISO()});
+  await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'EXPIRADO_PAGAMENTO',cancelled_at:nowISO(),updated_at:nowISO()});
   await rdsRestoreQueueAfterExpiration(order.phone);
+  await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,reason:'EXPIRADO_PAGAMENTO'});
   console.log('[RDS] pedido expirado:',order.code,'após',hours,'h');
   return true;
 }
