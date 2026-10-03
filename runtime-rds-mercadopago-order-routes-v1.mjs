@@ -31,6 +31,19 @@ app.post('/api/operator/orders/:id/pix',async(req,res)=>{
     return res.json({success:true,orderId:order.id,code:order.code,status:order.status,mercadoPagoOrderId:result.orderId,mercadoPagoPaymentId:result.chargeId,reused:Boolean(result.reused),qr:result.qr});
   }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
+app.post('/api/operator/orders/:id/pix/send',async(req,res)=>{
+  try{
+    const session=await rdsMpOrderTenant(req,res);if(!session)return;
+    const id=cleanText(req.params.id);
+    const order=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(id)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
+    if(!order)throw new Error('Pedido não encontrado para este vendedor.');
+    if(!order.phone)throw new Error('Pedido sem WhatsApp do cliente.');
+    const result=await rdsMercadoPagoCreatePix(order);
+    const text='💳 *PAGAMENTO PIX*\n\nPedido: *'+order.code+'*\nValor: *R$ '+money(order.total_amount)+'*\n\nCopie e cole o código PIX abaixo para pagar:\n\n'+result.qr.text+'\n\nApós o pagamento, aguarde a confirmação automática do RDS.';
+    const sent=await sendTextPhone(order.phone,text);
+    return res.json({success:true,sent:true,messageId:sent?.id||null,reused:Boolean(result.reused),qr:result.qr});
+  }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
+});
 app.get('/api/operator/orders/:id/payment-status',async(req,res)=>{
   try{
     const session=await rdsMpOrderTenant(req,res);if(!session)return;
