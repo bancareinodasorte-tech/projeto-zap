@@ -1,0 +1,1 @@
+(()=>{window.rdsSellerPanelVersion='1';})();
