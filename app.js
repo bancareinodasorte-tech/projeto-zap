@@ -10,7 +10,7 @@ function btn(t,onclick,cls='btn'){return `<button class="${cls}" onclick="${oncl
 function badge(s){const x=String(s||'').toUpperCase(),c=/CONCLUIDO|ENVIADA|ATIVO|VALIDADO/.test(x)?'ok':/FALHA|CANCELADO/.test(x)?'bad':/AGUARDANDO|COLETANDO|AGENDADA|RASCUNHO/.test(x)?'warn':'';return `<span class="badge ${c}">${esc(x||'—')}</span>`}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><div class=row style="justify-content:flex-end">${btn('✕',"this.closest('.modal').remove()")}</div>${html}</div>`;document.body.appendChild(m)}
 function setNav(){[...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
-function go(p){page=p;localStorage.setItem('rds_current_page',page);setNav();render();scrollTo(0,0)}
+function go(p){page=p;localStorage.setItem('rds_current_page',page);setNav();if(p==='account'&&typeof window.rdsUnifiedAccountPage==='function'){window.rdsUnifiedAccountPage();}else{render()}scrollTo(0,0)}
 [...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.onclick=()=>go(b.dataset.page));
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR')},1000);
 
@@ -43,11 +43,11 @@ async function render(){app.innerHTML='<div class="card"><span class=mut>Carrega
  else if(page==='orders')await orders();
  else if(page==='account'){
    if(typeof window.rdsUnifiedAccountPage==='function'){
-     await window.rdsUnifiedAccountPage();
-   }else{
-     app.innerHTML='<div class="card"><span class="eyebrow">Conta</span><h2>Minha conta</h2><p class="mut">Preparando a área de conta…</p></div>';
-     setTimeout(()=>{if(typeof window.rdsUnifiedAccountPage==='function')window.rdsUnifiedAccountPage();},250);
+     window.rdsUnifiedAccountPage();
+     return;
    }
+   app.innerHTML='<div class="card"><span class="eyebrow">Conta</span><h2>Minha conta</h2><p class="mut">Preparando a área de conta…</p></div>';
+   setTimeout(()=>{if(typeof window.rdsUnifiedAccountPage==='function')window.rdsUnifiedAccountPage();},250);
  }
  else if(page==='settings')await settings();
 }catch(e){app.innerHTML=`<div class=card><h2>Não foi possível carregar</h2><p>${esc(e.message)}</p></div>`}}
