@@ -309,27 +309,8 @@ async function logHistoryMessages(messages=[]){
   return unique.length;
 }
 async function persistHistoryContacts(contacts=[]){
-  let saved=0;
-  for(const contact of contacts||[]){
-    const jid=String(contact?.id||'');
-    let phone='';
-    if(jid.endsWith('@s.whatsapp.net')) phone=normalizeBR(jid.split('@')[0]);
-    else if(lidToPn.has(jid)) phone=lidToPn.get(jid);
-    if(!validBRPhone(phone)) continue;
-    try{
-      await saveOrMergeContact({
-        name:cleanText(contact.name||contact.notify||contact.verifiedName)||`Cliente ${phone.slice(-4)}`,
-        phone,
-        lid:jid.endsWith('@lid')?jid:null,
-        group_name:'WHATSAPP',
-        origin:'WHATSAPP_HISTORICO',
-        validated:true,
-        last_seen_at:nowISO()
-      });
-      saved++;
-    }catch{}
-  }
-  return saved;
+  // Histórico do WhatsApp pode ser exibido na aba WhatsApp, mas nunca cria clientes no CRM.
+  return 0;
 }
 async function persistHistorySet(data={}){
   try{
