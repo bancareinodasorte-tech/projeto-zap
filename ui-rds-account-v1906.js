@@ -24,24 +24,100 @@ function openLogin(message=''){
 }
 async function context(){try{return await json('/api/rds/unified/context',{headers:{...headers(),...adminHeaders()}});}catch{return {authenticated:false};}}
 async function sellerData(){
- const [me,settings,mp]=await Promise.all([json('/api/operator/me',{headers:headers()}),json('/api/operator/settings',{headers:headers()}),json('/api/operator/mercadopago/status',{headers:headers()})]);
- return {me:me.seller,devices:me.devices||[],settings:settings.settings||{},mp};
+ const [me,settings,mp]=await Promise.allSettled([
+  json('/api/operator/me',{headers:headers()}),
+  json('/api/operator/settings',{headers:headers()}),
+  json('/api/operator/mercadopago/status',{headers:headers()})
+ ]);
+ return {
+  me:me.status==='fulfilled'?(me.value.seller||{}):{},
+  devices:me.status==='fulfilled'?(me.value.devices||[]):[],
+  settings:settings.status==='fulfilled'?(settings.value.settings||{}):{},
+  mp:mp.status==='fulfilled'?(mp.value||{}):{}
+ };
 }
 async function account(){
- const c=await context();
- if(!c.authenticated){openLogin('Entre para acessar sua conta.');return;}
- if(c.role==='ADMINISTRADOR'){
-  app.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p>'+esc(c.admin?.email||'')+'</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
-  document.getElementById('rdsUnifiedLogout').onclick=logout;return;
+ const root=document.getElementById('app');
+ if(!root)return;
+ root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Minha conta</h1><p class="mut">Validando sua sessão…</p></div></div><div class="card"><span class="mut">Carregando dados da conta…</span></div>';
+
+ let c;
+ try{
+  c=await Promise.race([
+   context(),
+   new Promise(resolve=>setTimeout(()=>resolve({authenticated:false,timeout:true}),8000))
+  ]);
+ }catch(e){
+  openLogin(e.message||'Não foi possível validar a sessão.');
+  return;
  }
- let d;try{d=await sellerData();}catch(e){openLogin(e.message);return;}
- const s=d.settings||{},m=d.mp||{},connected=Boolean(m.configured);
- app.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1>'+esc(d.me?.name||'Vendedor')+'</h1><p class="mut">'+esc(d.me?.phone||'')+' • '+esc(d.me?.email||'')+'</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Minha conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><p class="mut">Esta é a sua área individual. Os dados financeiros pertencem somente a esta conta.</p></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status '+(connected?'ok':'warn')+'">'+(connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado')+'</div><p class="mut">A conexão é feita pelo OAuth oficial. O Access Token e o Refresh Token permanecem protegidos no servidor.</p><div class="row"><button id="rdsMpConnect" class="btn primary">'+(connected?'Reconectar Mercado Pago':'Conectar Mercado Pago')+'</button>'+(connected?'<button id="rdsMpDisconnect" class="btn danger">Desconectar</button>':'')+'</div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value="'+esc(s.pix_key||'')+'"><label>Nome do favorecido</label><input id="rdsAccountPixName" value="'+esc(s.pix_name||'')+'"><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value="'+esc(s.official_email||'')+'"><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div>'+d.devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status)+'<br><span class="mini">'+esc(x.device_id||'')+'</span></div>').join('')+'</div></div>';
+ if(!c?.authenticated){
+  openLogin(c?.timeout?'A validação da sessão demorou mais que o esperado. Entre novamente.':'Entre para acessar sua conta.');
+  return;
+ }
+
+ if(c.role==='ADMINISTRADOR'){
+  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p>'+esc(c.admin?.email||'')+'</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
+  document.getElementById('rdsUnifiedLogout').onclick=logout;
+  return;
+ }
+
+ const seller=c.seller||{};
+ // Render the seller account immediately from the unified context. Secondary data must not block the page.
+ root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1>'+esc(seller.name||'Vendedor')+'</h1><p class="mut">'+esc(seller.phone||'')+' • '+esc(seller.email||'')+'</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Minha conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><p class="mut">Esta é a sua área individual. Os dados financeiros pertencem somente a esta conta.</p></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><p class="mut">A conexão é feita pelo OAuth oficial. O Access Token e o Refresh Token permanecem protegidos no servidor.</p><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value=""><label>Nome do favorecido</label><input id="rdsAccountPixName" value=""><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value=""><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
+
  document.getElementById('rdsUnifiedLogout').onclick=logout;
- document.getElementById('rdsMpConnect').onclick=async()=>{const b=document.getElementById('rdsMpConnect'),msg=document.getElementById('rdsMpMsg');b.disabled=true;msg.textContent='Abrindo Mercado Pago…';try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});location.href=r.url;}catch(e){msg.textContent=e.message;b.disabled=false;}};
- document.getElementById('rdsMpDisconnect')?.addEventListener('click',async()=>{if(!confirm('Desconectar a conta Mercado Pago deste vendedor?'))return;try{await json('/api/operator/mercadopago/oauth/disconnect',{method:'POST',headers:headers()});account();}catch(e){toast(e.message);}});
- document.getElementById('rdsAccountSave').onclick=async()=>{const msg=document.getElementById('rdsAccountMsg');msg.textContent='Salvando…';try{await json('/api/operator/settings',{method:'POST',headers:{'Content-Type':'application/json',...headers()},body:JSON.stringify({mpEnvironment:s.mp_environment||'production',mpPublicKey:s.mp_public_key||'',pixKey:document.getElementById('rdsAccountPix').value,pixName:document.getElementById('rdsAccountPixName').value,officialEmail:document.getElementById('rdsAccountEmail').value})});msg.textContent='Dados salvos com segurança.';}catch(e){msg.textContent=e.message;}};
- const q=new URLSearchParams(location.search);if(q.get('mp')==='connected'){document.getElementById('rdsMpMsg').textContent='Mercado Pago conectado com sucesso.';history.replaceState({},'',location.pathname+'?rds=account');}if(q.get('mp')==='error'){document.getElementById('rdsMpMsg').textContent='A conexão do Mercado Pago não foi concluída.';history.replaceState({},'',location.pathname+'?rds=account');}
+ const mpConnect=document.getElementById('rdsMpConnect');
+ const mpDisconnect=document.getElementById('rdsMpDisconnect');
+ const mpStatus=document.getElementById('rdsMpAccountStatus');
+ const mpMsg=document.getElementById('rdsMpMsg');
+
+ mpConnect.onclick=async()=>{
+  mpConnect.disabled=true;mpMsg.textContent='Abrindo Mercado Pago…';
+  try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});location.href=r.url;}
+  catch(e){mpMsg.textContent=e.message;mpConnect.disabled=false;}
+ };
+ mpDisconnect.onclick=async()=>{
+  if(!confirm('Desconectar a conta Mercado Pago deste vendedor?'))return;
+  try{await json('/api/operator/mercadopago/oauth/disconnect',{method:'POST',headers:headers()});account();}
+  catch(e){toast(e.message);}
+ };
+ document.getElementById('rdsAccountSave').onclick=async()=>{
+  const msg=document.getElementById('rdsAccountMsg');msg.textContent='Salvando…';
+  try{
+   const st=window.__rdsAccountSettings||{};
+   await json('/api/operator/settings',{method:'POST',headers:{'Content-Type':'application/json',...headers()},body:JSON.stringify({
+    mpEnvironment:st.mp_environment||'production',mpPublicKey:st.mp_public_key||'',
+    pixKey:document.getElementById('rdsAccountPix').value,
+    pixName:document.getElementById('rdsAccountPixName').value,
+    officialEmail:document.getElementById('rdsAccountEmail').value
+   })});
+   msg.textContent='Dados salvos com segurança.';
+  }catch(e){msg.textContent=e.message;}
+ };
+
+ try{
+  const d=await sellerData();
+  const st=d.settings||{},m=d.mp||{},connected=Boolean(m.configured);
+  window.__rdsAccountSettings=st;
+  document.getElementById('rdsAccountPix').value=st.pix_key||'';
+  document.getElementById('rdsAccountPixName').value=st.pix_name||'';
+  document.getElementById('rdsAccountEmail').value=st.official_email||'';
+  mpStatus.className='status '+(connected?'ok':'warn');
+  mpStatus.textContent=connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado';
+  mpConnect.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
+  mpDisconnect.style.display=connected?'':'none';
+  const devices=d.devices||[];
+  document.getElementById('rdsAccountDevices').innerHTML=devices.length?devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status||'')+'<br><span class="mini">'+esc(x.device_id||'')+'</span></div>').join(''):'<span class="mut">Nenhum dispositivo registrado.</span>';
+ }catch(e){
+  mpStatus.className='status warn';
+  mpStatus.textContent='🟡 Conta carregada; alguns dados adicionais não responderam.';
+  document.getElementById('rdsAccountDevices').innerHTML='<span class="mut">'+esc(e.message||'Dados adicionais indisponíveis.')+'</span>';
+ }
+
+ const q=new URLSearchParams(location.search);
+ if(q.get('mp')==='connected'){mpMsg.textContent='Mercado Pago conectado com sucesso.';history.replaceState({},'',location.pathname+'?rds=account');}
+ if(q.get('mp')==='error'){mpMsg.textContent='A conexão do Mercado Pago não foi concluída.';history.replaceState({},'',location.pathname+'?rds=account');}
 }
 async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;openLogin('Sessão encerrada.');}
 window.rdsUnifiedAccountPage=account;
