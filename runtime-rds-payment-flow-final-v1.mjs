@@ -20,15 +20,15 @@ async function rdsFinalHandleOrderForm(identity,order,text){
   const t=cleanText(text);
   if(!order||order.status!=='COLETANDO_DADOS')return;
   const get=label=>{
-    const m=t.match(new RegExp(label+'\\s*[:\\-]\\s*([^\\n\\r]+)','i'));
+    const m=t.match(new RegExp(label+'\s*[:\-]\s*([^\n\r]+)','i'));
     return cleanText(m?.[1]||'');
   };
-  const quantity=Number((get('quantidade').match(/\\d+/)||[])[0]||0);
-  const name=get('nome').replace(/\\s+/g,' ').trim();
+  const quantity=Number((get('quantidade').match(/\d+/)||[])[0]||0);
+  const name=get('nome').replace(/\s+/g,' ').trim();
   const cpf=digits(get('cpf'));
   if(!quantity||quantity<1)return replyInbound(identity,'❌ Informe uma quantidade válida.');
   if(name.length<3)return replyInbound(identity,'❌ Informe seu nome completo.');
-  if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ Informe um CPF válido com 11 dígitos.');
+  if(!/^\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ Informe um CPF válido com 11 dígitos.');
 
   const total=Number((quantity*Number(order.unit_price||3)).toFixed(2));
   if(identity.phone){
@@ -59,14 +59,14 @@ async function rdsFinalHandleOrderForm(identity,order,text){
     pix=await rdsMercadoPagoCreatePix(fresh);
   }catch(e){
     await addAlert('MERCADO_PAGO_PIX_FALHA','Falha ao criar PIX — '+fresh.code,{order:fresh.code,error:e.message});
-    return replyInbound(identity,'⚠️ *PEDIDO RECEBIDO*\\n\\nSeu pedido '+fresh.code+' foi registrado, mas não foi possível gerar o PIX agora. O atendimento pode tentar novamente pelo painel.');
+    return replyInbound(identity,'⚠️ *PEDIDO RECEBIDO*\n\nSeu pedido '+fresh.code+' foi registrado, mas não foi possível gerar o PIX agora. O atendimento pode tentar novamente pelo painel.');
   }
 
   if(typeof sendPixToIdentity==='function'){
     await sendPixToIdentity(identity,{...fresh,pix_copy_paste:pix?.qr?.text||fresh.pix_copy_paste},pix);
   }else{
     const code=cleanText(pix?.qr?.text||'');
-    await replyInbound(identity,'💳 *PAGAMENTO PIX*\\n\\nPedido: *'+fresh.code+'*\\nValor: *R$ '+money(total)+'*\\n\\n*PIX COPIA E COLA:*\\n'+code+'\\n\\nApós pagar, aguarde a confirmação automática do Mercado Pago.');
+    await replyInbound(identity,'💳 *PAGAMENTO PIX*\n\nPedido: *'+fresh.code+'*\nValor: *R$ '+money(total)+'*\n\n*PIX COPIA E COLA:*\n'+code+'\n\nApós pagar, aguarde a confirmação automática do Mercado Pago.');
   }
   await logEvent('PEDIDO_DADOS_COMPLETOS',{phone:identity.phone,order:fresh.code,quantity,total,provider:'MERCADO_PAGO'});
 }
