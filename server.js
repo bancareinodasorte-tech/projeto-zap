@@ -598,7 +598,43 @@ async function handleOrderForm(identity, order, text){
   const name=t.replace(/\s+/g,' ').trim();
   if(name.length<3||/^(\d+|CANCELAR|SAIR|REINICIAR)$/i.test(name)){ await replyInbound(identity,'Informe seu *nome completo* para continuar.\n\nDigite *CANCELAR* para sair.'); return; }
   const quantity=Number(order.quantity||0), total=Number((quantity*Number(order.unit_price||3)).toFixed(2));
-  if(identity.phone){ const existing=await findContact(identity.phone); if(existing) await patch('rds10_contacts',`id=eq.${existing.id}`,{name,validated:true,last_seen_at:nowISO(),updated_at:nowISO()}); else await saveOrMergeContact({name,phone:identity.phone,group_name:'INTERESSADOS',origin:'PEDIDO',validated:true,last_seen_at:nowISO()}); }
+  if(identity.phone){
+    const existing=await findContact(identity.phone);
+    const existingOrigin=String(existing?.origin||'').trim().toUpperCase();
+    const historicalOnly=['WHATSAPP','WHATSAPP_HISTORICO'].includes(existingOrigin);
+    if(existing && historicalOnly){
+      const autoName=typeof rdsAutoContactName==='function' ? rdsAutoContactName(name) : ('Cliente '+name.split(/\\s+/).slice(0,2).join(' '));
+      await patch('rds10_contacts',`id=eq.${existing.id}`,{
+        name:autoName,
+        group_name:'INTERESSADOS',
+        origin:'PEDIDO',
+        status:'ATIVO',
+        validated:true,
+        whatsapp_validated:true,
+        last_seen_at:nowISO(),
+        updated_at:nowISO()
+      });
+    }else if(existing){
+      await patch('rds10_contacts',`id=eq.${existing.id}`,{
+        name: name || existing.name,
+        group_name:existing.group_name||'INTERESSADOS',
+        origin:['IMPORTACAO','MANUAL','PEDIDO','COMPRA'].includes(existingOrigin)?existing.origin:'PEDIDO',
+        validated:true,
+        whatsapp_validated:true,
+        last_seen_at:nowISO(),
+        updated_at:nowISO()
+      });
+    }else{
+      await saveOrMergeContact({
+        name,
+        phone:identity.phone,
+        group_name:'INTERESSADOS',
+        origin:'PEDIDO',
+        validated:true,
+        last_seen_at:nowISO()
+      });
+    }
+  }
   await patch('rds10_orders',`id=eq.${order.id}`,{customer_name:name,contact_phone:identity.phone,quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',updated_at:nowISO()});
   const settings=await getSettings(), pix=cleanText(settings.pix_key||'PIX NÃO CONFIGURADO');
   await replyInbound(identity,`✅ *PEDIDO RECEBIDO*\n\n👤 ${name}\n🎟 ${quantity} bilhete(s)\n💰 Total: *R$ ${money(total)}*\n🧾 Pedido: *${order.code}*\n\n💳 *PAGAMENTO PIX*\nChave: ${pix}\nFavorecido: ${cleanText(settings.pix_name||'REINO DA SORTE')}\nValor: *R$ ${money(total)}*\n\nApós pagar, envie o comprovante aqui 👇`);
