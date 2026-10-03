@@ -73,3 +73,5 @@ async function gate(){
 }
 window.addEventListener('load',()=>setTimeout(gate,20));
 })();
+
+(()=>{const originalGo=window.go;window.go=async p=>{if(window.rdsUnifiedRole==='VENDEDOR'){if(!['home','orders','account'].includes(p))p='home';localStorage.setItem('rds_current_page',p);if(typeof setNav==='function')setNav();try{if(p==='account')await window.rdsUnifiedAccountPage();else if(p==='orders')await window.rdsSellerOrdersPage();else await window.rdsSellerCentralPage();}catch(e){document.getElementById('app').innerHTML='<div class="card"><h2>Não foi possível carregar</h2><p>'+String(e.message||e)+'</p></div>'}scrollTo(0,0);return}return originalGo(p)}})();
