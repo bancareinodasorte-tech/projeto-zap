@@ -87,10 +87,12 @@ async function rdsMpOAuthCallback(req,res){
 }
 app.get('/api/mercadopago/oauth/start',async(req,res)=>{
   try{
-    const session=await rdsOpRequire(req,res);if(!session)return;
-    if(!rdsMpOAuthConfigured())return res.status(503).json({success:false,error:'OAuth do Mercado Pago ainda não está configurado no servidor.'});
-    return rdsMpOAuthStart(req,res);
-  }catch(e){return res.status(500).json({success:false,error:String(e?.message||e)});}
+    console.log('[RDS MP OAuth] início da autorização');
+    return await rdsMpOAuthStart(req,res);
+  }catch(e){
+    console.error('[RDS MP OAuth] falha ao iniciar:',e?.message||e);
+    return res.status(500).json({success:false,error:String(e?.message||e)});
+  }
 });
 app.get('/api/mercadopago/oauth/callback',rdsMpOAuthCallback);
 app.get('/api/operator/mercadopago/status',async(req,res)=>{
