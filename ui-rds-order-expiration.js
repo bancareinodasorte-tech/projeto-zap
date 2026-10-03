@@ -8,7 +8,7 @@
       const c=await fetch('/api/order-expiration',{cache:'no-store'}).then(r=>r.json());
       const box=document.createElement('div');
       box.className='card';
-      box.innerHTML='<span class="eyebrow">Ciclo do pedido</span><h2>Expiração automática</h2><p class="mut">Pedidos sem pagamento expiram automaticamente após este prazo. O padrão é 3 horas.</p><label>Prazo para expirar (horas)</label><input id="rdsOrderExpirationHours" type="number" min="0.25" max="168" step="0.25" value="'+Number(c.hours||3)+'"><p class="mini">Após expirar, o pedido é desvinculado, a fila de campanhas é retomada quando houver mensagens restantes e o próximo contato começa novamente pelo menu.</p><div class="row"><button class="btn primary" onclick="rdsSaveOrderExpiration()">Salvar prazo</button></div>';
+      box.innerHTML='<span class="eyebrow">Ciclo do pedido</span><h2>Expiração automática</h2><p class="mut">Pedidos sem pagamento expiram automaticamente após este prazo. O padrão é 4 horas.</p><label>Prazo para expirar (horas)</label><input id="rdsOrderExpirationHours" type="number" min="0.25" max="168" step="0.25" value="'+Number(c.hours||4)+'"><p class="mini">Após expirar, o pedido é desvinculado, a fila de campanhas é retomada quando houver mensagens restantes e o próximo contato começa novamente pelo menu.</p><div class="row"><button class="btn primary" onclick="rdsSaveOrderExpiration()">Salvar prazo</button></div>';
       app.appendChild(box);
       const r=await fetch('/api/payment-reminders',{cache:'no-store'}).then(x=>x.json());
       const rbox=document.createElement('div');
@@ -22,7 +22,7 @@
   };
   window.rdsSaveOrderExpiration=async function(){
     try{
-      const hours=Number(document.querySelector('#rdsOrderExpirationHours')?.value||3);
+      const hours=Number(document.querySelector('#rdsOrderExpirationHours')?.value||4);
       if(!Number.isFinite(hours)||hours<0.25||hours>168)throw new Error('Informe um prazo entre 0,25 e 168 horas.');
       await fetch('/api/order-expiration',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hours})}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao salvar prazo.');return d;});
       toast('Prazo de expiração salvo.');
@@ -33,7 +33,7 @@ window.rdsSavePaymentReminders=async function(){
   try{
     const enabled=document.querySelector('#rdsPixReminderEnabled')?.checked!==false;
     const interval_hours=Number(document.querySelector('#rdsPixReminderInterval')?.value||1);
-    const max_reminders=Number(document.querySelector('#rdsPixReminderMax')?.value||3);
+    const max_reminders=Number(document.querySelector('#rdsPixReminderMax')?.value||4);
     if(!Number.isFinite(interval_hours)||interval_hours<0.25||interval_hours>24)throw new Error('O intervalo deve ficar entre 0,25 e 24 horas.');
     if(!Number.isInteger(max_reminders)||max_reminders<1||max_reminders>10)throw new Error('O máximo deve ficar entre 1 e 10 lembretes.');
     await fetch('/api/payment-reminders',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled,interval_hours,max_reminders})}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao salvar cobrança automática.');return d;});
