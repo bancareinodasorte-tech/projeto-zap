@@ -95,5 +95,5 @@ fs.writeFileSync(path,s,'utf8');
 console.log('[RDS] fluxo de pagamento final V1 aplicado');
 `;
 
-s=s.slice(0,pos)+block+'\\n'+s.slice(pos);
+s=s.slice(0,pos)+block+'\n'+s.slice(pos);
 fs.writeFileSync(path,s,'utf8');
