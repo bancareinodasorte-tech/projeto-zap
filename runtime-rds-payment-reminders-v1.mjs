@@ -76,8 +76,3 @@ try{
   fs.writeFileSync(serverPath,s,'utf8');
 }catch(e){console.error('[RDS] backend payment reminders:',e.message);process.exitCode=1;}
 
-try{
-  let a=fs.readFileSync(appPath,'utf8');
-  if(!a.includes('RDS_PAYMENT_REMINDERS_UI_V1')){
-    a += [
-      "
