@@ -39,38 +39,55 @@ async function sellerData(){
 async function account(){
  const root=document.getElementById('app');
  if(!root)return;
- root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Minha conta</h1><p class="mut">Validando sua sessão…</p></div></div><div class="card"><span class="mut">Carregando dados da conta…</span></div>';
 
- let c;
- try{
-  c=await Promise.race([
-   context(),
-   new Promise(resolve=>setTimeout(()=>resolve({authenticated:false,timeout:true}),8000))
-  ]);
- }catch(e){
-  openLogin(e.message||'Não foi possível validar a sessão.');
-  return;
- }
- if(!c?.authenticated){
-  openLogin(c?.timeout?'A validação da sessão demorou mais que o esperado. Entre novamente.':'Entre para acessar sua conta.');
-  return;
- }
+ // A Conta não pode depender de uma chamada ao servidor para começar a renderizar.
+ // O token local já identifica o tipo de sessão; os dados complementares entram depois.
+ const hasSeller=!!token(), hasAdmin=!!adminToken();
+ if(!hasSeller&&!hasAdmin){openLogin('Entre para acessar sua conta.');return;}
 
- if(c.role==='ADMINISTRADOR'){
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p>'+esc(c.admin?.email||'')+'</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
+ if(hasAdmin&&!hasSeller){
+  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p id="rdsAdminEmail" class="mut">Validando sessão…</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
   document.getElementById('rdsUnifiedLogout').onclick=logout;
-  return;
+ }else{
+  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsAccountName">Minha conta</h1><p id="rdsAccountIdentity" class="mut">Carregando seus dados…</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Minha conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><p class="mut">Esta é a sua área individual. Os dados financeiros pertencem somente a esta conta.</p></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><p class="mut">A conexão é feita pelo OAuth oficial. O Access Token e o Refresh Token permanecem protegidos no servidor.</p><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value=""><label>Nome do favorecido</label><input id="rdsAccountPixName" value=""><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value=""><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
+  document.getElementById('rdsUnifiedLogout').onclick=logout;
  }
 
- const seller=c.seller||{};
- // Render the seller account immediately from the unified context. Secondary data must not block the page.
- root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1>'+esc(seller.name||'Vendedor')+'</h1><p class="mut">'+esc(seller.phone||'')+' • '+esc(seller.email||'')+'</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Minha conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><p class="mut">Esta é a sua área individual. Os dados financeiros pertencem somente a esta conta.</p></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><p class="mut">A conexão é feita pelo OAuth oficial. O Access Token e o Refresh Token permanecem protegidos no servidor.</p><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value=""><label>Nome do favorecido</label><input id="rdsAccountPixName" value=""><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value=""><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
+ // Validate in the background, without blocking the page.
+ try{
+  const c=await Promise.race([
+   context(),
+   new Promise(resolve=>setTimeout(()=>resolve({authenticated:false,timeout:true}),4000))
+  ]);
+  if(!c?.authenticated){
+   openLogin(c?.timeout?'A validação da sessão demorou mais que o esperado. Entre novamente.':'Sua sessão não está mais válida.');
+   return;
+  }
+  window.rdsUnifiedRole=c.role;
+  if(c.role==='ADMINISTRADOR'){
+   const el=document.getElementById('rdsAdminEmail');if(el)el.textContent=c.admin?.email||'Administrador';
+   return;
+  }
 
- document.getElementById('rdsUnifiedLogout').onclick=logout;
+  const seller=c.seller||{};
+  const name=document.getElementById('rdsAccountName');
+  const identity=document.getElementById('rdsAccountIdentity');
+  if(name)name.textContent=seller.name||'Minha conta';
+  if(identity)identity.textContent=(seller.phone||'')+(seller.email?' • '+seller.email:'');
+  await loadSellerAccountDetails();
+ }catch(e){
+  // The account remains visible even when the validation/data APIs are temporarily slow.
+  const msg=document.getElementById('rdsMpMsg');
+  if(msg)msg.textContent='Alguns dados adicionais estão temporariamente indisponíveis.';
+ }
+}
+
+async function loadSellerAccountDetails(){
  const mpConnect=document.getElementById('rdsMpConnect');
  const mpDisconnect=document.getElementById('rdsMpDisconnect');
  const mpStatus=document.getElementById('rdsMpAccountStatus');
  const mpMsg=document.getElementById('rdsMpMsg');
+ if(!mpConnect||!mpStatus)return;
 
  mpConnect.onclick=async()=>{
   mpConnect.disabled=true;mpMsg.textContent='Abrindo Mercado Pago…';
@@ -112,18 +129,14 @@ async function account(){
  }catch(e){
   mpStatus.className='status warn';
   mpStatus.textContent='🟡 Conta carregada; alguns dados adicionais não responderam.';
-  document.getElementById('rdsAccountDevices').innerHTML='<span class="mut">'+esc(e.message||'Dados adicionais indisponíveis.')+'</span>';
+  document.getElementById('rdsAccountDevices').innerHTML='<span class="mut">Dados adicionais indisponíveis no momento.</span>';
  }
-
- const q=new URLSearchParams(location.search);
- if(q.get('mp')==='connected'){mpMsg.textContent='Mercado Pago conectado com sucesso.';history.replaceState({},'',location.pathname+'?rds=account');}
- if(q.get('mp')==='error'){mpMsg.textContent='A conexão do Mercado Pago não foi concluída.';history.replaceState({},'',location.pathname+'?rds=account');}
 }
 async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;openLogin('Sessão encerrada.');}
 window.rdsUnifiedAccountPage=account;
 window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
-window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'||q.get('rds')==='account')setTimeout(()=>{if(typeof window.go==='function')window.go('account');},0);});
+window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'){setTimeout(()=>openLogin(),0);}else if(q.get('rds')==='account'){setTimeout(()=>account(),0);}});
 })();
 /* RDS ROLE GATE V2 — painel operacional unificado */
 (()=>{
@@ -131,6 +144,7 @@ const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution',
 const nav=()=>[...document.querySelectorAll('#nav button,#mobileNav button')];
 const applySellerNav=()=>nav().forEach(b=>{const ok=sellerPages.has(b.dataset.page);b.style.display=ok?'':'none';});
 async function gate(){
+ if(localStorage.getItem('rds_current_page')==='account'||new URLSearchParams(location.search).get('rds')==='account')return;
  try{
   const c=await fetch('/api/rds/unified/context',{cache:'no-store'}).then(r=>r.json());
   if(!c.authenticated){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin();return;}
@@ -142,7 +156,7 @@ async function gate(){
    if(current!==p)localStorage.setItem('rds_current_page',current);
    if(typeof setNav==='function')setNav();
   }
- }catch(e){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin('Não foi possível validar a sessão.');}
+ }catch(e){if(localStorage.getItem('rds_current_page')!=='account'&&typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin('Não foi possível validar a sessão.');}
 }
 window.addEventListener('load',()=>setTimeout(gate,20));
 })();
