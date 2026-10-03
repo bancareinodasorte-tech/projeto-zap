@@ -134,6 +134,7 @@ window.rdsWaOpen=async phone=>{
  app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><div class="rds-wa-full-title"><span class="rds-wa-avatar">•</span><div><b>Abrindo conversa...</b><small>'+E(fmtPhone(phone)||phone)+'</small></div></div></header><main id="rdsWaMessages" class="rds-wa-full-messages"><div class="rds-wa-full-loading">Carregando conversa...</div></main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="Digite uma mensagem..."></textarea><button class="rds-wa-full-send" type="submit">➤</button></form></section>';
  try{
   await F('/api/whatsapp/chat/'+encodeURIComponent(phone)+'/read',{method:'POST',body:JSON.stringify({})}).catch(()=>{});
+  try{ if(lastData?.chats){ lastData={...lastData,chats:lastData.chats.map(c=>String(c.phone)===String(phone)?{...c,unread_count:0}:c)}; } }catch{}
   const d=await F('/api/whatsapp/chat/'+encodeURIComponent(phone)),c=d.contact||{},messages=d.messages||[];
   const contactName=c?.name||phone;
   const managed=Boolean(c?.id);
