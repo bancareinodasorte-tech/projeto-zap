@@ -49,3 +49,27 @@ window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'||q.get('rds')==='account')setTimeout(()=>{if(typeof window.go==='function')window.go('account');},0);});
 })();
+/* RDS ROLE GATE V1 */
+(()=>{
+const allowedSeller=new Set(['home','orders','account']);
+const nav=()=>[...document.querySelectorAll('#nav button,#mobileNav button')];
+const applySellerNav=()=>nav().forEach(b=>{const ok=allowedSeller.has(b.dataset.page);b.style.display=ok?'':'none';});
+const hideShell=()=>{document.querySelector('.sidebar')?.setAttribute('data-rds-role','VENDEDOR');document.querySelector('.workspace .top-actions')?.setAttribute('data-rds-role','VENDEDOR');};
+async function gate(){
+ try{
+  const c=await fetch('/api/rds/unified/context',{cache:'no-store'}).then(r=>r.json());
+  if(!c.authenticated){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin();return;}
+  window.rdsUnifiedRole=c.role;
+  if(c.role==='VENDEDOR'){
+   applySellerNav();hideShell();
+   const p=localStorage.getItem('rds_current_page')||'home';
+   if(!allowedSeller.has(p))localStorage.setItem('rds_current_page','home');
+   const current=localStorage.getItem('rds_current_page')||'home';
+   if(current==='account')await window.rdsUnifiedAccountPage();
+   else if(current==='orders')await window.rdsSellerOrdersPage();
+   else await window.rdsSellerCentralPage();
+  }
+ }catch(e){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin('Não foi possível validar a sessão.');}
+}
+window.addEventListener('load',()=>setTimeout(gate,20));
+})();
