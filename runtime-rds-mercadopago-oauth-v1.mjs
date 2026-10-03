@@ -8,9 +8,9 @@ if(server.includes(marker)){
   process.exit(0);
 }
 
-const listen="app.listen(PORT,async()=>{";
-const pos=server.indexOf(listen);
-if(pos<0)throw new Error('app.listen não localizado para OAuth Mercado Pago.');
+const beforeRoute="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const pos=server.indexOf(beforeRoute);
+if(pos<0)throw new Error('catch-all não localizado para OAuth Mercado Pago.');
 
 const block=String.raw`
 ${marker}
