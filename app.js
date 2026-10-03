@@ -98,7 +98,7 @@ async function renderAccountNative(){
 }
 async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
  if(page==='home')await home();
- else if(page==='contacts')await (typeof window.rdsCrmPage==='function'?window.rdsCrmPage():contacts)();
+ else if(page==='contacts'){if(typeof window.rdsCrmPage==='function')await window.rdsCrmPage();else await contacts();}
  else if(page==='whatsapp'){
    if(typeof window.__rdsWaPage==='function') await window.__rdsWaPage();
    else if(typeof window.rdsWaReload==='function') await window.rdsWaReload();
