@@ -10,6 +10,7 @@ async function commandHome(){
   const d=await F('/api/dashboard'),rr=await F('/api/operator/orders').catch(()=>[]);
   const os=Array.isArray(rr)?rr:(rr.orders||[]);
   const attention=[
+   os.filter(o=>o.status==='AGUARDANDO_PAGAMENTO').length&&['Cobranças PIX',os.filter(o=>o.status==='AGUARDANDO_PAGAMENTO').length,'payments','amber'],
    d.proofReview&&['Conferir pagamentos',d.proofReview,'payments','amber'],
    d.ticketsPending&&['Emitir bilhetes',d.ticketsPending,'orders','blue'],
    d.failed&&['Revisar falhas',d.failed,'execution','red'],
