@@ -1,1 +1,9 @@
-const CACHE='rds-v11-1-final';const ASSETS=['/','/styles.css','/styles-rds-premium.css','/styles-rds-interface-final.css','/styles-rds-v11-polish.css','/app.js','/ui-rds-v11-polish.js','/manifest.webmanifest'];self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{}))});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))));self.clients.claim()});self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).pathname.startsWith('/api/'))return;e.respondWith(fetch(e.request).then(r=>{const x=r.clone();caches.open(CACHE).then(c=>c.put(e.request,x));return r}).catch(()=>caches.match(e.request)))})
+const CACHE='rds-v12-no-stale-shell';
+self.addEventListener('install',e=>{self.skipWaiting();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+ if(e.request.method!=='GET')return;
+ const u=new URL(e.request.url);
+ if(u.pathname.startsWith('/api/'))return;
+ e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match(e.request)));
+});
