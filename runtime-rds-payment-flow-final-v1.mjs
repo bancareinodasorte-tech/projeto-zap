@@ -73,10 +73,6 @@ async function rdsFinalHandleOrderForm(identity,order,text){
 handleOrderForm=rdsFinalHandleOrderForm;
 
 /* 2) Cancelamentos passam a guardar a natureza do encerramento. */
-const oldCancelRoute="app.post('/api/orders/:id/cancel',async(req,res)=>{ try{await patch('rds10_orders',\`id=eq.${req.params.id}\`,{status:'CANCELADO',updated_at:nowISO()});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });";
-const newCancelRoute="app.post('/api/orders/:id/cancel',async(req,res)=>{ try{const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));if(!o)throw new Error('Pedido não encontrado.');if(['CONCLUIDO','CANCELADO'].includes(String(o.status||'')))throw new Error('Pedido já encerrado.');await patch('rds10_orders','id=eq.'+encodeURIComponent(o.id),{status:'CANCELADO',cancel_reason:'CANCELAMENTO_MANUAL',cancelled_at:nowISO(),updated_at:nowISO()});await cancelFutureDeliveries(o.phone,'CANCELAMENTO_MANUAL');await logEvent('PEDIDO_CANCELADO',{order:o.code,phone:o.phone,reason:'CANCELAMENTO_MANUAL',source:'OPERADOR'});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });";
-if(s.includes(oldCancelRoute))s=s.replace(oldCancelRoute,newCancelRoute);
-
 /* Expiração: grava explicitamente que foi automática. */
 s=s.replace(
   "await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',updated_at:nowISO()});\n  await rdsRestoreQueueAfterExpiration(order.phone);\n  console.log('[RDS] pedido expirado:'",
