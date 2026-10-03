@@ -52,11 +52,11 @@ async function rdsMpOAuthCallback(req,res){
     if(new Date(row.expires_at).getTime()<=Date.now())throw new Error('A autorização expirou. Inicie uma nova conexão.');
     if(!rdsMpOAuthConfigured())throw new Error('OAuth do Mercado Pago não configurado no servidor.');
     const form=new URLSearchParams({
-      client_id:MERCADOPAGO_OAUTH_CLIENT_ID,
+      client_id:rdsMpOAuthClientId(),
       client_secret:rdsMpOAuthClientSecret(),
       grant_type:'authorization_code',
       code,
-      redirect_uri:MERCADOPAGO_OAUTH_REDIRECT_URI
+      redirect_uri:rdsMpOAuthRedirectUri()
     });
     if(row.code_verifier)form.set('code_verifier',row.code_verifier);
     const tokenResponse=await fetch(MERCADOPAGO_OAUTH_TOKEN_URL,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},body:form.toString()});
