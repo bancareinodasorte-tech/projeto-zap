@@ -48,16 +48,18 @@ if(!server.includes("const rdsRequestScope=new AsyncLocalStorage()")){
 }
 const jsonAnchor="app.use(express.json({ limit:'15mb' }));";
 const jp=server.indexOf(jsonAnchor);if(jp<0)throw new Error('express.json não localizado.');
-const middleware="app.use(async(req,res,next)=>{
-  if(!String(req.path||'').startsWith('/api'))return next();
-  try{
-    if(typeof rdsOpSession==='function'){
-      const s=await rdsOpSession(req).catch(()=>null);
-      if(s?.seller?.id)return rdsRequestScope.run({sellerId:s.seller.id},()=>next());
-    }
-  }catch{}
-  return next();
-});\n";
+const middleware = [
+  "app.use(async(req,res,next)=>{",
+  "  if(!String(req.path||'').startsWith('/api'))return next();",
+  "  try{",
+  "    if(typeof rdsOpSession==='function'){",
+  "      const s=await rdsOpSession(req).catch(()=>null);",
+  "      if(s?.seller?.id)return rdsRequestScope.run({sellerId:s.seller.id},()=>next());",
+  "    }",
+  "  }catch{}",
+  "  return next();",
+  "});"
+].join(String.fromCharCode(10));
 server=server.slice(0,jp+jsonAnchor.length)+'\n'+middleware+server.slice(jp+jsonAnchor.length);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] escopo multi-vendedor V1 instalado');
