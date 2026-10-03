@@ -136,7 +136,7 @@ async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',
 window.rdsUnifiedAccountPage=account;
 window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
-window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'){setTimeout(()=>openLogin(),0);}else if(q.get('rds')==='account'){setTimeout(()=>account(),0);}});
+window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'){setTimeout(()=>openLogin(),0);}});
 })();
 /* RDS ROLE GATE V2 — painel operacional unificado */
 (()=>{
