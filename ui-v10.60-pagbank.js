@@ -12,20 +12,20 @@
     const proof=ordersList.filter(o=>o.status==='AGUARDANDO_CONFERENCIA');
     const paid=ordersList.filter(o=>o.status==='PAGO_AGUARDANDO_BILHETES');
     const total=waiting.reduce((a,o)=>a+Number(o.total_amount||0),0);
-    const statusLabel=o=>o.mercadopago_status?String(o.mercadopago_status):'SEM PIX';
+    const statusLabel=o=>o.pagbank_status?String(o.pagbank_status):'SEM PIX';
     const pixButtons=o=>{
       const hasPix=!!o.pix_copy_paste;
       return `${btn(hasPix?'Ver PIX':'Gerar PIX',`rdsCreatePix('${o.id}',false)`,'btn primary')}${btn('Gerar e enviar no WhatsApp',`rdsCreatePix('${o.id}',true)`,'btn success')}${hasPix?btn('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`):''}<a target=_blank href="${waLink(o.phone)}">${btn('Abrir WhatsApp','')}</a>`;
     };
     app.innerHTML=`
-      <div class="rds-clean-head"><div><span class=eyebrow>Operação financeira</span><h1>Pagamentos</h1><p class=rds-clean-sub>PIX automático Mercado Pago, QR Code, Copia e Cola e confirmação automática.</p></div>${badge(pb.configured?'PAGBANK '+String(pb.environment||'').toUpperCase():'PAGBANK NÃO CONFIGURADO')}</div>
+      <div class="rds-clean-head"><div><span class=eyebrow>Operação financeira</span><h1>Pagamentos</h1><p class=rds-clean-sub>PIX automático Mercado Pago, QR Code, Copia e Cola e confirmação automática.</p></div>${badge(pb.connected?'MERCADO PAGO '+String(pb.environment||'').toUpperCase():'MERCADO PAGO NÃO CONFIGURADO')}</div>
       <div class=rds-mini-grid>
         <div class="card metric-card"><span class=eyebrow>Aguardando PIX</span><div class=metric>${waiting.length}</div></div>
         <div class="card metric-card"><span class=eyebrow>Valor pendente</span><div class=metric>${money(total)}</div></div>
         <div class="card metric-card"><span class=eyebrow>Conferência manual</span><div class=metric>${proof.length}</div></div>
         <div class="card metric-card"><span class=eyebrow>Pagamento confirmado</span><div class=metric>${paid.length}</div></div>
       </div>
-      <div class="rds-section card"><div class=rds-section-title><h2>Cobranças PIX</h2></div><div class=rds-order-list>${waiting.length?waiting.map(o=>`<div class=rds-order><div class=rds-order-top><div><h3>${esc(o.customer_name||o.phone)}</h3><p>${esc(o.code)} • ${o.quantity||0} bilhete(s) • <b>${money(o.total_amount)}</b></p></div>${badge(statusLabel(o))}</div><p class=mut>${o.mercadopago_order_id?'Mercado Pago: '+esc(o.mercadopago_order_id):'PIX ainda não gerado.'}${o.pix_expires_at?' • Expira: '+dt(o.pix_expires_at):''}</p><div class=rds-buttons>${pixButtons(o)}</div></div>`).join(''):'<div class=rds-empty>Nenhum pedido aguardando PIX.</div>'}</div></div>
+      <div class="rds-section card"><div class=rds-section-title><h2>Cobranças PIX</h2></div><div class=rds-order-list>${waiting.length?waiting.map(o=>`<div class=rds-order><div class=rds-order-top><div><h3>${esc(o.customer_name||o.phone)}</h3><p>${esc(o.code)} • ${o.quantity||0} bilhete(s) • <b>${money(o.total_amount)}</b></p></div>${badge(statusLabel(o))}</div><p class=mut>${o.pagbank_order_id?'Mercado Pago: '+esc(o.pagbank_order_id):'PIX ainda não gerado.'}${o.pix_expires_at?' • Expira: '+dt(o.pix_expires_at):''}</p><div class=rds-buttons>${pixButtons(o)}</div></div>`).join(''):'<div class=rds-empty>Nenhum pedido aguardando PIX.</div>'}</div></div>
       <div class="rds-section card"><div class=rds-section-title><h2>Comprovantes recebidos</h2></div><div class=rds-order-list>${proof.length?proof.map(o=>`<div class=rds-order><div class=rds-order-top><div><h3>${esc(o.customer_name||o.phone)}</h3><p>${esc(o.code)} • ${o.quantity||0} bilhete(s) • <b>${money(o.total_amount)}</b></p></div>${badge('COMPROVANTE RECEBIDO')}</div><div class=rds-buttons>${btn('Confirmar pagamento',`rdsApproveProof('${o.id}')`,'btn success')}${btn('Rejeitar e voltar ao PIX',`rdsRejectProof('${o.id}')`,'btn danger')}${btn('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`)}<a target=_blank href="${waLink(o.phone)}">${btn('Abrir WhatsApp','')}</a></div></div>`).join(''):'<div class=rds-empty>Nenhum comprovante aguardando decisão.</div>'}</div></div>
       <div class="rds-section card"><div class=rds-section-title><h2>Pagamentos confirmados</h2></div><div class=rds-order-list>${paid.length?paid.map(o=>`<div class=rds-order><div class=rds-order-top><div><h3>${esc(o.customer_name||o.phone)}</h3><p>${esc(o.code)} • ${o.quantity||0} bilhete(s) • <b>${money(o.total_amount)}</b></p></div>${badge('PAGO')}</div></div>`).join(''):'<div class=rds-empty>Nenhum pagamento confirmado aguardando bilhetes.</div>'}</div></div>
     `;
@@ -38,7 +38,7 @@
       const r=await post(send?`/api/operator/orders/${id}/pix/send`:`/api/operator/orders/${id}/pix`,{});
       const code=r?.qr?.text||o.pix_copy_paste||''; const qrBase64=String(r?.qr?.base64||'');
       if(!code)throw new Error('PIX não retornado pelo Mercado Pago.');
-      modal(`<span class=eyebrow>PIX PAGBANK • ${(r.environment||'sandbox').toUpperCase()}</span><h2>${send?'PIX gerado e enviado':'PIX gerado'}</h2><p><b>${esc(o.customer_name||o.phone)}</b><br>${esc(o.code)} • ${money(o.total_amount)}</p><img class=pix-qr src="/api/mercadopago/orders/${id}/qrcode.png?v=${Date.now()}" alt="QR Code PIX"><label>PIX Copia e Cola</label><textarea id=rdsPixCode class=pix-code readonly>${esc(code)}</textarea><div class=row>${btn('Copiar PIX','rdsCopyPix()','btn primary')}${btn('Fechar',"this.closest('.modal').remove()")}</div>`);
+      modal(`<span class=eyebrow>PIX MERCADO PAGO • ${(r.environment||'production').toUpperCase()}</span><h2>${send?'PIX gerado e enviado':'PIX gerado'}</h2><p><b>${esc(o.customer_name||o.phone)}</b><br>${esc(o.code)} • ${money(o.total_amount)}</p>${qrBase64?`<img class=pix-qr src="data:image/png;base64,${qrBase64}" alt="QR Code PIX">`:'<p class=mut>QR Code não retornado. Use o PIX Copia e Cola.</p>'}<label>PIX Copia e Cola</label><textarea id=rdsPixCode class=pix-code readonly>${esc(code)}</textarea><div class=row>${btn('Copiar PIX','rdsCopyPix()','btn primary')}${btn('Fechar',"this.closest('.modal').remove()")}</div>`);
       toast(send?'PIX gerado e enviado no WhatsApp.':'PIX gerado com sucesso.');
       setTimeout(()=>paymentsPage(),400);
     }catch(e){showError(e)}
