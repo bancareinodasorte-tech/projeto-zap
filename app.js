@@ -1,7 +1,8 @@
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], app=$('#app');
 let page=localStorage.getItem('rds_current_page')||'home', state={contacts:[],groups:[],campaigns:[],orders:[],settings:null,returns:[],automation:null};
-const api=async(url,opt={})=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(url,{...opt,signal:controller.signal,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha na operação');return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
+let navSeq=0;
+const api=async(url,opt={})=>{const requestNavSeq=navSeq;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(url,{...opt,signal:controller.signal,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha na operação');if(requestNavSeq!==navSeq){const e=new Error('NAV_STALE');e.code='NAV_STALE';throw e;}return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
 const post=(u,b={})=>api(u,{method:'POST',body:JSON.stringify(b)}),put=(u,b={})=>api(u,{method:'PUT',body:JSON.stringify(b)}),del=u=>api(u,{method:'DELETE'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const dt=v=>v?new Date(v).toLocaleString('pt-BR'):'—',money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -10,7 +11,7 @@ function btn(t,onclick,cls='btn'){return `<button class="${cls}" onclick="${oncl
 function badge(s){const x=String(s||'').toUpperCase(),c=/CONCLUIDO|ENVIADA|ATIVO|VALIDADO/.test(x)?'ok':/FALHA|CANCELADO/.test(x)?'bad':/AGUARDANDO|COLETANDO|AGENDADA|RASCUNHO/.test(x)?'warn':'';return `<span class="badge ${c}">${esc(x||'—')}</span>`}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div><div class=row style="justify-content:flex-end">${btn('✕',"this.closest('.modal').remove()")}</div>${html}</div>`;document.body.appendChild(m)}
 function setNav(){[...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
-function go(p){page=p;localStorage.setItem('rds_current_page',page);setNav();if(p==='account'){renderAccountNative();}else{render()}scrollTo(0,0)}
+function go(p){page=p;localStorage.setItem('rds_current_page',page);navSeq++;setNav();if(p==='account'){renderAccountNative();}else{render()}scrollTo(0,0)}
 [...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.onclick=()=>go(b.dataset.page));
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR')},1000);
 
@@ -95,7 +96,7 @@ async function renderAccountNative(){
   const i=document.getElementById('rdsNativeIdentity');if(i)i.textContent='Conta carregada. Alguns dados complementares não responderam agora.';
  }
 }
-async function render(){app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
+async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
  if(page==='home')await home();
  else if(page==='contacts')await (typeof window.rdsCrmPage==='function'?window.rdsCrmPage():contacts)();
  else if(page==='whatsapp'){
@@ -110,7 +111,7 @@ async function render(){app.innerHTML='<div class="card"><span class=mut>Carrega
    await renderAccountNative();
  }
  else if(page==='settings')await settings();
-}catch(e){app.innerHTML=`<div class=card><h2>Não foi possível carregar</h2><p>${esc(e.message)}</p></div>`}}
+}catch(e){if(e?.code==='NAV_STALE'||e?.message==='NAV_STALE')return;if(currentNavSeq!==navSeq)return;app.innerHTML=`<div class=card><h2>Não foi possível carregar</h2><p>${esc(e.message)}</p></div>`}}
 
 async function home(){
  const d=await api('/api/dashboard');
