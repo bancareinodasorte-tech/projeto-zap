@@ -912,7 +912,7 @@ app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
   await sendTextPhone(o.phone,cleanText(s.final_message)||`✅ *COMPRA CONCLUÍDA*\nSeus bilhetes foram enviados. 🍀\nA Reino da Sorte agradece sua compra.\nBoa sorte! 🍀\n\nPedido ${o.code}`);
   res.json({ok:true});
 }catch(e){res.status(400).json({error:e.message});} });
-app.post('/api/orders/:id/cancel',async(req,res)=>{ try{await patch('rds10_orders',`id=eq.${req.params.id}`,{status:'CANCELADO',updated_at:nowISO()});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/cancel',async(req,res)=>{ try{const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));if(!o)throw new Error('Pedido não encontrado.');if(['CONCLUIDO','CANCELADO'].includes(String(o.status||'')))throw new Error('Pedido já encerrado.');await patch('rds10_orders','id=eq.'+encodeURIComponent(o.id),{status:'CANCELADO',cancel_reason:'CANCELAMENTO_MANUAL',cancelled_at:nowISO(),updated_at:nowISO()});await cancelFutureDeliveries(o.phone,'CANCELAMENTO_MANUAL');await logEvent('PEDIDO_CANCELADO',{order:o.code,phone:o.phone,reason:'CANCELAMENTO_MANUAL',source:'OPERADOR'});res.json({ok:true});}catch(e){res.status(400).json({error:e.message});} });
 
 
 app.get('/api/contacts/:id/profile',async(req,res)=>{
