@@ -21,6 +21,21 @@
   window.rdsPayments=payments;
   window.rdsConfirmPayment=async id=>{try{const r=await fetch(`/api/orders/${id}/payment-confirmed`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha');toast(d.message||'Pagamento confirmado.');payments()}catch(e){toast(e.message)}};
   window.rdsCompleteTickets=async id=>{try{const r=await fetch(`/api/orders/${id}/tickets-sent`,{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao concluir');toast('Bilhetes enviados e pedido concluído.');payments()}catch(e){toast(e.message)}};
+  function annotateOrderModal(){
+    try{
+      const mod=[...document.querySelectorAll('.modal')].find(x=>/RDS-[A-Z0-9]{6,12}/i.test(x.textContent||''));
+      if(!mod||mod.querySelector('.rds-order-nature'))return;
+      const m=(mod.textContent||'').match(/RDS-[A-Z0-9]{6,12}/i);if(!m)return;
+      const o=(window.state?.orders||[]).find(x=>String(x.code||'').toUpperCase()===m[0].toUpperCase());if(!o)return;
+      const reason=String(o.cancel_reason||'').toUpperCase();
+      const nature=reason==='EXPIRADO_PAGAMENTO'?'⏱ Expirado por falta de pagamento':reason==='CANCELAMENTO_MANUAL'?'✋ Cancelamento manual':reason==='CANCELAMENTO_CLIENTE'?'👤 Cancelado pelo cliente':reason?reason.replaceAll('_',' '):'Não registrado';
+      const box=document.createElement('div');box.className='card rds-order-nature';box.style.marginTop='12px';
+      box.innerHTML='<span class="eyebrow">Encerramento e pagamento</span><p><b>Natureza do cancelamento:</b> '+E(nature)+'</p>'+(o.payment_method?'<p><b>Forma de pagamento:</b> '+E(String(o.payment_method).replaceAll('_',' '))+'</p>':'');
+      mod.querySelector('div')?.appendChild(box);
+    }catch{}
+  }
+  const rdsModalObserver=new MutationObserver(annotateOrderModal);
+  rdsModalObserver.observe(document.body,{childList:true,subtree:true});
   function settingsHook(){const app=document.querySelector('#app');if(!app||!app.innerHTML.includes('<h1>Ajustes</h1>')||document.getElementById('rdsIssuerCard'))return;const holder=document.createElement('div');holder.id='rdsIssuerCard';holder.className='card rds-issuer-card';holder.innerHTML=`<span class="eyebrow">Integração operacional</span><h2>Emissor de bilhetes</h2><p class="mut">A integração oficial é a rota principal. Este campo fica apenas como contingência manual.</p><label>URL do emissor manual</label><input id="rdsIssuerUrl" inputmode="url" placeholder="https://seu-emissor.exemplo/emitir" value="${esc(getIssuer())}"><p class="mini">No Android, a URL poderá abrir um aplicativo associado. No iPhone/PC, abrirá no navegador.</p><div class="row">${btn('Salvar emissor',"rdsSaveIssuer()",'btn primary')}${getIssuer()?btn('Testar abertura',"rdsTestIssuer()",'btn'):''}</div>`;app.appendChild(holder)}
   window.rdsSaveIssuer=()=>{setIssuer(document.getElementById('rdsIssuerUrl')?.value||'');toast('Emissor salvo neste dispositivo')};window.rdsTestIssuer=()=>{const u=getIssuer();if(u)window.open(u,'_blank','noopener,noreferrer')};
   function nav(){document.querySelectorAll('[data-page="payments"]').forEach(b=>{b.onclick=e=>{e.preventDefault();e.stopImmediatePropagation();payments()}});document.querySelectorAll('[data-page="about"]').forEach(b=>{b.onclick=e=>{e.preventDefault();e.stopImmediatePropagation();setActive('about');about()}})}
