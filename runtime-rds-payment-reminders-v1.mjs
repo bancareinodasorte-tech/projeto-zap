@@ -80,35 +80,4 @@ try{
   let a=fs.readFileSync(appPath,'utf8');
   if(!a.includes('RDS_PAYMENT_REMINDERS_UI_V1')){
     a += [
-      "/* RDS_PAYMENT_REMINDERS_UI_V1 */
-try{
-  let a=fs.readFileSync(appPath,'utf8');
-  if(!a.includes('RDS_PAYMENT_REMINDERS_UI_V1')){
-    a += [
-      "/* RDS_PAYMENT_REMINDERS_UI_V1 */",
-      "const rdsPaymentReminderSettingsBase=settings;",
-      "settings=async function(){",
-      "  await rdsPaymentReminderSettingsBase();",
-      "  try{",
-      "    const c=await api('/api/payment-reminders');",
-      "    const box=document.createElement('div');",
-      "    box.className='card';",
-      "    box.innerHTML='<span class=eyebrow>Cobrança automática</span><h2>Lembretes de pagamento PIX</h2><p class=mut>O sistema envia lembretes somente enquanto o pedido estiver em <b>AGUARDANDO PIX</b>. O prazo de expiração continua sendo o limite final do pedido.</p><label><input type=checkbox id=rdsPixReminderEnabled style=width:auto '+(c.enabled!==false?'checked':'')+'> Enviar lembretes automáticos</label><div class=grid><div><label>Lembrar a cada (horas)</label><input id=rdsPixReminderInterval type=number min=0.25 max=24 step=0.25 value='+Number(c.interval_hours||1)+'><p class=mini mut>Ex.: 1 = um lembrete a cada hora.</p></div><div><label>Máximo de lembretes por pedido</label><input id=rdsPixReminderMax type=number min=1 max=10 step=1 value='+Number(c.max_reminders||3)+'><p class=mini mut>Com prazo de 4h e intervalo de 1h, o padrão envia até 3 lembretes: 1h, 2h e 3h.</p></div></div><div class=row><button class=btn onclick=rdsSavePaymentReminders()>Salvar cobrança automática</button></div>';",
-      "    app.appendChild(box);",
-      "  }catch(e){console.error('[RDS] UI lembretes PIX',e);}",
-      "};",
-      "window.rdsSavePaymentReminders=async function(){",
-      "  try{",
-      "    const enabled=document.querySelector('#rdsPixReminderEnabled')?.checked!==false;",
-      "    const interval_hours=Number(document.querySelector('#rdsPixReminderInterval')?.value||1);",
-      "    const max_reminders=Number(document.querySelector('#rdsPixReminderMax')?.value||3);",
-      "    if(!Number.isFinite(interval_hours)||interval_hours<0.25||interval_hours>24)throw new Error('O intervalo deve ficar entre 0,25 e 24 horas.');",
-      "    if(!Number.isInteger(max_reminders)||max_reminders<1||max_reminders>10)throw new Error('O máximo deve ficar entre 1 e 10 lembretes.');",
-      "    await put('/api/payment-reminders',{enabled,interval_hours,max_reminders});",
-      "    toast('Cobrança automática salva.');",
-      "  }catch(e){toast(e.message);}",
-      "};"
-    ].join('\\n');
-    fs.writeFileSync(appPath,a,'utf8');
-  }
-}catch(e){console.error('[RDS] frontend payment reminders:',e.message);process.exitCode=1;}
+      "
