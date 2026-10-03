@@ -135,7 +135,7 @@
     }
   `;
   document.head.appendChild(style);
-  window.rdsCrmPage=window.contacts;
+  window.rdsCrmPage=function(){ return window.contacts; };
   window.rdsCrmToggle=function(row,event){
     if(event && event.target && event.target.closest('button'))return;
     document.querySelectorAll('.rds-crm-client.rds-open').forEach(x=>{if(x!==row)x.classList.remove('rds-open')});
