@@ -2,7 +2,7 @@
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const token=()=>localStorage.getItem('rds_operator_token')||'';
 const adminToken=()=>localStorage.getItem('rds_admin_token')||'';
-const json=async(u,o={})=>{const r=await fetch(u,{cache:'no-store',...o});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.message||'Falha na operação.');return d;};
+const json=async(u,o={})=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);try{const r=await fetch(u,{cache:'no-store',...o,signal:controller.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.message||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
 const headers=()=>{const t=token();return t?{Authorization:'Bearer '+t}:{}};
 const adminHeaders=()=>{const t=adminToken();return t?{Authorization:'Bearer '+t}:{}};
 const deviceKey='rds_operator_device_id';
@@ -17,6 +17,7 @@ function openLogin(message=''){
    const d=await json('/api/rds/unified/login',{method:'POST',headers:{'Content-Type':'application/json','x-rds-device-id':deviceId()},body:JSON.stringify({identifier:document.getElementById('rdsUnifiedIdentifier').value,password:document.getElementById('rdsUnifiedPassword').value,platform:'app',deviceId:deviceId()})});
    if(d.role==='VENDEDOR'){localStorage.setItem('rds_operator_token',d.token);localStorage.removeItem('rds_admin_token');}
    else{localStorage.setItem('rds_admin_token',d.token);localStorage.removeItem('rds_operator_token');}
+   window.rdsUnifiedRole=d.role;
    if(typeof window.go==='function')window.go('account');else location.href='/?rds=account';
   }catch(e){b.disabled=false;b.textContent='Entrar';openLogin(e.message);}
  };
@@ -42,8 +43,9 @@ async function account(){
  document.getElementById('rdsAccountSave').onclick=async()=>{const msg=document.getElementById('rdsAccountMsg');msg.textContent='Salvando…';try{await json('/api/operator/settings',{method:'POST',headers:{'Content-Type':'application/json',...headers()},body:JSON.stringify({mpEnvironment:s.mp_environment||'production',mpPublicKey:s.mp_public_key||'',pixKey:document.getElementById('rdsAccountPix').value,pixName:document.getElementById('rdsAccountPixName').value,officialEmail:document.getElementById('rdsAccountEmail').value})});msg.textContent='Dados salvos com segurança.';}catch(e){msg.textContent=e.message;}};
  const q=new URLSearchParams(location.search);if(q.get('mp')==='connected'){document.getElementById('rdsMpMsg').textContent='Mercado Pago conectado com sucesso.';history.replaceState({},'',location.pathname+'?rds=account');}if(q.get('mp')==='error'){document.getElementById('rdsMpMsg').textContent='A conexão do Mercado Pago não foi concluída.';history.replaceState({},'',location.pathname+'?rds=account');}
 }
-async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');openLogin('Sessão encerrada.');}
+async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;openLogin('Sessão encerrada.');}
 window.rdsUnifiedAccountPage=account;
+window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'||q.get('rds')==='account')setTimeout(()=>{if(typeof window.go==='function')window.go('account');},0);});
 })();
