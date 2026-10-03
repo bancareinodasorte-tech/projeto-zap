@@ -79,9 +79,7 @@ async function renderAccountNative(){
      b.disabled=true;
      b.textContent='Abrindo Mercado Pago…';
      try{
-      const q=await jsonNative('/api/mercadopago/oauth/start');
-      if(!q?.url)throw new Error('O servidor não retornou a URL de autorização do Mercado Pago.');
-      window.location.assign(q.url);
+      window.location.assign('/api/mercadopago/oauth/start?redirect=1');
      }catch(e){
       b.disabled=false;
       b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
