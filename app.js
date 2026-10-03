@@ -19,7 +19,14 @@ async function refreshCurrentPage(){
  try{
   const b=document.getElementById('rdsRefreshBtn');
   if(b){b.disabled=true;b.textContent='↻ Atualizando…';}
-  if(page==='contacts' && typeof window.rdsCrmPage==='function') await window.rdsCrmPage(); else await render();
+  if(page==='account') await renderAccountNative();
+  else if(page==='contacts' && typeof window.rdsCrmPage==='function') await window.rdsCrmPage();
+  else await render();
+ }catch(e){
+  if(page==='account'){
+   const root=document.getElementById('app');
+   if(root)root.innerHTML='<div class="card"><h2>Não foi possível atualizar</h2><p class="mut">'+esc(e.message||'Falha na atualização.')+'</p></div>';
+  }else throw e;
  }finally{
   const b=document.getElementById('rdsRefreshBtn');
   if(b){b.disabled=false;b.textContent='↻ Atualizar';}
@@ -75,8 +82,27 @@ async function renderAccountNative(){
   if(mp.status==='fulfilled'){
    const connected=!!mp.value.configured,box=document.getElementById('rdsNativeMP');
    if(box){box.className='status '+(connected?'ok':'warn');box.textContent=connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado'}
-   const b=document.getElementById('rdsNativeMPConnect');if(b)b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
-   b?.addEventListener('click',async()=>{try{const q=await jsonNative('/api/mercadopago/oauth/start');location.href=q.url}catch(e){const m=document.getElementById('rdsNativeMsg');if(m)m.textContent=e.message}});
+   const b=document.getElementById('rdsNativeMPConnect');
+   if(b){
+    b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
+    b.onclick=async(ev)=>{
+     ev.preventDefault();
+     ev.stopPropagation();
+     ev.stopImmediatePropagation();
+     b.disabled=true;
+     b.textContent='Abrindo Mercado Pago…';
+     try{
+      const q=await jsonNative('/api/mercadopago/oauth/start');
+      if(!q?.url)throw new Error('O servidor não retornou a URL de autorização do Mercado Pago.');
+      window.location.assign(q.url);
+     }catch(e){
+      b.disabled=false;
+      b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
+      const m=document.getElementById('rdsNativeMsg');
+      if(m)m.textContent=e.message||'Não foi possível iniciar a conexão com o Mercado Pago.';
+     }
+    };
+   }
   }
   const devices=me.devices||[],el=document.getElementById('rdsNativeDevices');
   if(el)el.innerHTML=devices.length?devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status||'')+'<br><span class="mini">'+esc(x.device_id||'')+'</span></div>').join(''):'Nenhum dispositivo registrado.';
