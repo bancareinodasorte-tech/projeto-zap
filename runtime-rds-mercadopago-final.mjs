@@ -35,13 +35,42 @@ function rdsMercadoPagoDecrypt(v){
   d.setAuthTag(Buffer.from(p[1],'base64'));
   return Buffer.concat([d.update(Buffer.from(p[2],'base64')),d.final()]).toString('utf8');
 }
+const rdsMercadoPagoRefreshLocks=new Map();
+async function rdsMercadoPagoRefreshTenantToken(sellerId,settings){
+  const key=String(sellerId);
+  if(rdsMercadoPagoRefreshLocks.has(key))return await rdsMercadoPagoRefreshLocks.get(key);
+  const job=(async()=>{
+    const refreshToken=settings?.mp_refresh_token_enc?rdsMercadoPagoDecrypt(settings.mp_refresh_token_enc):'';
+    if(!refreshToken)throw new Error('Token Mercado Pago expirado e sem refresh_token disponível. Reconecte o Mercado Pago.');
+    if(!rdsMpOAuthConfigured())throw new Error('OAuth do Mercado Pago não configurado para renovação.');
+    const form=new URLSearchParams({client_id:rdsMpOAuthClientId(),client_secret:rdsMpOAuthClientSecret(),grant_type:'refresh_token',refresh_token:refreshToken});
+    const response=await fetch(MERCADOPAGO_BASE.replace('/api','')+'/oauth/token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},body:form.toString()});
+    const raw=await response.text();let data={};try{data=raw?JSON.parse(raw):{};}catch{}
+    if(!response.ok)throw new Error('Mercado Pago não renovou o Access Token ('+response.status+'). Reconecte o Mercado Pago se a autorização tiver sido revogada.');
+    const accessToken=cleanText(data.access_token),nextRefresh=cleanText(data.refresh_token)||refreshToken;
+    if(!accessToken)throw new Error('Mercado Pago não retornou novo Access Token.');
+    const expiresAt=data.expires_in?new Date(Date.now()+Number(data.expires_in)*1000).toISOString():null;
+    await patch('rds10_seller_settings','seller_id=eq.'+encodeURIComponent(sellerId),{mp_access_token_enc:rdsOpEnc(accessToken),mp_refresh_token_enc:rdsOpEnc(nextRefresh),mp_token_expires_at:expiresAt,mp_oauth_scope:cleanText(data.scope)||settings?.mp_oauth_scope||null,mp_user_id:data.user_id?String(data.user_id):(settings?.mp_user_id||null),mp_public_key:cleanText(data.public_key)||settings?.mp_public_key||null,mp_environment:data.live_mode===false?'sandbox':'production',updated_at:nowISO()});
+    console.log('[RDS MP OAuth] Access Token renovado para vendedor '+key);
+    return {token:accessToken,expiresAt};
+  })();
+  rdsMercadoPagoRefreshLocks.set(key,job);
+  try{return await job;}finally{rdsMercadoPagoRefreshLocks.delete(key);}
+}
 async function rdsMercadoPagoTenantConfig(orderOrSeller){
   const sellerId=cleanText(orderOrSeller?.seller_id||orderOrSeller?.sellerId);
   if(!sellerId)return {token:MERCADOPAGO_ACCESS_TOKEN,environment:MERCADOPAGO_ENV,payerEmail:MERCADOPAGO_PAYER_EMAIL,tenant:false};
-  const settings=await one('rds10_seller_settings','select=seller_id,mp_access_token_enc,mp_environment,official_email&seller_id=eq.'+encodeURIComponent(sellerId));
+  let settings=await one('rds10_seller_settings','select=seller_id,mp_access_token_enc,mp_refresh_token_enc,mp_environment,official_email,mp_token_expires_at,mp_oauth_scope,mp_user_id,mp_public_key&seller_id=eq.'+encodeURIComponent(sellerId));
   if(!settings?.mp_access_token_enc)throw new Error('Mercado Pago não configurado para este vendedor.');
-  const token=rdsMercadoPagoDecrypt(settings.mp_access_token_enc);
+  let token=rdsMercadoPagoDecrypt(settings.mp_access_token_enc);
   if(!token)throw new Error('Credencial Mercado Pago do vendedor inválida.');
+  const expires=settings?.mp_token_expires_at?new Date(settings.mp_token_expires_at).getTime():0;
+  const scope=String(settings?.mp_oauth_scope||'');
+  if(expires&&expires<=Date.now()+10*60*1000){
+    if(!/\\boffline_access\\b/i.test(scope))throw new Error('A autorização do Mercado Pago precisa incluir offline_access para renovação automática. Reconecte o Mercado Pago.');
+    const renewed=await rdsMercadoPagoRefreshTenantToken(sellerId,settings);
+    token=renewed.token;
+  }
   return {
     token,
     environment:String(settings.mp_environment||'production').toLowerCase()==='sandbox'?'sandbox':'production',
