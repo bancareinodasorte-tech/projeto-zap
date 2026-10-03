@@ -67,7 +67,7 @@ async function rdsMercadoPagoTenantConfig(orderOrSeller){
   const expires=settings?.mp_token_expires_at?new Date(settings.mp_token_expires_at).getTime():0;
   const scope=String(settings?.mp_oauth_scope||'');
   if(expires&&expires<=Date.now()+10*60*1000){
-    if(!/\\boffline_access\\b/i.test(scope))throw new Error('A autorização do Mercado Pago precisa incluir offline_access para renovação automática. Reconecte o Mercado Pago.');
+    if(!/\boffline_access\b/i.test(scope))throw new Error('A autorização do Mercado Pago precisa incluir offline_access para renovação automática. Reconecte o Mercado Pago.');
     const renewed=await rdsMercadoPagoRefreshTenantToken(sellerId,settings);
     token=renewed.token;
   }
