@@ -560,14 +560,29 @@ async function saveOrMergeContact(data, {preferExisting=true}={}){
 async function upsertInboundContact(identity, pushName=''){
   return null;
 }
+async function rdsWhatsappSellerId(){
+  const active=await list('rds10_sellers','select=id,status&status=eq.ATIVO&order=created_at.asc');
+  if(active.length===1)return active[0].id;
+  const authorized=await list('rds10_seller_settings','select=seller_id,official_authorized&official_authorized=eq.true&limit=20');
+  const ids=[...new Set(authorized.map(x=>x?.seller_id).filter(Boolean))];
+  if(ids.length===1){
+    const seller=active.find(x=>String(x.id)===String(ids[0]));
+    if(seller)return seller.id;
+  }
+  return null;
+}
 async function activeOrder(phone){
-  return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)&order=created_at.desc`);
+  const sellerId=await rdsWhatsappSellerId();
+  const sellerFilter=sellerId?`&seller_id=eq.${encodeURIComponent(sellerId)}`:'';
+  return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)${sellerFilter}&order=created_at.desc`);
 }
 async function createOrder(phone, campaignCode=null){
   const existing = await activeOrder(phone);
   if(existing) return existing;
+  const sellerId=await rdsWhatsappSellerId();
+  if(!sellerId)throw new Error('Não foi possível identificar o vendedor responsável pelo WhatsApp. Configure um único vendedor ATIVO para este canal.');
   const s = await getSettings();
-  const rows = await insert('rds10_orders',{code:orderCode(),phone,campaign_code:campaignCode,status:'COLETANDO_DADOS',unit_price:Number(s.unit_price||3),created_at:nowISO(),updated_at:nowISO()});
+  const rows = await insert('rds10_orders',{code:orderCode(),seller_id:sellerId,phone,campaign_code:campaignCode,status:'COLETANDO_DADOS',unit_price:Number(s.unit_price||3),created_at:nowISO(),updated_at:nowISO()});
   return rows?.[0];
 }
 function parseOrderForm(text){
