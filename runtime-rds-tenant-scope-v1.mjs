@@ -57,7 +57,7 @@ const middleware="app.use(async(req,res,next)=>{
     }
   }catch{}
   return next();
-});\\n";
+});\n";
 server=server.slice(0,jp+jsonAnchor.length)+'\n'+middleware+server.slice(jp+jsonAnchor.length);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] escopo multi-vendedor V1 instalado');
