@@ -39,7 +39,9 @@ async function rdsMpOAuthStart(req,res){
     redirect_uri:rdsMpOAuthRedirectUri()
   });
   if(verifier){q.set('code_challenge',rdsMpOAuthChallenge(verifier));q.set('code_challenge_method','S256');}
-  return res.json({success:true,url:MERCADOPAGO_OAUTH_AUTH_URL+'?'+q.toString(),expiresAt:expires,pkce:MERCADOPAGO_OAUTH_PKCE});
+  const authorizationUrl=MERCADOPAGO_OAUTH_AUTH_URL+'?'+q.toString();
+  if(String(req.query?.redirect||'')==='1')return res.redirect(302,authorizationUrl);
+  return res.json({success:true,url:authorizationUrl,expiresAt:expires,pkce:MERCADOPAGO_OAUTH_PKCE});
 }
 async function rdsMpOAuthCallback(req,res){
   try{
