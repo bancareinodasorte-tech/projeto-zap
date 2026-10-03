@@ -63,6 +63,7 @@ await import('./runtime-rds-tenant-scope-v1.mjs');
 await import('./runtime-rds-whatsapp-meta-cloud-v1.mjs');
 await import('./runtime-rds-whatsapp-pairing-v1.mjs');
 await import('./runtime-rds-whatsapp-panel-v1.mjs');
+await import('./runtime-rds-whatsapp-tenant-v1.mjs');
 await import('./runtime-v10.71-stable-runtime.mjs');
 await import('./runtime-rds-orders-payments-safe.mjs');
 await import('./runtime-rds-pix-ux-v7.mjs');
