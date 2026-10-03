@@ -65,7 +65,7 @@ await import('./runtime-rds-whatsapp-pairing-v1.mjs');
 await import('./runtime-rds-whatsapp-panel-v1.mjs');
 await import('./runtime-rds-whatsapp-tenant-v1.mjs');
 // PagBank legado desativado para produção. Mercado Pago é o provedor oficial.
-await import('./runtime-rds-orders-payments-safe.mjs');
+// API legada de Pagamentos Safe removida do boot: o núcleo de pedidos já está ativo e o Mercado Pago é o provedor oficial.
 await import('./runtime-rds-pix-ux-v7.mjs');
 // Inicializa o servidor oficial diretamente. O runner PagBank legado não participa mais do boot.
 await import('./server.js');
