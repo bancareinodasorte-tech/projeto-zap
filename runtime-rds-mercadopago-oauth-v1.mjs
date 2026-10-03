@@ -36,7 +36,8 @@ async function rdsMpOAuthStart(req,res){
     response_type:'code',
     platform_id:'mp',
     state,
-    redirect_uri:rdsMpOAuthRedirectUri()
+    redirect_uri:rdsMpOAuthRedirectUri(),
+    scope:'offline_access'
   });
   if(verifier){q.set('code_challenge',rdsMpOAuthChallenge(verifier));q.set('code_challenge_method','S256');}
   const authorizationUrl=MERCADOPAGO_OAUTH_AUTH_URL+'?'+q.toString();
