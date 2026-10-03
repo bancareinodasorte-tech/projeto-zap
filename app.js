@@ -41,6 +41,7 @@ async function render(){app.innerHTML='<div class="card"><span class=mut>Carrega
  else if(page==='execution')await automation();
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
+ else if(page==='account')await (typeof window.rdsUnifiedAccountPage==='function'?window.rdsUnifiedAccountPage():settings());
  else if(page==='settings')await settings();
 }catch(e){app.innerHTML=`<div class=card><h2>Não foi possível carregar</h2><p>${esc(e.message)}</p></div>`}}
 
