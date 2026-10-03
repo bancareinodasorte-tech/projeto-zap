@@ -80,7 +80,7 @@ const autoBlockCode = [
 
 if(!source.includes('RDS_PAGBANK_AUTO_RECONCILE_V10_61')){
   const autoBlockLiteral=JSON.stringify(autoBlockCode);
-  source += "\nconst autoBlockCode=" + autoBlockLiteral + ";const autoPos=source.indexOf(marker);if(autoPos<0)throw new Error('Ponto de insercao da reconciliacao automatica nao localizado');source=source.slice(0,autoPos)+autoBlockCode+'\n'+source.slice(autoPos);\n";
+  source += "\nconst autoBlockCode=" + autoBlockLiteral + ";const autoPos=source.indexOf(marker);if(autoPos<0)throw new Error('Ponto de insercao da reconciliacao automatica nao localizado');source=source.slice(0,autoPos)+autoBlockCode+String.fromCharCode(10)+source.slice(autoPos);\n";
 }
 
 fs.writeFileSync(fixedPath, source, 'utf8');
