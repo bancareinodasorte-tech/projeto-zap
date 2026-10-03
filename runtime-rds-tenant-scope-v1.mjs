@@ -6,11 +6,13 @@ const marker='// RDS TENANT SCOPE V1';
 if(server.includes(marker)){console.log('[RDS] escopo multi-vendedor V1 já aplicado');process.exit(0);}
 
 const insertFn="async function insert(table, row, returning='representation'){";
-const helper = "// RDS TENANT SCOPE V1"
-  + "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders']);"
-  + "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}"
-  + "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}"
-  + "function rdsTenantFilter(q,sellerId){const base=String(q||'');if(!sellerId||rdsHasSellerFilter(base))return base;return base?base+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);}";
+const helper = [
+  "// RDS TENANT SCOPE V1",
+  "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders']);",
+  "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
+  "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
+  "function rdsTenantFilter(q,sellerId){const base=String(q||'');if(!sellerId||rdsHasSellerFilter(base))return base;return base?base+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);}"
+].join('\\n');
 const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não localizada.');
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
