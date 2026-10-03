@@ -64,5 +64,7 @@ async function commandContacts(){
  }catch(e){app.innerHTML='<div class="rds-panel rds-error"><h2>Falha ao carregar Clientes</h2><p>'+E(e.message)+'</p></div>'}
 }
 window.home=commandHome;
-window.render=async function(){if(page==='home')return commandHome();if(page==='contacts')return (typeof window.rdsCrmPage==='function'?window.rdsCrmPage():commandContacts());return oldRender.apply(this,arguments)};
+// O app.js é o único controlador de navegação/renderização.
+// Não sobrescrever window.render aqui: múltiplos renderers causavam
+// corrida de navegação e o erro "rdsCrmPage() is an instance of Promise".
 })();
