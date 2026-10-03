@@ -10,15 +10,8 @@ try{
   let s=fs.readFileSync(serverPath,'utf8');
 
   s=s.replace(
-    "    const eligible=rows.filter(d=>String(d.cancel_reason||'')==='CLIENTE_EM_PEDIDO');
-    for(const d of eligible){
-      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Math.max(Date.now(),Date.parse(d.scheduled_at||'')||0)).toISOString(),updated_at:nowISO()});
-    }",
-    "    const now=Date.now();
-    const eligible=rows.filter(d=>String(d.cancel_reason||'')==='CLIENTE_EM_PEDIDO' && Number.isFinite(Date.parse(d.scheduled_at||'')) && Date.parse(d.scheduled_at)>now);
-    for(const d of eligible){
-      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Date.parse(d.scheduled_at)).toISOString(),updated_at:nowISO()});
-    }"
+    "    const eligible=rows.filter(d=>String(d.cancel_reason||'')==='CLIENTE_EM_PEDIDO');\n    for(const d of eligible){\n      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Math.max(Date.now(),Date.parse(d.scheduled_at||'')||0)).toISOString(),updated_at:nowISO()});\n    }",
+    "    const now=Date.now();\n    const eligible=rows.filter(d=>String(d.cancel_reason||'')==='CLIENTE_EM_PEDIDO' && Number.isFinite(Date.parse(d.scheduled_at||'')) && Date.parse(d.scheduled_at)>now);\n    for(const d of eligible){\n      await patch('rds10_deliveries','id=eq.'+d.id,{status:'AGENDADA',scheduled_at:new Date(Date.parse(d.scheduled_at)).toISOString(),updated_at:nowISO()});\n    }"
   );
 
   if(!s.includes('RDS_PAYMENT_REMINDERS_V1')){
@@ -72,8 +65,7 @@ try{
 "setTimeout(()=>rdsPaymentReminderProcess().catch(()=>{}),30000);",
 "setInterval(()=>rdsPaymentReminderProcess().catch(()=>{}),60000);",
 ""
-    ].join('
-');
+    ].join('\n');
     s=s.slice(0,pos)+block+s.slice(pos);
   }
 
@@ -111,8 +103,7 @@ try{
       "    toast('Cobrança automática salva.');",
       "  }catch(e){toast(e.message);}",
       "};"
-    ].join('
-');
+    ].join('\n');
     fs.writeFileSync(appPath,a,'utf8');
   }
 }catch(e){console.error('[RDS] frontend payment reminders:',e.message);process.exitCode=1;}
