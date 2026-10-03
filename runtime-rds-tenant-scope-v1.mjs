@@ -12,7 +12,7 @@ const helper = [
   "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
   "function rdsTenantFilter(q,sellerId){const base=String(q||'');if(!sellerId||rdsHasSellerFilter(base))return base;return base?base+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);}"
-].join('\\n');
+].join('\n');
 const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não localizada.');
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
