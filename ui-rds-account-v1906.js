@@ -49,29 +49,38 @@ window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'||q.get('rds')==='account')setTimeout(()=>{if(typeof window.go==='function')window.go('account');},0);});
 })();
-/* RDS ROLE GATE V1 */
+/* RDS ROLE GATE V2 — painel operacional unificado */
 (()=>{
-const allowedSeller=new Set(['home','orders','account']);
+const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','account']);
 const nav=()=>[...document.querySelectorAll('#nav button,#mobileNav button')];
-const applySellerNav=()=>nav().forEach(b=>{const ok=allowedSeller.has(b.dataset.page);b.style.display=ok?'':'none';});
-const hideShell=()=>{document.querySelector('.sidebar')?.setAttribute('data-rds-role','VENDEDOR');document.querySelector('.workspace .top-actions')?.setAttribute('data-rds-role','VENDEDOR');};
+const applySellerNav=()=>nav().forEach(b=>{const ok=sellerPages.has(b.dataset.page);b.style.display=ok?'':'none';});
 async function gate(){
  try{
   const c=await fetch('/api/rds/unified/context',{cache:'no-store'}).then(r=>r.json());
   if(!c.authenticated){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin();return;}
   window.rdsUnifiedRole=c.role;
   if(c.role==='VENDEDOR'){
-   applySellerNav();hideShell();
+   applySellerNav();
    const p=localStorage.getItem('rds_current_page')||'home';
-   if(!allowedSeller.has(p))localStorage.setItem('rds_current_page','home');
-   const current=localStorage.getItem('rds_current_page')||'home';
-   if(current==='account')await window.rdsUnifiedAccountPage();
-   else if(current==='orders')await window.rdsSellerOrdersPage();
-   else await window.rdsSellerCentralPage();
+   const current=sellerPages.has(p)?p:'home';
+   if(current!==p)localStorage.setItem('rds_current_page',current);
+   if(typeof setNav==='function')setNav();
   }
  }catch(e){if(typeof window.rdsUnifiedOpenLogin==='function')window.rdsUnifiedOpenLogin('Não foi possível validar a sessão.');}
 }
 window.addEventListener('load',()=>setTimeout(gate,20));
 })();
 
-(()=>{const originalGo=window.go;window.go=async p=>{if(window.rdsUnifiedRole==='VENDEDOR'){if(!['home','orders','account'].includes(p))p='home';localStorage.setItem('rds_current_page',p);if(typeof setNav==='function')setNav();try{if(p==='account')await window.rdsUnifiedAccountPage();else if(p==='orders')await window.rdsSellerOrdersPage();else await window.rdsSellerCentralPage();}catch(e){document.getElementById('app').innerHTML='<div class="card"><h2>Não foi possível carregar</h2><p>'+String(e.message||e)+'</p></div>'}scrollTo(0,0);return}return originalGo(p)}})();
+(()=>{
+const originalGo=window.go;
+window.go=async p=>{
+ if(window.rdsUnifiedRole==='VENDEDOR'){
+  if(!['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','account'].includes(p))p='home';
+  localStorage.setItem('rds_current_page',p);
+  if(typeof setNav==='function')setNav();
+  return originalGo(p);
+ }
+ return originalGo(p);
+};
+})();
+
