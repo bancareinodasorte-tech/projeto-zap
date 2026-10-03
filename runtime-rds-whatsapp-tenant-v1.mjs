@@ -30,6 +30,6 @@ const block = String.raw`
  app.get('/api/operator/whatsapp/chat/:phone',async(req,res)=>{try{const x=await tenant(req,res);if(!x)return;const p=normalizeBR(req.params.phone);if(!validBRPhone(p))throw new Error('WhatsApp inválido.');const c=await one('rds10_contacts','select=id,name,phone,group_name,validated,city,tags,origin&phone=eq.'+encodeURIComponent(p));const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id,raw_payload&phone=eq.'+encodeURIComponent(p)+'&order=created_at.asc&limit=1000');res.json({success:true,...pub(sessions.get(String(x.seller.id))),contact:c||{name:p,phone:p},messages})}catch(e){res.status(400).json({success:false,error:e.message})}});
 })();
 `;
-server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
 console.log('[RDS] WhatsApp por vendedor V1 instalado');
