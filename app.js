@@ -15,22 +15,9 @@ function go(p){page=p;localStorage.setItem('rds_current_page',page);setNav();if(
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR')},1000);
 
 async function refreshCurrentPage(){
- localStorage.setItem('rds_current_page',page);
- try{
-  const b=document.getElementById('rdsRefreshBtn');
-  if(b){b.disabled=true;b.textContent='↻ Atualizando…';}
-  if(page==='account') await renderAccountNative();
-  else if(page==='contacts' && typeof window.rdsCrmPage==='function') await window.rdsCrmPage();
-  else await render();
- }catch(e){
-  if(page==='account'){
-   const root=document.getElementById('app');
-   if(root)root.innerHTML='<div class="card"><h2>Não foi possível atualizar</h2><p class="mut">'+esc(e.message||'Falha na atualização.')+'</p></div>';
-  }else throw e;
- }finally{
-  const b=document.getElementById('rdsRefreshBtn');
-  if(b){b.disabled=false;b.textContent='↻ Atualizar';}
- }
+ const target=page||localStorage.getItem('rds_current_page')||'home';
+ localStorage.setItem('rds_current_page',target);
+ window.location.assign('/?rds='+encodeURIComponent(target));
 }
 window.rdsRefreshCurrentPage=refreshCurrentPage;
 
