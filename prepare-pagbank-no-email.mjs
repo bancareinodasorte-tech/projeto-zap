@@ -49,6 +49,7 @@ await import('./runtime-rds-mercadopago-oauth-v1.mjs');
 await import('./runtime-rds-mercadopago-order-routes-v1.mjs');
 await import('./runtime-rds-pix-ux-final.mjs');
 await import('./runtime-rds-order-expiration-crm-final.mjs');
+await import('./runtime-rds-payment-reminders-v1.mjs');
 await import('./runtime-rds-returns-cleanup.mjs');
 await import('./runtime-rds-pagbank-whitelist-guard.mjs');
 await import('./runtime-rds-mercadopago-reconcile-auto.mjs');
