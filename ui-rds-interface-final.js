@@ -57,5 +57,5 @@
 
   const refresh=()=>{cleanText();bindDetails();};
   refresh();
-  new MutationObserver(refresh).observe(app,{childList:true,subtree:true});
+  window.rdsInterfaceRefresh=refresh;
 })();
