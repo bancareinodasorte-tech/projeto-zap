@@ -21,6 +21,7 @@
         try{window.rdsOfficialFinalMaybeRender?.();}catch{}
         try{window.rdsV11Refresh?.();}catch{}
         try{window.rdsInterfaceRefresh?.();}catch{}
+        try{window.rdsInjectEmitOrders?.();}catch{}
       },0);
     }
   }
