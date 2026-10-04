@@ -84,6 +84,7 @@ const block=`
     const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
     if(sellerId&&String(order.seller_id||'')!==String(sellerId))return;
     if(String(order.official_issue_status||'')==='EMITINDO')return;
+    const previousIssueStatus=String(order.official_issue_status||'');
 
     await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
 
@@ -105,8 +106,8 @@ const block=`
           official_issue_error:'Disponibilidade oficial insuficiente: '+available+' disponível(eis) para '+quantity+' solicitado(s).',
           updated_at:nowISO()
         });
-        await addAlert('PEDIDO_PAGO_AGUARDANDO_ESTOQUE','Pedido pago aguardando disponibilidade oficial — '+order.code,{order:order.code,requested:quantity,available});
-        await logEvent('PEDIDO_PAGO_AGUARDANDO_ESTOQUE',{order:order.code,order_id:order.id,requested:quantity,available});
+        if(previousIssueStatus!=='AGUARDANDO_ESTOQUE')await addAlert('PEDIDO_PAGO_AGUARDANDO_ESTOQUE','Pedido pago aguardando disponibilidade oficial — '+order.code,{order:order.code,requested:quantity,available});
+        if(previousIssueStatus!=='AGUARDANDO_ESTOQUE')await logEvent('PEDIDO_PAGO_AGUARDANDO_ESTOQUE',{order:order.code,order_id:order.id,requested:quantity,available});
         return;
       }
       const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{
