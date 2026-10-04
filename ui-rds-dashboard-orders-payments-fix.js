@@ -41,7 +41,7 @@ async function payments(){
     <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Pagamento confirmado: ${D(o.payment_confirmed_at||o.updated_at)}</small></div>${B('PAGO — AGUARDA BILHETES')}</div>
     <div class=rds-buttons>${T('Ir para emissão',`go('orders')`,'btn primary')}${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a></div>
   </div>`;
-  app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="rds-clean-sub">Uma central para cobrar, confirmar, conciliar e encaminhar cada pedido sem perder o histórico.</p></div><div class="row">${T('Configurar cobrança',`go('settings')`,'btn')}${B(provider, '', configured?'btn success':'btn danger')}</div></div>
+  app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="rds-clean-sub">Uma central para cobrar, confirmar, conciliar e encaminhar cada pedido sem perder o histórico.</p></div><div class="row">${T('Configurar Mercado Pago',`go('account')`,'btn')}${B(provider, '', configured?'btn success':'btn danger')}</div></div>
   <div class="rds-mini-grid">
     <div class="card metric-card"><span class=eyebrow>Aguardando PIX</span><div class=metric>${w.length}</div><small>${w.length?'Cobranças abertas':'Nenhuma cobrança pendente'}</small></div>
     <div class="card metric-card"><span class=eyebrow>Conferir pagamento</span><div class=metric>${p.length}</div><small>Comprovantes recebidos</small></div>
