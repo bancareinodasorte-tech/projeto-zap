@@ -27,7 +27,7 @@
           <div><span class="eyebrow">Operação de vendas</span><h1>Compras</h1><p class="mut">Acompanhe cada pedido por etapa, com ações específicas e sem misturar estados.</p></div>
           <div class="row">${buttonR('Limpar +30 dias','rdsCleanupOrders()','btn danger')}</div>
         </div>
-        <div class="rds-ops-summary"><div><span>EM ANDAMENTO</span><b>${active}</b></div>${counts.map(g=>`<div><span>${E(g.n).toUpperCase()}</span><b>${g.rows.length}</b></div>`).join('')}</div>
+        <div class="rds-ops-summary">${counts.map(g=>`<div><span>${E(g.n).toUpperCase()}</span><b>${g.rows.length}</b></div>`).join('')}</div>
         <div class="toolbar rds-orders-toolbar">
           <label class="rds-search-box"><span class="rds-search-icon" aria-hidden="true">⌕</span><input id="rdsOrderSearch" type="search" autocomplete="off" placeholder="Buscar pedido, cliente ou WhatsApp"><button type="button" id="rdsOrderSearchClear" class="rds-search-clear" aria-label="Limpar busca" title="Limpar busca">×</button></label>
           <select id="rdsOrderStatus"><option value="">Todas as etapas</option>${groups.map(([k,n])=>`<option value="${E(k)}">${E(n)}</option>`).join('')}</select>
