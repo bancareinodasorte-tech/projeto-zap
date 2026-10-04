@@ -180,7 +180,10 @@ const block=`
   app.get('/api/v1012/official-sales/auto-status',async(req,res)=>{
     try{
       const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-      const rows=await list('rds10_orders','select=id,code,status,official_sale_id,official_issue_status,official_issue_error,official_ticket_url,official_issue_at&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=100');
+      const filter=sellerId
+        ? 'select=id,code,status,official_sale_id,official_issue_status,official_issue_error,official_ticket_url,official_issue_at,official_inventory_available,official_inventory_checked_at&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=100'
+        : 'select=id,code,status,official_sale_id,official_issue_status,official_issue_error,official_ticket_url,official_issue_at,official_inventory_available,official_inventory_checked_at&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=100';
+      const rows=await list('rds10_orders',filter);
       res.json({ok:true,sellerId,pending:rows});
     }catch(e){res.status(500).json({ok:false,error:e.message});}
   });
