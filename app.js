@@ -40,6 +40,7 @@ async function renderAccountNative(){
  else if(page==='execution')await automation();
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
+ else if(page==='payments'){if(typeof window.rdsPaymentsRefined==='function')await window.rdsPaymentsRefined();else throw new Error('Renderer refinado de Pagamentos não foi carregado.');}
  else if(page==='account'){
    await renderAccountNative();
  }
