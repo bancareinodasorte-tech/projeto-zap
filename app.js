@@ -1,6 +1,6 @@
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], app=$('#app');
-let page=localStorage.getItem('rds_current_page')||'home', state={contacts:[],groups:[],campaigns:[],orders:[],settings:null,returns:[],automation:null};
+var page=localStorage.getItem('rds_current_page')||'home', state={contacts:[],groups:[],campaigns:[],orders:[],settings:null,returns:[],automation:null};
 let navSeq=0;
 const api=async(url,opt={})=>{const requestNavSeq=navSeq;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(url,{...opt,signal:controller.signal,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha na operação');if(requestNavSeq!==navSeq){const e=new Error('NAV_STALE');e.code='NAV_STALE';throw e;}return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
 const post=(u,b={})=>api(u,{method:'POST',body:JSON.stringify(b)}),put=(u,b={})=>api(u,{method:'PUT',body:JSON.stringify(b)}),del=u=>api(u,{method:'DELETE'});
