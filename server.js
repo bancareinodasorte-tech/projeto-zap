@@ -466,7 +466,7 @@ async function addAlert(kind, title, payload={}){
   try{ await insert('rds10_alerts',{kind,title,payload,is_read:false,created_at:nowISO()},'minimal'); }catch{}
 }
 async function logEvent(kind, payload={}){
-  try{ await insert('rds10_events',{kind,payload,created_at:nowISO()},'minimal'); }catch{}
+  try{ await insert('rds10_events',{event_type:String(kind||'RDS_EVENT'),metadata:payload||{},kind,payload:payload||{},created_at:nowISO()},'minimal'); }catch(e){ console.error('[RDS] logEvent:',e.message); }
 }
 async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){
   try{
