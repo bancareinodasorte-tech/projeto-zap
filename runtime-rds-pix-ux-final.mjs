@@ -14,10 +14,12 @@ async function rdsPixUxSendV6(identity,order,pix){
   const code=cleanText(pix?.qr?.text||order?.pix_copy_paste||'');
   if(!code)throw new Error('PIX sem código copia e cola.');
   const total=money(order?.total_amount);
+  const deadline=order?.order_expires_at?new Date(order.order_expires_at):null;
+  const deadlineText=deadline&&!Number.isNaN(deadline.getTime())?deadline.toLocaleString('pt-BR',{timeZone:'America/Fortaleza',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'não disponível';
 
   await sleep(250);
 
-  const paymentText='🧾 *N° do Pedido:* '+order.code+'\n\n💳 *DADOS PARA PAGAMENTO*\n\n💰 *VALOR:* R$ '+total+'\n\n🔑 *CHAVE PIX*\n'+code;
+  const paymentText='🧾 *N° do Pedido:* '+order.code+'\n\n💳 *PAGAMENTO PIX — MERCADO PAGO*\n\n💰 *VALOR:* R$ '+total+'\n\n⏰ *PAGUE ATÉ:* '+deadlineText+'\n\n🔑 *PIX COPIA E COLA*\n'+code+'\n\n⚠️ Após o prazo, o pedido será cancelado e o PIX anterior não deverá mais ser pago.';
   let jid=identity?.remoteJid||'';
   if(identity?.phone){
     try{jid=(await ensureTargetJid(identity.phone)).jid;}catch{}
