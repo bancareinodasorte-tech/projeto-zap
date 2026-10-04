@@ -191,7 +191,14 @@ async function rdsCancelMercadoPagoForClosedOrder(order){
     await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancelled_at:nowISO(),payment_cancel_error:null,pagbank_status:'CANCELLED',payment_updated_at:nowISO(),updated_at:nowISO()});
     await logEvent('MERCADOPAGO_COBRANCA_CANCELADA',{order:order.code,order_id:order.id,source:'order_cancel',status:data?.status||'canceled'});
     return {ok:true,method:'order_cancel'};
-  }catch(e){lastError=String(e?.message||e);}
+  }catch(e){
+    lastError=String(e?.message||e);
+    if(/order_already_canceled|order_already_cancelled/i.test(lastError)){
+      await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancelled_at:nowISO(),payment_cancel_error:null,pagbank_status:'CANCELLED',payment_updated_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+      await logEvent('MERCADOPAGO_COBRANCA_JA_CANCELADA',{order:order.code,order_id:order.id,source:'order_cancel'});
+      return {ok:true,already:true,method:'order_cancel'};
+    }
+  }
   if(order.pagbank_charge_id){
     try{
       const data=await rdsMercadoPagoRequest('/v1/payments/'+encodeURIComponent(order.pagbank_charge_id),{method:'PUT',body:JSON.stringify({status:'cancelled'})},cfg.token);
