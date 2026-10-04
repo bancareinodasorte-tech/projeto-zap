@@ -25,7 +25,16 @@ async function card(){
       else if(b.authorized)s.innerHTML='<strong>🟢 Dispositivo oficial autorizado</strong><p class="mut">Sessão persistida com proteção no servidor.</p>';
       else s.innerHTML='<strong>🔴 Credenciais não disponíveis no runtime</strong><p class="mut">O servidor não está recebendo as credenciais oficiais neste endpoint.</p>';
       document.getElementById('r4act').innerHTML=b.emailConfigured&&!b.authorized?'<button class="btn primary" onclick="rdsOfficialAuthorizeDevice()">Autorizar este dispositivo</button>':'<button class="btn primary" onclick="rdsOfficialRefreshSettings()">Atualizar conexão</button>';
-      if(b.authorized){try{const st=await json('/api/v1011/official-sales/status');if(s)s.innerHTML='<strong>🟢 Vendedor oficial conectado</strong><p class="mut">'+esc(st.seller?.name||st.seller?.email||'CANAL DE VENDAS RDS')+'</p>';}catch(e){if(s)s.innerHTML='<strong>🟠 Sessão precisa ser renovada</strong><p class="mut">'+esc(e.message)+'</p>';}}
+      if(b.authorized){
+        try{
+          const st=await json('/api/v1011/official-sales/status');
+          if(s)s.innerHTML='<strong>🟢 Vendedor oficial conectado</strong><p class="mut">'+esc(st.seller?.name||st.seller?.email||'CANAL DE VENDAS RDS')+'</p>';
+        }catch(e){
+          if(s)s.innerHTML='<strong>🔴 Dispositivo não autorizado no sistema oficial</strong><p class="mut">'+esc(e.message)+'</p>';
+          const act=document.getElementById('r4act');
+          if(act)act.innerHTML='<button class="btn primary" onclick="rdsOfficialAuthorizeDevice()">Reautorizar este dispositivo</button>';
+        }
+      }
       try{const d=await json('/api/v1011/official-sales/draw-info');const x=d.data||{};const dr=document.getElementById('r4draw');if(dr)dr.innerHTML='<strong>🟢 Sorteio oficial disponível</strong><p class="mut">'+esc(x.drawTitle||x.title||x.name||'Sorteio ativo')+' • ID '+esc(x.drawId||'—')+' • '+money(x.pricePerTicket)+' • '+esc(x.totalBooklets??x.availableBooklets??'—')+' bloco(s) disponíveis</p>';}catch(e){const dr=document.getElementById('r4draw');if(dr)dr.innerHTML='<strong>🟠 Sorteio ainda não consultado</strong><p class="mut">'+esc(e.message)+'</p>';}
     }catch(e){const s=document.getElementById('r4state');if(s)s.innerHTML='<strong>🔴 Falha na integração</strong><p class="mut">'+esc(e.message)+'</p>';}
   }finally{rendering=false;}
