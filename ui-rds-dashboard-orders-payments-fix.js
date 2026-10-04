@@ -52,8 +52,26 @@ async function payments(){
   <div class="rds-section card"><div class=rds-section-title><h2>Cobranças PIX abertas</h2><span class=mini>${w.length} pedido(s)</span></div><div class=rds-order-list>${w.map(waitingCard).join('')||'<div class=rds-empty>Nenhum pedido aguardando PIX no momento.</div>'}</div></div>
   <div class="rds-section card"><div class=rds-section-title><h2>Comprovantes recebidos</h2><span class=mini>${p.length} pedido(s)</span></div><div class=rds-order-list>${p.map(proofCard).join('')||'<div class=rds-empty>Nenhum comprovante aguardando conferência.</div>'}</div></div>
   <div class="rds-section card"><div class=rds-section-title><h2>Pagamentos confirmados</h2><span class=mini>${paid.length} pedido(s)</span></div><div class=rds-order-list>${paid.map(paidCard).join('')||'<div class=rds-empty>Nenhum pagamento confirmado aguardando emissão.</div>'}</div></div>
-  <div class="rds-section card"><div class=rds-section-title><h2>Histórico de cancelamentos</h2><span class=mini>${cancelled.length} pedido(s)</span></div><div class=rds-order-list>${cancelled.slice(0,20).map(o=>`<div class=rds-order><div class=rds-order-top><div><h3>${E(o.code)}</h3><p>${E(o.customer_name||o.phone)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Encerrado: ${D(o.cancelled_at||o.updated_at)}</small></div>${B('CANCELADO')}</div><p class=mut><b>Natureza:</b> ${E(cancelReason(o))}</p><div class=rds-buttons>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div></div>`).join('')||'<div class=rds-empty>Nenhum cancelamento registrado.</div>'}</div></div>`;
+  <div class="rds-section card rds-cancel-history"><div class=rds-section-title><div><h2>Histórico de cancelamentos</h2><p class=mut>Lista recolhida por pedido para manter a operação organizada.</p></div><span class=mini id=rdsCancelCount>${cancelled.length} pedido(s)</span></div>
+  <div class="toolbar rds-cancel-toolbar"><input id="rdsCancelSearch" type="search" placeholder="Buscar pedido, cliente ou WhatsApp" autocomplete="off"><span class="mini">Toque no pedido para abrir os detalhes</span></div>
+  <div id="rdsCancelList" class="rds-order-list">${cancelled.slice(0,100).map(o=>{const label=String(o.customer_name||o.phone||"Cliente");const reason=cancelReason(o);const search=String([o.code,label,o.phone,reason].filter(Boolean).join(" ")).toLowerCase().replace(/"/g,"&quot;");return '<details class="rds-cancel-item" data-search="'+search+'"><summary><span><b>'+E(o.code)+'</b><small>'+E(label)+' • Encerrado: '+D(o.cancelled_at||o.updated_at)+'</small></span><strong>›</strong></summary><div class="rds-cancel-body"><div class="rds-cancel-meta"><span>'+(o.quantity||0)+' bilhete(s)</span><b>'+M(o.total_amount)+'</b><span>CANCELADO</span></div><p class=mut><b>Natureza:</b> '+E(reason)+'</p><div class=rds-buttons><button class="btn" onclick="rdsOrderDetails(\'${o.id}\')">Ver detalhes</button></div></div></details>'}).join("")||"<div class=rds-empty>Nenhum cancelamento registrado.</div>"}</div>
+  </div>
 }
+  function bindCancelHistory(){
+    const input=document.getElementById("rdsCancelSearch");const list=document.getElementById("rdsCancelList");const count=document.getElementById("rdsCancelCount");
+    if(!input||!list||input.dataset.bound==="1")return;input.dataset.bound="1";
+    const items=[...list.querySelectorAll(".rds-cancel-item")];
+    const apply=()=>{const q=String(input.value||"").toLowerCase().trim();let visible=0;items.forEach(item=>{const ok=!q||String(item.dataset.search||"").includes(q);item.style.display=ok?"":"none";if(ok)visible++;});if(count)count.textContent=q?visible+" encontrado(s)":items.length+" pedido(s)";};
+    input.addEventListener("input",apply);apply();
+  }
+  function ensureCancelStyles(){
+    if(document.getElementById("rdsCancelHistoryStyles"))return;const s=document.createElement("style");s.id="rdsCancelHistoryStyles";
+    s.textContent=".rds-cancel-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.rds-cancel-toolbar input{flex:1;min-width:220px}.rds-cancel-item{border:1px solid rgba(30,70,120,.16);border-radius:16px;background:#fff;margin:8px 0;overflow:hidden}.rds-cancel-item summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.rds-cancel-item summary::-webkit-details-marker{display:none}.rds-cancel-item summary span{min-width:0;display:flex;flex-direction:column;gap:4px}.rds-cancel-item summary b{font-size:16px;color:#17355d}.rds-cancel-item summary small{font-size:12px;color:#71809a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rds-cancel-item summary strong{font-size:25px;color:#6680a5;transition:transform .15s}.rds-cancel-item[open] summary strong{transform:rotate(90deg)}.rds-cancel-body{padding:0 16px 15px;border-top:1px solid rgba(30,70,120,.10)}.rds-cancel-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 0 6px;color:#566b88}.rds-cancel-meta span:last-child{font-size:11px;font-weight:800;color:#a13c3c;background:#fae9e9;border-radius:999px;padding:5px 9px}.rds-cancel-history .rds-empty{padding:14px 0}.rds-cancel-history .rds-buttons{margin-top:10px}";
+    document.head.appendChild(s);
+  }
+  ensureCancelStyles();
+  const cancelObserver=new MutationObserver(bindCancelHistory);cancelObserver.observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
+  setTimeout(bindCancelHistory,0);
 window.paymentsPage=payments;
 window.rdsLegacyPaymentsPage=payments;
 })();
