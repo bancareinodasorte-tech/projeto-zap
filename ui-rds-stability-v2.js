@@ -113,6 +113,4 @@
     }
     document.body.classList.remove('rds-booting');
   },8000);
-  new MutationObserver(()=>{bindNavigation();stableSetNav();}).observe(document.body,{childList:true,subtree:true});
-  setInterval(stableSetNav,500);
 })();
