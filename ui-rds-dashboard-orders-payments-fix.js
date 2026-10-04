@@ -44,8 +44,8 @@ async function payments(){
     <div class=rds-buttons>${T('Confirmar pagamento',`rdsApproveProof('${o.id}')`,'btn success')}${T('Rejeitar comprovante',`rdsRejectProof('${o.id}')`,'btn danger')}${T('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div>
   </div>`;
   const paidCard=o=>`<div class="rds-order">
-    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Pagamento confirmado: ${D(o.payment_confirmed_at||o.updated_at)}</small></div>${B('PAGO — AGUARDA BILHETES')}</div>
-    <div class=rds-buttons>${T('Ir para emissão',`go('orders')`,'btn primary')}${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a></div>
+    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Pagamento confirmado: ${D(o.payment_confirmed_at||o.updated_at)}</small></div><span class="rds-paid-wait-status">PAGO — AGUARDA BILHETES</span></div>
+    <div class=rds-buttons>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div>
   </div>`;
   app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="rds-clean-sub">Uma central para cobrar, confirmar, conciliar e encaminhar cada pedido sem perder o histórico.</p></div><div class="row">${T('Configurar Mercado Pago',`go('account')`,'btn')}${B(provider, '', configured?'btn success':'btn danger')}</div></div>
   <div class="rds-mini-grid">
@@ -120,6 +120,12 @@ async function payments(){
     document.head.appendChild(s);
   }
   ensureCancelStyles();
+  if(!document.getElementById('rdsPaidWaitStatusStyles')){
+    const s=document.createElement('style');s.id='rdsPaidWaitStatusStyles';
+    s.textContent=".rds-paid-wait-status{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:9px;font-weight:900;letter-spacing:.02em;color:#8a5a00;background:#fff3cd;border:1px solid #f0d27a;border-radius:999px;padding:7px 9px;white-space:nowrap}.rds-paid-wait-status:before{content:'●';font-size:8px;color:#d89b18}@media(max-width:430px){.rds-paid-wait-status{font-size:8px;padding:6px 7px}}";
+    document.head.appendChild(s);
+  }
+
   if(!document.getElementById('rdsPaymentStageStyles')){
     const s=document.createElement('style');s.id='rdsPaymentStageStyles';
     s.textContent=".rds-stage-pills{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;margin-top:9px;overflow:hidden}.rds-stage-pills span{font-size:9px;font-weight:800;color:#71809a;background:#f1f5fa;border:1px solid rgba(30,70,120,.08);border-radius:999px;padding:4px 7px;white-space:nowrap}.rds-stage-pills span.done{color:#24764c;background:#eaf8ef}.rds-stage-pills span.active{color:#1c5f96;background:#eaf4ff;border-color:rgba(28,95,150,.16)}@media(max-width:430px){.rds-stage-pills{gap:3px}.rds-stage-pills span{font-size:8px;padding:4px 5px}}";
