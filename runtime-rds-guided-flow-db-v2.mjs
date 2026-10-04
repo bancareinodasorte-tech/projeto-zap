@@ -25,9 +25,9 @@ function rdsGuidedDbEditMenu(){
 }
 async function rdsGuidedDbCancel(order,reason='CANCELAMENTO_CLIENTE'){
   if(!order?.id)return;
-  if(typeof rdsCancelOrderFinal==='function')return rdsCancelOrderFinal(order,reason);
   await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:reason,cancelled_at:nowISO(),updated_at:nowISO()});
   await cancelFutureDeliveries(order.phone,reason);
+  await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason});
 }
 async function rdsGuidedDbStart(identity,campaignCode=null){
   const phone=rdsGuidedDbPhone(identity);
