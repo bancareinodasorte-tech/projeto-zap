@@ -41,6 +41,29 @@ async function rdsFinalHandleOrderForm(identity,order,text){
     const cpf=digits(t);
     if(!/^\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ Informe um CPF válido com 11 dígitos.');
     const quantity=Number(order.quantity||0);
+    let officialDraw=null;
+    if(typeof rdsFinalRequest==='function'){
+      try{
+        officialDraw=await rdsFinalRequest('/seller/draw-info');
+        const closed=officialDraw?.isDrawClosed===true || officialDraw?.isSalesClosed===true || officialDraw?.salesOpen===false;
+        const available=Number(officialDraw?.totalBooklets);
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
+          official_inventory_available:Number.isFinite(available)?available:null,
+          official_inventory_checked_at:nowISO(),
+          official_inventory_error:null,
+          updated_at:nowISO()
+        }).catch(()=>{});
+        if(closed)return replyInbound(identity,'⚠️ *VENDAS ENCERRADAS*\\n\\nO sorteio oficial não está recebendo novas vendas neste momento. Não foi gerada nenhuma cobrança.');
+        if(Number.isFinite(available) && available<quantity){
+          await addAlert('ESTOQUE_OFICIAL_BAIXO','Venda bloqueada por disponibilidade oficial insuficiente',{order:order.code,requested:quantity,available});
+          return replyInbound(identity,'⚠️ *DISPONIBILIDADE INSUFICIENTE*\\n\\nNo momento existem apenas *'+available+'* bilhetes disponíveis para emissão oficial, mas este pedido solicita *'+quantity+'*.\\n\\nNenhum PIX foi gerado. Tente novamente quando houver disponibilidade.');
+        }
+      }catch(e){
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_inventory_error:String(e?.message||e).slice(0,1200),official_inventory_checked_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+        await addAlert('ESTOQUE_OFICIAL_NAO_CONSULTADO','Venda bloqueada porque a disponibilidade oficial não pôde ser confirmada',{order:order.code,error:String(e?.message||e)});
+        return replyInbound(identity,'⚠️ *NÃO FOI POSSÍVEL CONFIRMAR A DISPONIBILIDADE*\\n\\nO sistema não gerou o PIX para evitar vender bilhetes sem emissão garantida. Tente novamente em alguns instantes.');
+      }
+    }
     const total=Number((quantity*Number(order.unit_price||3)).toFixed(2));
     if(identity.phone){
       try{
