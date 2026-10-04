@@ -20,8 +20,8 @@ const block=`
   const cleanCpf=v=>digits(v);
   const qtyFrom=v=>{
     const t=cleanText(v).toLowerCase();
-    if(!/^\\d+(?:\\s*(?:bilhete|bilhetes))?$/.test(t))return 0;
-    const n=Number((t.match(/^\\d+/)||[])[0]||0);
+    if(!/^[0-9]+(?: *(?:bilhete|bilhetes))?$/.test(t))return 0;
+    const n=Number((t.match(/^[0-9]+/)||[])[0]||0);
     return Number.isInteger(n)&&n>0?n:0;
   };
   const confirmText=o=>[
