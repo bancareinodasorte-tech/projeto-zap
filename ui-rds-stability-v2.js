@@ -49,7 +49,7 @@
   window.rdsRenderCurrentPage=stableRender;
   window.render=stableRender;
 
-  const revealBoot=()=>{document.body.classList.remove('rds-booting');stableSetNav();};
+  const revealBoot=()=>{document.body.classList.remove('rds-booting');stableSetNav();setTimeout(stableSetNav,0);};
   window.rdsRefreshCurrentPage=async()=>{
     if(refreshBusy)return;
     refreshBusy=true;
@@ -91,5 +91,6 @@
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',bindNavigation,{once:true});
   }
-  new MutationObserver(bindNavigation).observe(document.body,{childList:true,subtree:true});
+  new MutationObserver(()=>{bindNavigation();stableSetNav();}).observe(document.body,{childList:true,subtree:true});
+  setInterval(stableSetNav,500);
 })();
