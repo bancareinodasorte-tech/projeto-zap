@@ -57,10 +57,10 @@ async function payments(){
     <div class="rds-control-grid">
       <label class="rds-control-toggle"><span><b>Lembretes de pagamento</b><small>Envia automaticamente o lembrete para pedidos que continuam aguardando PIX.</small></span><input id="rdsReminderEnabled" type="checkbox" ${rem.enabled!==false?'checked':''}></label>
       <label><span>Expiração do pedido</span><select id="rdsExpirationHours"><option value="1" ${Number(exp.hours)==1?'selected':''}>1 hora</option><option value="2" ${Number(exp.hours)==2?'selected':''}>2 horas</option><option value="3" ${Number(exp.hours)==3?'selected':''}>3 horas</option><option value="4" ${Number(exp.hours)==4?'selected':''}>4 horas</option><option value="6" ${Number(exp.hours)==6?'selected':''}>6 horas</option><option value="12" ${Number(exp.hours)==12?'selected':''}>12 horas</option><option value="24" ${Number(exp.hours)==24?'selected':''}>24 horas</option></select></label>
-      <label><span>Intervalo dos lembretes</span><select id="rdsReminderInterval"><option value="1" ${Number(rem.interval_hours)==1?'selected':''}>A cada 1 hora</option><option value="2" ${Number(rem.interval_hours)==2?'selected':''}>A cada 2 horas</option><option value="3" ${Number(rem.interval_hours)==3?'selected':''}>A cada 3 horas</option><option value="6" ${Number(rem.interval_hours)==6?'selected':''}>A cada 6 horas</option><option value="12" ${Number(rem.interval_hours)==12?'selected':''}>A cada 12 horas</option></select></label>
+      <label><span>Intervalo dos lembretes</span><select id="rdsReminderInterval"><option value="0.5" \${Number(rem.interval_hours)==0.5?'selected':''}>A cada 30 minutos</option><option value="1" ${Number(rem.interval_hours)==1?'selected':''}>A cada 1 hora</option><option value="2" ${Number(rem.interval_hours)==2?'selected':''}>A cada 2 horas</option><option value="3" ${Number(rem.interval_hours)==3?'selected':''}>A cada 3 horas</option><option value="6" ${Number(rem.interval_hours)==6?'selected':''}>A cada 6 horas</option><option value="12" ${Number(rem.interval_hours)==12?'selected':''}>A cada 12 horas</option></select></label>
       <label><span>Máximo de lembretes</span><select id="rdsReminderMax"><option value="1" ${Number(rem.max_reminders)==1?'selected':''}>1 lembrete</option><option value="2" ${Number(rem.max_reminders)==2?'selected':''}>2 lembretes</option><option value="3" ${Number(rem.max_reminders)==3?'selected':''}>3 lembretes</option><option value="4" ${Number(rem.max_reminders)==4?'selected':''}>4 lembretes</option><option value="5" ${Number(rem.max_reminders)==5?'selected':''}>5 lembretes</option></select></label>
     </div>
-    <div class="rds-control-footer"><small>As alterações valem para os próximos ciclos de cobrança. Um pedido pago ou encerrado não recebe novos lembretes.</small><button class="btn primary" type="button" id="rdsSaveBillingControl">Salvar controle</button></div>
+    <div class="rds-control-footer"><small>O sistema ajusta automaticamente o intervalo e o máximo de lembretes para que nenhum lembrete coincida com a expiração. As alterações valem para os próximos ciclos; pedidos pagos ou encerrados não recebem novos lembretes.</small><button class="btn primary" type="button" id="rdsSaveBillingControl">Salvar controle</button></div>
   </div>
   <div class="rds-section card"><div class=rds-section-title><h2>Cobranças PIX abertas</h2><span class=mini>${w.length} pedido(s)</span></div><div class=rds-order-list>${w.map(waitingCard).join('')||'<div class=rds-empty>Nenhum pedido aguardando PIX no momento.</div>'}</div></div>
   <div class="rds-section card"><div class=rds-section-title><h2>Comprovantes recebidos</h2><span class=mini>${p.length} pedido(s)</span></div><div class=rds-order-list>${p.map(proofCard).join('')||'<div class=rds-empty>Nenhum comprovante aguardando conferência.</div>'}</div></div>
@@ -74,7 +74,19 @@ async function payments(){
     const b=document.getElementById('rdsSaveBillingControl'); if(!b||b.dataset.bound==='1')return; b.dataset.bound='1';
     const enabled=document.getElementById('rdsReminderEnabled'), expH=document.getElementById('rdsExpirationHours'), interval=document.getElementById('rdsReminderInterval'), max=document.getElementById('rdsReminderMax'), status=document.querySelector('.rds-control-status');
     const sync=()=>{if(status){status.textContent=enabled?.checked?'COBRANÇA ATIVA':'COBRANÇA INATIVA';status.className='rds-control-status '+(enabled?.checked?'on':'off');}};
-    enabled?.addEventListener('change',sync); sync();
+    const reconcile=()=>{
+      const h=Number(expH?.value||4);
+      const allowed=[0.5,1,2,3,4,6,12].filter(x=>x<h);
+      if(enabled?.checked && interval && allowed.length && !allowed.includes(Number(interval.value))) interval.value=String(allowed[allowed.length-1]);
+      if(enabled?.checked && max && interval){
+        const safe=Math.max(1,Math.min(5,Math.ceil(h/Number(interval.value||1))-1));
+        if(Number(max.value)>safe)max.value=String(safe);
+      }
+    };
+    enabled?.addEventListener('change',()=>{sync();reconcile();});
+    expH?.addEventListener('change',reconcile);
+    interval?.addEventListener('change',reconcile);
+    sync(); reconcile();
     b.addEventListener('click',async()=>{
       b.disabled=true;b.textContent='Salvando...';
       try{
