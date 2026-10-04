@@ -240,6 +240,7 @@ setTimeout(()=>rdsCloseMercadoPagoOrders().catch(()=>{}),20000);
 setInterval(()=>rdsCloseMercadoPagoOrders().catch(()=>{}),60000);
 console.log('[RDS] cancelamento Mercado Pago + aviso WhatsApp instalados');
 
+`;
 
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
