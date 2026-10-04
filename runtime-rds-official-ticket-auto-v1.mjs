@@ -162,7 +162,10 @@ const block=`
       const rows=await list('rds10_orders',filter);
       for(const o of rows)await issueOne(o);
 
-      const pending=await list('rds10_orders','select=*&official_issue_status=eq.EMITIDO_AGUARDANDO_ENVIO&order=updated_at.asc&limit=20').catch(()=>[]);
+      const pendingFilter=sellerId
+        ? 'select=*&official_issue_status=eq.EMITIDO_AGUARDANDO_ENVIO&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=20'
+        : 'select=*&official_issue_status=eq.EMITIDO_AGUARDANDO_ENVIO&order=updated_at.asc&limit=20';
+      const pending=await list('rds10_orders',pendingFilter).catch(()=>[]);
       for(const o of pending){
         try{
           const info=extractSaleInfo(o.official_ticket_payload||{saleId:o.official_sale_id,pdfUrl:o.official_ticket_url});
