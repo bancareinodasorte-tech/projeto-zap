@@ -19,7 +19,7 @@
     const app=document.querySelector('#app');
     if(!app)return;
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
-    if(!['orders','account'].includes(p))return;
+    if(p!=='orders')return;
     if(document.getElementById('rdsOfficialIntegrationV2'))return;
 
     const card=document.createElement('section');
@@ -89,7 +89,7 @@
 
   window.rdsOfficialFinalMaybeRender=()=>{
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
-    if(['orders','account'].includes(p)){renderOfficialCard();if(p==='orders')renderAutoStatus();}
+    if(p==='orders'){renderOfficialCard();renderAutoStatus();}
   };
   setTimeout(()=>window.rdsOfficialFinalMaybeRender?.(),300);
 })();
