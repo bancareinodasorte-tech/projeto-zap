@@ -24,6 +24,25 @@
     }
   }
 
+  function stableSetNav(){
+    const p=window.page||localStorage.getItem('rds_current_page')||'home';
+    document.querySelectorAll('#nav button[data-page],#mobileNav button[data-page]').forEach(b=>{
+      b.classList.toggle('active',b.dataset.page===p);
+    });
+  }
+  async function stableGo(p){
+    const target=String(p||'home');
+    window.page=target;
+    localStorage.setItem('rds_current_page',target);
+    if(typeof window.navSeq==='number')window.navSeq++;
+    stableSetNav();
+    window.scrollTo(0,0);
+    await stableRender();
+    stableSetNav();
+  }
+
+  window.setNav=stableSetNav;
+  window.go=stableGo;
   window.rdsRenderCurrentPage=stableRender;
   window.render=stableRender;
 
@@ -35,8 +54,9 @@
     if(b){b.disabled=true;b.textContent='↻ Atualizando…';b.setAttribute('aria-busy','true');}
     try{
       if(typeof window.navSeq==='number')window.navSeq++;
-      if(typeof window.setNav==='function')window.setNav();
+      stableSetNav();
       await stableRender();
+      stableSetNav();
       if(typeof window.refreshStatus==='function')window.refreshStatus();
     }finally{
       if(b){b.disabled=false;b.textContent=old;b.removeAttribute('aria-busy');}
@@ -55,7 +75,7 @@
         window.page=p;
         localStorage.setItem('rds_current_page',p);
         if(typeof window.navSeq==='number')window.navSeq++;
-        if(typeof window.setNav==='function')window.setNav();
+        stableSetNav();
         window.scrollTo(0,0);
         await stableRender();
       };
