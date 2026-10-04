@@ -45,6 +45,9 @@
   window.go=stableGo;
   window.rdsRenderCurrentPage=stableRender;
   window.render=stableRender;
+  window.addEventListener('load',async()=>{
+    try{await stableRender();}finally{document.body.classList.remove('rds-booting');stableSetNav();}
+  },{once:true});
 
   window.rdsRefreshCurrentPage=async()=>{
     if(refreshBusy)return;
