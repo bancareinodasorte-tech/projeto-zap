@@ -16,7 +16,7 @@ const block=`
 // RDS SALES ROUTE FINAL V3
 (()=>{
   const NL=String.fromCharCode(10);
-  const cleanName=v=>cleanText(v).replace(/\\s+/g,' ').trim();
+  const cleanName=v=>cleanText(v).split(' ').filter(Boolean).join(' ').trim();
   const cleanCpf=v=>digits(v);
   const qtyFrom=v=>{
     const t=cleanText(v).toLowerCase();
@@ -83,7 +83,7 @@ const block=`
     const quantity=Number(fresh.quantity||0);
     const name=cleanName(fresh.customer_name);
     const cpf=cleanCpf(fresh.customer_tax_id);
-    if(!quantity||quantity<1||name.length<4||!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){
+    if(!quantity||quantity<1||name.length<4||!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){
       await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});
       return replyInbound(identity,'⚠️ Os dados do pedido estão incompletos. Escolha *2 — EDITAR* para corrigir.');
     }
@@ -152,7 +152,7 @@ const block=`
 
     if(step==='CPF'){
       const cpf=cleanCpf(t);
-      if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){await replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');return true;}
+      if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){await replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');return true;}
       await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
       await replyInbound(identity,confirmText(fresh||{...order,customer_tax_id:cpf,guided_step:'CONFIRMAR'}));
@@ -194,7 +194,7 @@ const block=`
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
     if(step==='EDIT_CPF'){
-      const cpf=cleanCpf(t);if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
+      const cpf=cleanCpf(t);if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
       await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
@@ -210,7 +210,7 @@ const block=`
       return replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
     }
     if(step==='TODOS_CPF'){
-      const cpf=cleanCpf(t);if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
+      const cpf=cleanCpf(t);if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
       await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
@@ -226,7 +226,7 @@ const block=`
     if(!phone)return previousHandleInbound(m);
 
     const active=await activeOrder(phone);
-    const buy=/^(?:comprar|compra|quero comprar|quero\\s*comprar|compre agora)$/i.test(text);
+    const buy=/^(?:comprar|compra|quero comprar|quero comprar|compre agora)$/i.test(text);
 
     if(active&&active.status==='COLETANDO_DADOS'){
       await logMessage({phone,direction:'IN',type:inbound.type||'text',body:text,status:'RECEBIDA',waId:m?.key?.id,raw:{remoteJid:identity.remoteJid}});
