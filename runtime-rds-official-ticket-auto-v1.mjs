@@ -80,6 +80,7 @@ const block=`
     if(!order?.id)return;
     if(['EMITIDO','EMITIDO_AGUARDANDO_ENVIO','CONCLUIDO','AGUARDANDO_AUTORIZACAO'].includes(String(order.official_issue_status||'')))return;
     if(String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
+    console.log('[RDS AUTO] processando pedido pago '+String(order.code||order.id)+' status='+String(order.official_issue_status||'—'));
 
     const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
     if(sellerId&&String(order.seller_id||'')!==String(sellerId))return;
@@ -151,6 +152,7 @@ const block=`
       }
     }catch(e){
       const err=String(e?.message||e);
+      console.error('[RDS AUTO] falha na emissão '+String(order.code||order.id)+': '+err);
       const unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized/i.test(err);
       if(unauthorized){
         await patch('rds10_orders','id=eq.'+order.id,{
@@ -171,8 +173,9 @@ const block=`
   }
 
   async function retryOfficialDelivery(){
-    if(running||!connected)return;
+    if(running)return;
     running=true;
+    console.log('[RDS AUTO] ciclo de emissão automática iniciado; WhatsApp='+String(connected));
     try{
       const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
       const filter=sellerId
@@ -210,7 +213,7 @@ const block=`
         }
       }
     }catch(e){console.error('[RDS] emissão automática:',e?.message||e);}
-    finally{running=false;}
+    finally{console.log('[RDS AUTO] ciclo de emissão automática finalizado');running=false;}
   }
 
   setTimeout(()=>retryOfficialDelivery().catch(()=>{}),12000);
