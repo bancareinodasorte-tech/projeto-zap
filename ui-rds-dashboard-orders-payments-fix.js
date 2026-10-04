@@ -6,12 +6,13 @@ const G=[['COLETANDO_DADOS','Em atendimento'],['AGUARDANDO_PAGAMENTO','Aguardand
 async function home(){const d=await F('/api/dashboard'),cs=await F('/api/contacts').catch(()=>[]),n=cs.filter(c=>!c.opted_out&&String(c.status||'').toUpperCase()!=='INATIVO'&&/INTERESSADOS/i.test(String(c.group_name||''))).length;app.innerHTML=`<div class="page-title"><div><span class="eyebrow">Operação comercial</span><h1>Central de Vendas</h1><p class="mut">O que precisa de atenção agora, sem ruído.</p></div>${T('Nova campanha',"go('campaigns')",'btn primary')}</div><div class="grid">${[['Clientes ativos',n],['Campanhas',d.campaigns],['Na fila',d.queue],['Enviadas',d.sent],['Retornos',d.returns],['Pedidos',d.orders],['Compras',d.purchases],['Receita',M(d.revenue)]].map(x=>`<div class="card metric-card"><span class="eyebrow">${x[0]}</span><div class="metric">${x[1]}</div></div>`).join('')}</div>`}
 async function orders(){const rows=await F('/api/operator/orders');state.orders=Array.isArray(rows)?rows:(rows.orders||[]);const cs=G.map(([k,n])=>({k,n,r:state.orders.filter(o=>o.status===k)}));const active=cs.filter(x=>!['CONCLUIDO','CANCELADO'].includes(x.k)).reduce((a,x)=>a+x.r.length,0);app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Vendas</span><h1>Compras</h1><p class="rds-clean-sub">Pagamento confirmado → emissão → envio dos bilhetes → conclusão.</p></div></div><div class="rds-mini-grid"><div class="card metric-card"><span class="eyebrow">Em andamento</span><div class="metric">${active}</div></div>${cs.slice(0,3).map(x=>`<div class="card metric-card"><span class="eyebrow">${x.n}</span><div class="metric">${x.r.length}</div></div>`).join('')}</div><div class="toolbar rds-orders-toolbar"><input id="rdsOrderSearch" placeholder="Buscar pedido, cliente ou WhatsApp"><select id="rdsOrderStatus"><option value="">Todas as etapas</option>${G.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></div><div id="rdsOrdersStages">${cs.map(x=>`<details class="rds-collapse" data-status="${x.k}"><summary><span><b>${x.n}</b><small>${x.r.length} registro(s)</small></span><strong>${x.r.length}</strong></summary><div class="rds-collapse-body">${x.r.map(o=>`<div class="card rds-order-clean"><div class="rds-order-head"><div><h2>${E(o.code)}</h2><p>${E(o.customer_name||o.phone||'Cliente')} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><span class="mini">Criado: ${D(o.created_at)}</span></div>${B(x.n)}</div><div class="rds-action-row">${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}${x.k==='AGUARDANDO_PAGAMENTO'?T('Pagamentos',"go('payments')",'btn primary'):''}${x.k==='AGUARDANDO_CONFERENCIA'?T('Confirmar pagamento',`confirmPay('${o.id}')`,'btn success'):''}${x.k==='PAGO_AGUARDANDO_BILHETES'?T('Bilhetes enviados',`ticketsSent('${o.id}')`,'btn primary'):''}${!['CONCLUIDO','CANCELADO','PAGO_AGUARDANDO_BILHETES'].includes(x.k)?T('Cancelar',`cancelOrder('${o.id}')`,'btn danger'):''}</div></div>`).join('')||'<div class="empty-state">Nenhum registro nesta etapa.</div>'}</div></details>`).join('')}</div>`;const s=document.querySelector('#rdsOrderSearch'),f=document.querySelector('#rdsOrderStatus');const apply=()=>{const q=String(s?.value||'').toLowerCase().trim(),st=f?.value||'';document.querySelectorAll('#rdsOrdersStages details').forEach(d=>d.style.display=!st||d.dataset.status===st?'':'none');document.querySelectorAll('.rds-order-clean').forEach(c=>c.style.display=!q||c.textContent.toLowerCase().includes(q)?'':'none')};s?.addEventListener('input',apply);f?.addEventListener('change',apply)}
 async function payments(){
-  const [rows,fin,exp,rem]=await Promise.all([
+  const [rows,fin,control]=await Promise.all([
     F('/api/operator/orders'),
     F('/api/operator/financial-status').catch(()=>({financial:{configured:false,environment:'production'},mercadoPago:{connected:false}})),
-    F('/api/order-expiration').catch(()=>({hours:4})),
-    F('/api/payment-reminders').catch(()=>({enabled:true,interval_hours:1,max_reminders:3}))
+    F('/api/billing-control').catch(()=>({hours:4,enabled:true,interval_hours:1,max_reminders:3}))
   ]);
+  const exp={hours:Number(control.hours||4)};
+  const rem={enabled:control.enabled!==false,interval_hours:Number(control.interval_hours||1),max_reminders:Number(control.max_reminders||3)};
   state.orders=Array.isArray(rows)?rows:(rows.orders||[]);
   const w=state.orders.filter(o=>o.status==='AGUARDANDO_PAGAMENTO');
   const p=state.orders.filter(o=>o.status==='AGUARDANDO_CONFERENCIA');
@@ -77,11 +78,9 @@ async function payments(){
     b.addEventListener('click',async()=>{
       b.disabled=true;b.textContent='Salvando...';
       try{
-        const a=await fetch('/api/order-expiration',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hours:Number(expH?.value||4)})});
-        const ad=await a.json().catch(()=>({}));if(!a.ok)throw new Error(ad.error||'Não foi possível salvar a expiração.');
-        const x=await fetch('/api/payment-reminders',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:Boolean(enabled?.checked),interval_hours:Number(interval?.value||1),max_reminders:Number(max?.value||3)})});
-        const xd=await x.json().catch(()=>({}));if(!x.ok)throw new Error(xd.error||'Não foi possível salvar os lembretes.');
-        toast?.('Controle da cobrança salvo.'); await payments();
+        const x=await fetch('/api/billing-control',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:Boolean(enabled?.checked),hours:Number(expH?.value||4),interval_hours:Number(interval?.value||1),max_reminders:Number(max?.value||3)})});
+        const xd=await x.json().catch(()=>({}));if(!x.ok||xd.ok!==true)throw new Error(xd.error||'Não foi possível confirmar o controle da cobrança.');
+        toast?.('Controle da cobrança salvo e confirmado.'); await payments();
       }catch(e){toast?.(e.message||'Não foi possível salvar.');b.disabled=false;b.textContent='Salvar controle';}
     });
   }
