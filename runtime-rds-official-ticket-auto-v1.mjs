@@ -78,7 +78,7 @@ const block=`
 
   async function issueOne(order){
     if(!order?.id)return;
-    if(['EMITIDO','EMITIDO_AGUARDANDO_ENVIO','CONCLUIDO'].includes(String(order.official_issue_status||'')))return;
+    if(['EMITIDO','EMITIDO_AGUARDANDO_ENVIO','CONCLUIDO','AGUARDANDO_AUTORIZACAO'].includes(String(order.official_issue_status||'')))return;
     if(String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
 
     const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
@@ -150,9 +150,23 @@ const block=`
         await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:String(e?.message||e)});
       }
     }catch(e){
-      await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'ERRO',official_issue_error:String(e?.message||e),updated_at:nowISO()});
-      await addAlert('EMISSAO_OFICIAL_FALHA','Falha na emissão oficial — '+order.code,{order:order.code,error:String(e?.message||e)});
-      await logEvent('ERRO_EMISSAO_OFICIAL',{order:order.code,order_id:order.id,error:String(e?.message||e)});
+      const err=String(e?.message||e);
+      const unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized/i.test(err);
+      if(unauthorized){
+        await patch('rds10_orders','id=eq.'+order.id,{
+          official_issue_status:'AGUARDANDO_AUTORIZACAO',
+          official_issue_error:'O dispositivo do servidor oficial precisa ser autorizado novamente.',
+          updated_at:nowISO()
+        });
+        if(previousIssueStatus!=='AGUARDANDO_AUTORIZACAO'){
+          await addAlert('EMISSAO_OFICIAL_AGUARDANDO_AUTORIZACAO','Autorização do dispositivo oficial necessária — '+order.code,{order:order.code,error:err});
+          await logEvent('EMISSAO_OFICIAL_AGUARDANDO_AUTORIZACAO',{order:order.code,order_id:order.id,error:err});
+        }
+      }else{
+        await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'ERRO',official_issue_error:err,updated_at:nowISO()});
+        await addAlert('EMISSAO_OFICIAL_FALHA','Falha na emissão oficial — '+order.code,{order:order.code,error:err});
+        await logEvent('ERRO_EMISSAO_OFICIAL',{order:order.code,order_id:order.id,error:err});
+      }
     }
   }
 
@@ -162,10 +176,25 @@ const block=`
     try{
       const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
       const filter=sellerId
-        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=50'
-        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=50';
+        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&official_issue_status=not.in.(AGUARDANDO_AUTORIZACAO)&order=updated_at.asc&limit=50'
+        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=not.in.(AGUARDANDO_AUTORIZACAO)&order=updated_at.asc&limit=50';
       const rows=await list('rds10_orders',filter);
       for(const o of rows)await issueOne(o);
+
+      // Pedidos pagos que aguardam autorização só voltam à fila quando a sessão oficial estiver válida.
+      const authPendingFilter=sellerId
+        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.AGUARDANDO_AUTORIZACAO&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=20'
+        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.AGUARDANDO_AUTORIZACAO&order=updated_at.asc&limit=20';
+      const authPending=await list('rds10_orders',authPendingFilter).catch(()=>[]);
+      if(authPending.length){
+        try{
+          if(typeof rdsFinalRequest==='function') await rdsFinalRequest('/auth/me');
+          for(const o of authPending){
+            await patch('rds10_orders','id=eq.'+encodeURIComponent(o.id),{official_issue_status:null,official_issue_error:null,updated_at:nowISO()}).catch(()=>{});
+            await issueOne({...o,official_issue_status:null});
+          }
+        }catch{}
+      }
 
       const pendingFilter=sellerId
         ? 'select=*&official_issue_status=eq.EMITIDO_AGUARDANDO_ENVIO&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=20'
