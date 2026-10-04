@@ -22,6 +22,8 @@
         try{window.rdsV11Refresh?.();}catch{}
         try{window.rdsInterfaceRefresh?.();}catch{}
         try{window.rdsInjectEmitOrders?.();}catch{}
+        try{window.rdsPostPaymentRefresh?.();}catch{}
+        try{window.rdsMobileUxRefresh?.();}catch{}
       },0);
     }
   }
@@ -90,13 +92,12 @@
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',bindNavigation,{once:true});
   }
-  // Garante que o primeiro carregamento nunca deixe a interface presa invisível.
+
   const bootWatchdog=setInterval(()=>{
     if(!document.body.classList.contains('rds-booting')){
       clearInterval(bootWatchdog);
       return;
     }
-    const target=window.page||localStorage.getItem('rds_current_page')||'home';
     if(!document.getElementById('rdsBootRecovery')){
       const box=document.createElement('div');
       box.id='rdsBootRecovery';
