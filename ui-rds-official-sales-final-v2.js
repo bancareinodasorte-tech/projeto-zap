@@ -1,7 +1,7 @@
 (()=>{
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const json=async(u,o={})=>{const r=await fetch(u,{cache:'no-store',...o});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;};
+  const json=async(u,o={})=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),8000);try{const r=await fetch(u,{cache:'no-store',...o,signal:ac.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('A integração oficial demorou para responder.');throw e;}finally{clearTimeout(tm);}};
 
   async function loadOfficial(){
     const [b,d]=await Promise.allSettled([
@@ -87,11 +87,9 @@
     }catch(e){alert(e.message||'Falha na emissão oficial.');throw e;}
   };
 
-  const obs=new MutationObserver(()=>{
+  window.rdsOfficialFinalMaybeRender=()=>{
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
-    if(['orders','account'].includes(p))renderOfficialCard();
-    if(p==='orders')renderAutoStatus();
-  });
-  obs.observe(document.getElementById('app')||document.body,{childList:true,subtree:true});
-  setTimeout(()=>{renderOfficialCard();renderAutoStatus()},300);
+    if(['orders','account'].includes(p)){renderOfficialCard();if(p==='orders')renderAutoStatus();}
+  };
+  setTimeout(()=>window.rdsOfficialFinalMaybeRender?.(),300);
 })();
