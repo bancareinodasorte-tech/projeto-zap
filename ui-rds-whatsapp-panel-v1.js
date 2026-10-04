@@ -81,7 +81,7 @@ function startPolling(){
      lastData={...lastData,status:d};
    }
   }catch{}
- },1200);
+ },4000);
 
  const refreshChats=async()=>{
    if(page!=='whatsapp'||activePhone||!lastData?.status?.connected)return;
@@ -89,12 +89,12 @@ function startPolling(){
      const d=await F('/api/whatsapp/chats');
      const chats=d.chats||[];
      const before=lastData?.chats||[];
-     const same=JSON.stringify(chats.map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]))
-       ===JSON.stringify(before.map(x=>[x.phone,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]));
+     const same=JSON.stringify(chats.map(x=>[x.phone,x.unread_count||0,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]))
+       ===JSON.stringify(before.map(x=>[x.phone,x.unread_count||0,x.messages?.[0]?.wa_message_id,x.messages?.[0]?.created_at,x.messages?.[0]?.body]));
      if(!same){ lastData={...lastData,chats}; drawChats(chats); }
    }catch{}
  };
- chatPollTimer=setInterval(refreshChats,5000);
+ chatPollTimer=setInterval(refreshChats,7000);
 }
 function sConnected(){return Boolean(lastData?.status?.connected)}
 window.rdsWaConnect=async()=>{
