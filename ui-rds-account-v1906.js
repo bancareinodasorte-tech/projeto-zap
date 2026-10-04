@@ -43,9 +43,16 @@ async function account(){
  // A Conta não pode depender de uma chamada ao servidor para começar a renderizar.
  // O token local já identifica o tipo de sessão; os dados complementares entram depois.
  const hasSeller=!!token(), hasAdmin=!!adminToken();
- if(!hasSeller&&!hasAdmin){openLogin('Entre para acessar sua conta.');return;}
+ // A sessão unificada também pode estar no cookie HttpOnly. Não bloqueie a Conta
+ // apenas porque o bearer do localStorage não está presente.
+ const initialContext=await Promise.race([
+  context(),
+  new Promise(resolve=>setTimeout(()=>resolve({authenticated:false,timeout:true}),4000))
+ ]).catch(()=>({authenticated:false}));
+ const initialRole=initialContext?.authenticated?initialContext.role:null;
+ if(!initialRole && !hasSeller && !hasAdmin){openLogin(initialContext?.timeout?'A validação da sessão demorou mais que o esperado.':'Entre para acessar sua conta.');return;}
 
- if(hasAdmin&&!hasSeller){
+ if(initialRole==='ADMINISTRADOR' || (hasAdmin&&!hasSeller)){
   root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p id="rdsAdminEmail" class="mut">Validando sessão…</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
   document.getElementById('rdsUnifiedLogout').onclick=logout;
  }else{
