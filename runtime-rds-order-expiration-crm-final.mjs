@@ -13,10 +13,15 @@ ${marker}
 
 async function rdsOrderExpirationHours(){
   try{
+    const ev=await one('rds10_events','select=payload&kind=eq.CONFIG_ORDER_EXPIRATION&order=created_at.desc&limit=1');
+    const saved=Number(ev?.payload?.hours);
+    if(Number.isFinite(saved)&&saved>=0.25&&saved<=168)return saved;
+  }catch{}
+  try{
     const st=await getSettings();
-    const n=Number(st?.order_expiration_hours||3);
+    const n=Number(st?.order_expiration_hours||4);
     return Math.max(0.25,Math.min(168,n));
-  }catch{return 3;}
+  }catch{return 4;}
 }
 
 async function rdsEnsureInterestedContact(phone,name,lid){
@@ -69,17 +74,23 @@ async function rdsExpireActiveOrders(){
 }
 
 app.get('/api/order-expiration',async(req,res)=>{
-  try{res.json({hours:await rdsOrderExpirationHours(),default_hours:3});}
+  try{const hours=await rdsOrderExpirationHours();res.json({hours,default_hours:4});}
   catch(e){res.status(500).json({error:e.message});}
 });
 
 app.put('/api/order-expiration',async(req,res)=>{
   try{
-    const hours=Math.max(0.25,Math.min(168,Number(req.body?.hours||3)));
-    const st=await one('rds10_settings','select=id&limit=1');
-    if(!st?.id)throw new Error('Configuração principal não encontrada.');
-    await patch('rds10_settings','id=eq.'+encodeURIComponent(st.id),{order_expiration_hours:hours,updated_at:nowISO()});
-    res.json({ok:true,hours});
+    const raw=Number(req.body?.hours);
+    if(!Number.isFinite(raw))throw new Error('Informe uma expiração válida.');
+    const hours=Math.max(0.25,Math.min(168,raw));
+    await logEvent('CONFIG_ORDER_EXPIRATION',{hours,updated_at:nowISO()});
+    try{
+      const st=await one('rds10_settings','select=id&limit=1');
+      if(st?.id)await patch('rds10_settings','id=eq.'+encodeURIComponent(st.id),{order_expiration_hours:hours,updated_at:nowISO()});
+    }catch(e){console.warn('[RDS] configuração legada de expiração não persistida:',e.message);}
+    const saved=await rdsOrderExpirationHours();
+    if(Math.abs(saved-hours)>0.0001)throw new Error('A configuração de expiração não foi confirmada.');
+    res.json({ok:true,hours:saved});
   }catch(e){res.status(400).json({error:e.message});}
 });
 
@@ -105,7 +116,7 @@ handleInbound=async function(message){
 
 setTimeout(()=>rdsExpireActiveOrders().catch(()=>{}),15000);
 setInterval(()=>rdsExpireActiveOrders().catch(()=>{}),60000);
-console.log('[RDS] expiração 3h editável + CRM de interessados + retorno de fila instalados');
+console.log('[RDS] expiração editável + CRM de interessados + retorno de fila instalados');
 `;
 
 const anchor='app.listen(PORT,async()=>{';
