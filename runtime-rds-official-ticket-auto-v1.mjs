@@ -1,0 +1,175 @@
+import fs from 'node:fs';
+
+const path='server.js';
+let server=fs.readFileSync(path,'utf8');
+const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V1';
+if(server.includes(marker)){
+  console.log('[RDS] emissão automática oficial já aplicada');
+  process.exit(0);
+}
+const listen="app.listen(PORT,async()=>{";
+const pos=server.indexOf(listen);
+if(pos<0)throw new Error('app.listen não localizado para emissão automática oficial.');
+
+const block=`
+// RDS OFFICIAL TICKET AUTO DELIVERY V1
+(()=>{
+  const NL=String.fromCharCode(10);
+  let running=false;
+
+  function firstValue(root,keys){
+    for(const key of keys){
+      const parts=key.split('.');
+      let v=root;
+      for(const p of parts)v=v?.[p];
+      if(v!==undefined&&v!==null&&String(v).trim()!=='')return v;
+    }
+    return null;
+  }
+
+  function extractSaleInfo(sale){
+    const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
+    const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl']);
+    const booklets=firstValue(sale,['booklets','tickets','data.booklets','data.tickets']);
+    const numbers=firstValue(sale,['ticketNumbers','bookletNumbers','numbers','data.ticketNumbers','data.bookletNumbers']);
+    return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,booklets,numbers};
+  }
+
+  function ticketText(order,info){
+    const lines=[
+      '🎟️ *BILHETES GERADOS*','',
+      'Pedido: *'+order.code+'*',
+      'Cliente: *'+cleanText(order.customer_name||'Cliente')+'*'
+    ];
+    if(info.saleId)lines.push('Venda oficial: *'+info.saleId+'*');
+    const list=Array.isArray(info.numbers)?info.numbers:Array.isArray(info.booklets)?info.booklets:null;
+    if(list?.length){
+      lines.push('', '🎫 *Bilhetes:*');
+      for(const item of list){
+        if(item&&typeof item==='object'){
+          const n=firstValue(item,['number','ticketNumber','bookletNumber','code','id']);
+          lines.push('• '+cleanText(n||JSON.stringify(item)));
+        }else lines.push('• '+cleanText(item));
+      }
+    }
+    lines.push('','✅ Pagamento confirmado e bilhetes emitidos pelo sistema oficial REINO DA SORTE.','Boa sorte! 🍀');
+    return lines.join(NL);
+  }
+
+  async function sendOfficialProof(order,info){
+    const phone=normalizeBR(order.phone||order.contact_phone||'');
+    if(!phone)throw new Error('Telefone do cliente não informado.');
+    const target=await ensureTargetJid(phone);
+    if(info.pdfUrl){
+      const r=await sendToJid(target.jid,{
+        document:{url:info.pdfUrl},
+        mimetype:'application/pdf',
+        fileName:'bilhetes-'+order.code+'.pdf',
+        caption:ticketText(order,info)
+      });
+      await logMessage({phone,direction:'OUT',type:'document',body:'Bilhetes gerados — '+order.code,status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfUrl:info.pdfUrl}});
+      return r;
+    }
+    const text=ticketText(order,info);
+    const r=await sendToJid(target.jid,{text});
+    await logMessage({phone,direction:'OUT',type:'text',body:text,status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId}});
+    return r;
+  }
+
+  async function issueOne(order){
+    if(!order?.id)return;
+    if(String(order.official_issue_status||'')==='EMITIDO')return;
+    if(String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
+
+    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
+    if(sellerId&&String(order.seller_id||'')!==String(sellerId))return;
+    if(String(order.official_issue_status||'')==='EMITINDO')return;
+
+    await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
+
+    try{
+      if(typeof rdsFinalRequest!=='function')throw new Error('Integração oficial REINO DA SORTE indisponível no runtime.');
+      const draw=await rdsFinalRequest('/seller/draw-info');
+      if(!draw||draw.isDrawClosed)throw new Error('Sorteio oficial encerrado ou indisponível.');
+      const quantity=Math.max(1,Math.floor(Number(order.quantity||0)));
+      if(Number(draw.totalBooklets||draw.availableBooklets||0)<quantity)throw new Error('Quantidade solicitada maior que a disponibilidade oficial.');
+      const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{
+        method:'POST',
+        body:JSON.stringify({
+          drawId:draw.drawId,
+          customerName:cleanText(order.customer_name),
+          customerPhone:normalizeBR(order.phone||order.contact_phone),
+          quantityBooklets:quantity,
+          lotNumber:1,
+          paymentMethod:String(order.payment_method||'pix').toLowerCase()
+        })
+      });
+      const info=extractSaleInfo(sale);
+      if(!info.saleId)throw new Error('Sistema oficial não retornou o identificador da venda.');
+
+      await patch('rds10_orders','id=eq.'+order.id,{
+        official_sale_id:info.saleId,
+        official_issue_status:'EMITIDO',
+        official_issue_at:nowISO(),
+        official_ticket_url:info.pdfUrl||null,
+        official_ticket_payload:sale||null,
+        official_issue_error:null,
+        updated_at:nowISO()
+      });
+      await logEvent('BILHETES_EMITIDOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,provider:'REINO_DA_SORTE'});
+
+      try{
+        await sendOfficialProof(order,info);
+        await patch('rds10_orders','id=eq.'+order.id,{status:'CONCLUIDO',tickets_sent_at:nowISO(),completed_at:nowISO(),official_issue_status:'CONCLUIDO',updated_at:nowISO()});
+        await logEvent('BILHETES_ENVIADOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,phone:order.phone});
+      }catch(e){
+        await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:String(e?.message||e),updated_at:nowISO()});
+        await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:String(e?.message||e)});
+      }
+    }catch(e){
+      await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'ERRO',official_issue_error:String(e?.message||e),updated_at:nowISO()});
+      await addAlert('EMISSAO_OFICIAL_FALHA','Falha na emissão oficial — '+order.code,{order:order.code,error:String(e?.message||e)});
+      await logEvent('ERRO_EMISSAO_OFICIAL',{order:order.code,order_id:order.id,error:String(e?.message||e)});
+    }
+  }
+
+  async function retryOfficialDelivery(){
+    if(running||!connected)return;
+    running=true;
+    try{
+      const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
+      const filter=sellerId
+        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=50'
+        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=50';
+      const rows=await list('rds10_orders',filter);
+      for(const o of rows)await issueOne(o);
+
+      const pending=await list('rds10_orders','select=*&official_issue_status=eq.EMITIDO_AGUARDANDO_ENVIO&order=updated_at.asc&limit=20').catch(()=>[]);
+      for(const o of pending){
+        try{
+          const info=extractSaleInfo(o.official_ticket_payload||{saleId:o.official_sale_id,pdfUrl:o.official_ticket_url});
+          await sendOfficialProof(o,info);
+          await patch('rds10_orders','id=eq.'+o.id,{status:'CONCLUIDO',tickets_sent_at:nowISO(),completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
+        }catch(e){
+          await patch('rds10_orders','id=eq.'+o.id,{official_issue_error:String(e?.message||e),updated_at:nowISO()}).catch(()=>{});
+        }
+      }
+    }catch(e){console.error('[RDS] emissão automática:',e?.message||e);}
+    finally{running=false;}
+  }
+
+  setTimeout(()=>retryOfficialDelivery().catch(()=>{}),12000);
+  setInterval(()=>retryOfficialDelivery().catch(()=>{}),30000);
+  app.get('/api/v1012/official-sales/auto-status',async(req,res)=>{
+    try{
+      const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
+      const rows=await list('rds10_orders','select=id,code,status,official_sale_id,official_issue_status,official_issue_error,official_ticket_url,official_issue_at&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=100');
+      res.json({ok:true,sellerId,pending:rows});
+    }catch(e){res.status(500).json({ok:false,error:e.message});}
+  });
+})();
+`;
+
+server=server.slice(0,pos)+block+'\n'+server.slice(pos);
+fs.writeFileSync(path,server,'utf8');
+console.log('[RDS] emissão automática oficial instalada');
