@@ -13,6 +13,7 @@
       b.dataset.rdsEmitAdded='1';
     });
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{inject();new MutationObserver(inject).observe(document.getElementById('app')||document.body,{childList:true,subtree:true})},{once:true});
-  else{inject();new MutationObserver(inject).observe(document.getElementById('app')||document.body,{childList:true,subtree:true})}
+  window.rdsInjectEmitOrders=inject;
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',inject,{once:true});
+  else inject();
 })();
