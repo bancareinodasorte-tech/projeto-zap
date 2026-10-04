@@ -27,6 +27,8 @@
       setTimeout(()=>{
         try{window.rdsOfficialMaybeRender?.();}catch{}
         try{window.rdsOfficialFinalMaybeRender?.();}catch{}
+        try{window.rdsV11Refresh?.();}catch{}
+        try{window.rdsInterfaceRefresh?.();}catch{}
       },0);
     }
   }
