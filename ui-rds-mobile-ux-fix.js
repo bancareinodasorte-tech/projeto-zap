@@ -17,12 +17,7 @@
       wrap.appendChild(card);
     });
   };
-  // Apenas o primeiro carregamento pode aplicar o estado inicial fechado.
-  // Não fechar novamente durante mutações evita o efeito de abrir e retrair imediatamente.
-  const closeOrderSectionsInitially=()=>{
-    app.querySelectorAll('details.rds-collapse').forEach(d=>d.removeAttribute('open'));
-  };
-  enhanceTables();
-  closeOrderSectionsInitially();
-  new MutationObserver(enhanceTables).observe(app,{childList:true,subtree:true});
+  const closeOrderSectionsInitially=()=>app.querySelectorAll('details.rds-collapse').forEach(d=>d.removeAttribute('open'));
+  window.rdsMobileUxRefresh=()=>{enhanceTables();closeOrderSectionsInitially();};
+  window.rdsMobileUxRefresh();
 })();
