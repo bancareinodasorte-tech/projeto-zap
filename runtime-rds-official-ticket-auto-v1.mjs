@@ -78,7 +78,7 @@ const block=`
 
   async function issueOne(order){
     if(!order?.id)return;
-    if(String(order.official_issue_status||'')==='EMITIDO')return;
+    if(['EMITIDO','EMITIDO_AGUARDANDO_ENVIO','CONCLUIDO'].includes(String(order.official_issue_status||'')))return;
     if(String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
 
     const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
