@@ -63,7 +63,7 @@ async function payments(){
     const items=[...list.querySelectorAll(".rds-cancel-item")];
     const apply=()=>{const q=String(input.value||"").toLowerCase().trim();const n=Math.max(1,Number(limit?.value||10));let visible=0;items.forEach((item,i)=>{const match=!q||String(item.dataset.search||"").includes(q);const ok=match&&i<n;item.style.display=ok?"":"none";if(ok)visible++;});if(count)count.textContent=q?visible+" encontrado(s)":Math.min(items.length,n)+" de "+items.length+" pedido(s)";};
     input.addEventListener("input",apply);limit?.addEventListener("change",apply);
-    clear?.addEventListener("click",async()=>{if(!confirm("Deseja limpar histórico?"))return;try{await F("/api/operator/cancel-history/clear",{method:"POST"});toast?.("Histórico limpo.");await payments();}catch(e){toast?.(e.message||"Não foi possível limpar o histórico.");}});
+    clear?.addEventListener("click",async()=>{if(!confirm("Deseja limpar histórico?"))return;try{await fetch("/api/operator/cancel-history/clear",{method:"POST",headers:{"Content-Type":"application/json"}}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Não foi possível limpar o histórico.");return d;});toast?.("Histórico limpo.");await payments();}catch(e){toast?.(e.message||"Não foi possível limpar o histórico.");}});
     apply();
   }
   function ensureCancelStyles(){
