@@ -40,7 +40,23 @@ async function renderAccountNative(){
  else if(page==='execution')await automation();
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
- else if(page==='payments'){if(typeof window.rdsPaymentsRefined==='function')await window.rdsPaymentsRefined();else throw new Error('Renderer refinado de Pagamentos não foi carregado.');}
+ else if(page==='payments'){
+   if(typeof window.rdsPaymentsRefined!=='function'){
+     await new Promise((resolve,reject)=>{
+       const id='rdsPaymentsRefinedRuntime';
+       const old=document.getElementById(id);
+       if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(new Error('Não foi possível carregar o módulo de Pagamentos.')),{once:true});return;}
+       const s=document.createElement('script');
+       s.id=id;
+       s.src='ui-rds-dashboard-orders-payments-fix.js?v=2004&rds='+Date.now();
+       s.onload=resolve;
+       s.onerror=()=>reject(new Error('Não foi possível carregar o módulo de Pagamentos.'));
+       document.body.appendChild(s);
+     });
+   }
+   if(typeof window.rdsPaymentsRefined!=='function')throw new Error('Renderer refinado de Pagamentos não foi carregado.');
+   await window.rdsPaymentsRefined();
+ }
  else if(page==='account'){
    await renderAccountNative();
  }
