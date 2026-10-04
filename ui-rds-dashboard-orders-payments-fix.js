@@ -123,5 +123,6 @@ async function payments(){
   const billingObserver=new MutationObserver(bindBillingControl);billingObserver.observe(document.getElementById('app')||document.body,{childList:true,subtree:true});
   const cancelObserver=new MutationObserver(bindCancelHistory);cancelObserver.observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
   setTimeout(bindCancelHistory,0);window.paymentsPage=payments;
+window.rdsPaymentsRefined=payments;
 window.rdsLegacyPaymentsPage=payments;
 })();
