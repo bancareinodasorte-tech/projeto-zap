@@ -66,7 +66,8 @@ ${marker}
      const s=await waPanelSession(req,res);if(!s)return;
      const phone=normalizeBR(req.params.phone);if(!validBRPhone(phone))throw new Error('WhatsApp inválido.');
      const readAt=cleanText(req.body?.read_at)||nowISO();
-     await sb('/rest/v1/rds10_whatsapp_chat_state?on_conflict=seller_id,phone',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({seller_id:s?.seller?.id||'00000000-0000-0000-0000-000000000000',phone,last_read_at:readAt,updated_at:nowISO()})});
+     const sellerId=s?.seller?.id||(typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null)||'00000000-0000-0000-0000-000000000000';
+     await sb('/rest/v1/rds10_whatsapp_chat_state?on_conflict=seller_id,phone',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({seller_id:sellerId,phone,last_read_at:readAt,updated_at:nowISO()})});
      res.json({ok:true,phone,last_read_at:readAt});
    }catch(e){res.status(400).json({ok:false,error:e.message});}
  });
