@@ -18,7 +18,11 @@ ${marker}
      const s=await waPanelSession(req,res);if(!s)return;
      const messages=await list('rds10_messages','select=id,phone,direction,message_type,body,status,created_at,wa_message_id&order=created_at.desc&limit=500');
      const contactsAll=await list('rds10_contacts','select=id,name,phone,group_name,validated,origin&order=updated_at.desc&limit=500');
-     const readStates=await list('rds10_whatsapp_chat_state','select=phone,last_read_at&limit=5000').catch(()=>[]);
+     const sellerId=s?.seller?.id||(typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null);
+     const readQuery=sellerId
+       ? 'select=phone,last_read_at&seller_id=eq.'+encodeURIComponent(sellerId)+'&limit=5000'
+       : 'select=phone,last_read_at&limit=5000';
+     const readStates=await list('rds10_whatsapp_chat_state',readQuery).catch(()=>[]);
      const readMap=new Map(readStates.map(x=>[String(x.phone||''),x.last_read_at]));
      const unreadMap=new Map();
      for(const m of messages){
