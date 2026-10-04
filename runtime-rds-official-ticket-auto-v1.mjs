@@ -93,7 +93,8 @@ const block=`
       const draw=await rdsFinalRequest('/seller/draw-info');
       if(!draw||draw.isDrawClosed)throw new Error('Sorteio oficial encerrado ou indisponível.');
       const quantity=Math.max(1,Math.floor(Number(order.quantity||0)));
-      const available=Number(draw.totalBooklets||draw.availableBooklets||0);
+      const rawAvailable=draw?.availableBooklets ?? draw?.totalBooklets ?? draw?.bookletsAvailable ?? draw?.availableTickets;
+      const available=rawAvailable===null||rawAvailable===undefined||rawAvailable===''?null:Number(rawAvailable);
       await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
         official_inventory_available:Number.isFinite(available)?available:null,
         official_inventory_checked_at:nowISO(),
