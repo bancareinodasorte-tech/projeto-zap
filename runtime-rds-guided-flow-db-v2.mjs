@@ -71,7 +71,7 @@ async function rdsGuidedDbHandle(identity,inbound,m){
     return true;
   }
 
-  if(/^(?:cancelar|cancelar pedido|desistir|não quero|nao quero|sair)$/i.test(text)){
+  if(/^(?:4|cancelar|cancelar pedido|desistir|não quero|nao quero|sair)$/i.test(text)){
     await rdsGuidedDbCancel(order,'CANCELAMENTO_CLIENTE');
     await replyInbound(identity,'✅ *SEU PEDIDO FOI CANCELADO*');
     return true;
