@@ -89,6 +89,7 @@ async function account(){
  }
 }
 
+function sellerName(st){return window.__rdsAccountSellerName||'';}
 async function loadSellerAccountDetails(){
  const mpConnect=document.getElementById('rdsMpConnect');
  const mpDisconnect=document.getElementById('rdsMpDisconnect');
@@ -123,10 +124,23 @@ async function loadSellerAccountDetails(){
  try{
   const d=await sellerData();
   const st=d.settings||{},m=d.mp||{},connected=Boolean(m.configured);
+  window.__rdsAccountSellerName=(d.me||{}).name||'';
+  window.__rdsAccountSellerEmail=(d.me||{}).email||'';
+  window.__rdsAccountSellerPhone=(d.me||{}).phone||'';
   window.__rdsAccountSettings=st;
   document.getElementById('rdsAccountPix').value=st.pix_key||'';
   document.getElementById('rdsAccountPixName').value=st.pix_name||'';
   document.getElementById('rdsAccountEmail').value=st.official_email||'';
+  const summaryName=document.getElementById('rdsAccountSummaryName');
+  const summaryPixName=document.getElementById('rdsAccountSummaryPixName');
+  const summaryPix=document.getElementById('rdsAccountSummaryPix');
+  const summaryEmail=document.getElementById('rdsAccountSummaryEmail');
+  const summaryPhone=document.getElementById('rdsAccountSummaryPhone');
+  if(summaryName)summaryName.textContent=sellerName(st)||'—';
+  if(summaryPixName)summaryPixName.textContent=st.pix_name||'Não cadastrada';
+  if(summaryPix)summaryPix.textContent=st.pix_key||'Não cadastrada';
+  if(summaryEmail)summaryEmail.textContent=window.__rdsAccountSellerEmail||'Não informado';
+  if(summaryPhone)summaryPhone.textContent=window.__rdsAccountSellerPhone||'Não informado';
   mpStatus.className='status '+(connected?'ok':'warn');
   mpStatus.textContent=connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado';
   mpConnect.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
@@ -140,7 +154,7 @@ async function loadSellerAccountDetails(){
  }
 }
 async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;openLogin('Sessão encerrada.');}
-window.rdsUnifiedAccountPage=account;
+<style id="rdsAccountRefinedStyles">.rds-account-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.rds-account-summary>div{border:1px solid rgba(30,70,120,.12);border-radius:13px;background:#f8fbff;padding:11px 12px;min-width:0}.rds-account-summary small{display:block;color:#71809a;font-weight:800;font-size:11px;margin-bottom:5px}.rds-account-summary b{display:block;color:#17355d;font-size:14px;line-height:1.25;overflow-wrap:anywhere}@media(max-width:560px){.rds-account-summary{grid-template-columns:1fr}}</style>window.rdsUnifiedAccountPage=account;
 window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='login'){setTimeout(()=>openLogin(),0);}});
