@@ -68,7 +68,7 @@ async function rdsExpireOneOrder(order){
   await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'EXPIRADO_PAGAMENTO',cancelled_at:nowISO(),updated_at:nowISO()});
   await rdsRestoreQueueAfterExpiration(order.phone);
   await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,reason:'EXPIRADO_PAGAMENTO'});
-  console.log('[RDS] pedido expirado:',order.code,'após',hours,'h');
+  console.log('[RDS] pedido expirado:',order.code,'até',new Date(expiresAt).toISOString());
   return true;
 }
 
