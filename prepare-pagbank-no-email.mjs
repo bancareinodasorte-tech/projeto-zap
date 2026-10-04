@@ -44,6 +44,7 @@ await import('./runtime-rds-campaign-cta-final.mjs');
 await import('./runtime-rds-interval-fix.mjs');
 await import('./runtime-rds-menu-refinement.mjs');
 await import('./runtime-rds-flow-hardening.mjs');
+await import('./runtime-rds-guided-flow-db-v2.mjs');
 await import('./runtime-rds-mercadopago-final.mjs');
 await import('./runtime-rds-mercadopago-oauth-v1.mjs');
 await import('./runtime-rds-mercadopago-order-routes-v1.mjs');
