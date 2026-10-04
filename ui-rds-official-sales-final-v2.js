@@ -1,54 +1,106 @@
 (()=>{
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const json=async(u,o={})=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),8000);try{const r=await fetch(u,{cache:'no-store',...o,signal:ac.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('A integração oficial demorou para responder.');throw e;}finally{clearTimeout(tm);}};
+  const json=async(u,o={})=>{
+    const ac=new AbortController();
+    const tm=setTimeout(()=>ac.abort(),8000);
+    try{
+      const r=await fetch(u,{cache:'no-store',...o,signal:ac.signal});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');
+      return d;
+    }catch(e){
+      if(e?.name==='AbortError')throw new Error('A integração oficial demorou para responder.');
+      throw e;
+    }finally{clearTimeout(tm);}
+  };
 
   async function loadOfficial(){
-    const [b,d]=await Promise.allSettled([
-      json('/api/v1012/official-sales/bootstrap'),
-      json('/api/v1012/official-sales/draw-info')
-    ]);
-    return {
-      bootstrap:b.status==='fulfilled'?b.value:null,
-      draw:d.status==='fulfilled'?(d.value.data||d.value):null,
-      error:b.status==='rejected'?b.reason?.message:(d.status==='rejected'?d.reason?.message:null)
-    };
+    const b=await json('/api/v1011/official-sales/bootstrap');
+    let status=null,draw=null,statusError=null,drawError=null;
+    if(b?.emailConfigured){
+      try{status=await json('/api/v1011/official-sales/status');}catch(e){statusError=e;}
+    }
+    if(status?.authenticated||b?.authorized){
+      try{const d=await json('/api/v1011/official-sales/draw-info');draw=d?.data||d;}catch(e){drawError=e;}
+    }
+    return {bootstrap:b||{},status,draw,statusError,drawError};
   }
 
-  async function renderOfficialCard(){
+  function authModal(){
+    document.querySelector('.rds-official-auth-modal')?.remove();
+    const m=document.createElement('div');
+    m.className='modal rds-official-auth-modal';
+    m.innerHTML='<div><div class="row" style="justify-content:flex-end"><button class="btn" type="button" id="rdsOfficialAuthClose">✕</button></div><span class="eyebrow">AUTORIZAÇÃO DO SERVIDOR</span><h2>Autorizar dispositivo</h2><p>Digite o código gerado pelo administrador do sistema oficial do REINO DA SORTE.</p><input id="rdsOfficialAuthCode" class="input-field" autocomplete="off" placeholder="Código de autorização"><div class="row" style="margin-top:12px"><button class="btn primary" type="button" id="rdsOfficialAuthSubmit">Autorizar</button></div><p id="rdsOfficialAuthMsg" class="mut"></p></div>';
+    document.body.appendChild(m);
+    document.getElementById('rdsOfficialAuthClose')?.addEventListener('click',()=>m.remove());
+    document.getElementById('rdsOfficialAuthSubmit')?.addEventListener('click',async()=>{
+      const code=String(document.getElementById('rdsOfficialAuthCode')?.value||'').trim();
+      const msg=document.getElementById('rdsOfficialAuthMsg');
+      if(!code){msg.textContent='Digite o código de autorização.';return;}
+      msg.textContent='Autorizando dispositivo...';
+      try{
+        await json('/api/v1011/official-sales/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({authorizationCode:code})});
+        m.remove();
+        alert('🟢 Dispositivo oficial autorizado com sucesso.');
+        await renderOfficialCard(true);
+      }catch(e){msg.textContent=e.message||'Código inválido ou expirado.';}
+    });
+    document.getElementById('rdsOfficialAuthCode')?.focus();
+  }
+
+  async function renderOfficialCard(force=false){
     const app=document.querySelector('#app');
     if(!app)return;
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
     if(p!=='orders')return;
-    if(document.getElementById('rdsOfficialIntegrationV2'))return;
+    const old=document.getElementById('rdsOfficialIntegrationV2');
+    if(old&&!force)return;
+    old?.remove();
 
     const card=document.createElement('section');
     card.id='rdsOfficialIntegrationV2';
     card.className='card rds-issuer-card';
-    card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><p class="mut">Emissão dos bilhetes após pagamento confirmado.</p><div class="priority"><strong>Verificando conexão...</strong></div>';
-    if(p==='orders')app.prepend(card);else app.appendChild(card);
+    card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p><div class="priority"><strong>Verificando integração oficial...</strong></div>';
+    app.prepend(card);
 
     try{
       const d=await loadOfficial();
       const b=d.bootstrap||{};
-      const authorized=Boolean(b.authorized);
+      const authorized=Boolean(d.status?.authenticated||b.authorized);
       const draw=d.draw||{};
-      const drawOk=Boolean(draw&&draw.drawId&&!draw.isDrawClosed);
-      const status=authorized&&drawOk?'ok':authorized?'warn':'bad';
+      const drawOk=Boolean(draw?.drawId&&!draw?.isDrawClosed);
+      let stateHtml='';
+      if(authorized){
+        stateHtml='<div class="status ok">🟢 Sistema oficial autorizado</div>';
+      }else if(b.emailConfigured){
+        stateHtml='<div class="status bad">🔴 Sistema oficial não autorizado</div><p class="mut" style="margin-top:8px">O dispositivo do servidor precisa estar autorizado para a emissão automática.</p>';
+      }else{
+        stateHtml='<div class="status bad">🔴 Credenciais oficiais não configuradas</div>';
+      }
+
+      const action=authorized
+        ? '<button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button>'
+        : (b.emailConfigured
+          ? '<div class="row"><button class="btn primary" type="button" id="rdsOfficialAuthorizeV2">Autorizar este dispositivo</button><button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button></div>'
+          : '<button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button>');
+
       card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2>'+
         '<p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p>'+
-        '<div class="status '+status+'">'+(authorized?'🟢 Sistema oficial conectado':'🔴 Sistema oficial não autorizado')+'</div>'+
+        stateHtml+
         '<div class="priority" style="margin-top:10px"><strong>Sorteio</strong><span class="mut">'+esc(draw?.drawTitle||draw?.title||draw?.name||'Não consultado')+' • '+(draw?.drawId?'Disponível':'Indisponível')+'</span></div>'+
         (draw?.pricePerTicket!=null?'<div class="priority"><strong>Valor oficial</strong><span class="mut">'+money(draw.pricePerTicket)+'</span></div>':'')+
         (draw?.totalBooklets!=null?'<div class="priority"><strong>Disponibilidade</strong><span class="mut">'+esc(draw.totalBooklets)+'</span></div>':'')+
-        '<div class="row" style="margin-top:12px"><button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button></div>'+
-        (d.error?'<p class="mut" style="margin-top:8px">'+esc(d.error)+'</p>':'');
-      document.getElementById('rdsOfficialRefreshV2')?.addEventListener('click',async()=>{
-        card.remove();
-        await renderOfficialCard();
-      });
+        '<div class="row" style="margin-top:12px">'+action+'</div>'+
+        (d.statusError&&!authorized?'<p class="mut" style="margin-top:8px">'+esc(d.statusError.message||d.statusError)+'</p>':'')+
+        (d.drawError?'<p class="mut" style="margin-top:8px">'+esc(d.drawError.message||d.drawError)+'</p>':'')+
+        '<p class="mut" style="margin-top:8px">Dispositivo: '+esc(b.deviceId||'—')+'</p>';
+
+      document.getElementById('rdsOfficialAuthorizeV2')?.addEventListener('click',authModal);
+      document.getElementById('rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
     }catch(e){
-      card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><div class="status bad">🔴 Falha ao consultar integração</div><p class="mut">'+esc(e.message)+'</p>';
+      card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><div class="status bad">🔴 Falha ao consultar integração</div><p class="mut">'+esc(e.message)+'</p><div class="row" style="margin-top:12px"><button class="btn" type="button" id="rdsOfficialRefreshV2">Tentar novamente</button></div>';
+      document.getElementById('rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
     }
   }
 
@@ -62,7 +114,7 @@
     holder.id='rdsOfficialAutoStatusV2';
     holder.className='card';
     holder.innerHTML='<span class="eyebrow">PÓS-PAGAMENTO</span><h2>Emissão automática</h2><p class="mut">Pagamento confirmado → emissão oficial → envio ao WhatsApp → conclusão.</p>';
-    const target=app.querySelector('.rds-issuer-card,#rdsOfficialIntegrationV2');
+    const target=app.querySelector('#rdsOfficialIntegrationV2,.rds-issuer-card');
     if(target)target.after(holder);else app.prepend(holder);
     try{
       const d=await json('/api/v1012/official-sales/auto-status');
@@ -79,7 +131,7 @@
       const o=orders.find(x=>String(x.id)===String(id));
       if(!o)throw new Error('Pedido não encontrado para este vendedor.');
       if(o.status!=='PAGO_AGUARDANDO_BILHETES')throw new Error('O pedido precisa estar em PAGO_AGUARDANDO_BILHETES.');
-      const r=await json('/api/v1012/official-sales/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName:o.customer_name,customerPhone:o.phone||o.contact_phone,quantityBooklets:o.quantity,paymentMethod:o.payment_method||'pix'})});
+      const r=await json('/api/v1011/official-sales/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id})});
       const saleId=String(r.data?.saleId||r.data?.id||r.data?.data?.saleId||'');
       await json('/api/operator/orders/'+encodeURIComponent(id)+'/tickets-sent',{method:'POST'});
       alert('🟢 Emissão oficial concluída'+(saleId?' — venda '+saleId:'')+'.');
