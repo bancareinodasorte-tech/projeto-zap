@@ -56,9 +56,15 @@ async function rdsExpireOneOrder(order){
   if(!order?.id)return false;
   const status=String(order.status||'');
   if(!['COLETANDO_DADOS','AGUARDANDO_PAGAMENTO'].includes(status))return false;
-  const created=Date.parse(order.created_at||'');
-  const hours=await rdsOrderExpirationHours();
-  if(!Number.isFinite(created)||Date.now()-created < hours*3600000)return false;
+  let expiresAt=Date.parse(order.order_expires_at||'');
+  if(!Number.isFinite(expiresAt)){
+    const created=Date.parse(order.created_at||'');
+    const hours=await rdsOrderExpirationHours();
+    if(!Number.isFinite(created))return false;
+    expiresAt=created+hours*3600000;
+    await patch('rds10_orders','id=eq.'+order.id,{order_expires_at:new Date(expiresAt).toISOString(),updated_at:nowISO()}).catch(()=>{});
+  }
+  if(Date.now()<expiresAt)return false;
   await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'EXPIRADO_PAGAMENTO',cancelled_at:nowISO(),updated_at:nowISO()});
   await rdsRestoreQueueAfterExpiration(order.phone);
   await logEvent('PEDIDO_EXPIRADO',{phone:order.phone,order:order.code,reason:'EXPIRADO_PAGAMENTO'});
