@@ -8,7 +8,7 @@
     if(!pending.length){old?.remove();return}
     if(old){
       const count=old.querySelector('[data-count]');
-      if(count)count.textContent=String(pending.length);
+      if(count&&count.textContent!==String(pending.length))count.textContent=String(pending.length);
       return;
     }
     const anchor=app.querySelector('.rds-ops-summary');
@@ -35,6 +35,6 @@
     @media(max-width:760px){.rds-postpayment-alert{align-items:stretch;flex-direction:column}.rds-postpayment-alert .btn{width:100%}}
   `;
   document.head.appendChild(style);
-  new MutationObserver(apply).observe(document.body,{childList:true,subtree:true});
+  window.rdsPostPaymentRefresh=apply;
   setTimeout(apply,0);
 })();
