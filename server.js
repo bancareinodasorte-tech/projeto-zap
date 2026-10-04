@@ -496,9 +496,9 @@ async function findContact(phone){
   if(!key) return null;
   let c = await one('rds10_contacts',`select=*&phone=eq.${encodeURIComponent(key)}`);
   if(c) return c;
-  // Compatibilidade com cadastros antigos em formatações diferentes.
-  const rows = await list('rds10_contacts','select=*');
-  return rows.find(x => phoneKey(x.phone) === key) || null;
+  // Não fazer varredura da tabela inteira aqui: isso deixava o cadastro lento
+  // e podia ultrapassar o timeout quando o CRM tinha muitos registros.
+  return null;
 }
 async function saveOrMergeContact(data, {preferExisting=true}={}){
   const phone = phoneKey(data.phone);
@@ -841,8 +841,9 @@ app.post('/api/contacts',async(req,res)=>{
   try{
     const phone=phoneKey(req.body.phone);
     if(!phone) throw new Error('Telefone inválido.');
-    const found=connected?await sock.onWhatsApp(`${phone}@s.whatsapp.net`):null;
-    const valid=connected?Boolean(found?.[0]?.exists):false;
+    // Cadastro manual não deve depender de uma consulta ao WhatsApp.
+    // A validação do número é uma ação separada no botão "Validar".
+    const valid=false;
     const r=await saveOrMergeContact({
       name:req.body.name,phone,
       group_name:req.body.group_name||'NOVOS',
