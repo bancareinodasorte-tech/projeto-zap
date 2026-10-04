@@ -27,7 +27,7 @@
     apply();
   };
   const wrapOrders=()=>{if(typeof window.orders!=='function'||window.orders.__rdsSearchWrapped)return;const original=window.orders;const wrapped=async function(){const r=await original.apply(this,arguments);setTimeout(wire,0);return r};wrapped.__rdsSearchWrapped=true;window.orders=wrapped};
-  wrapOrders();new MutationObserver(()=>{wrapOrders();wire()}).observe(document.body,{childList:true,subtree:true});
+  wrapOrders();
   const style=document.createElement('style');style.textContent=`
     .rds-search-box{position:relative!important;display:flex!important;align-items:center!important;width:100%!important}
     .rds-search-box input{width:100%!important;padding-left:16px!important;padding-right:78px!important}
