@@ -91,6 +91,24 @@
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',bindNavigation,{once:true});
   }
+  // Garante que o primeiro carregamento nunca deixe a interface presa invisível.
+  const bootWatchdog=setInterval(()=>{
+    if(!document.body.classList.contains('rds-booting')){
+      clearInterval(bootWatchdog);
+      return;
+    }
+    const target=window.page||localStorage.getItem('rds_current_page')||'home';
+    if(!document.getElementById('rdsBootRecovery')){
+      const box=document.createElement('div');
+      box.id='rdsBootRecovery';
+      box.className='card';
+      box.style.cssText='position:fixed;left:16px;right:16px;top:96px;z-index:9999';
+      box.innerHTML='<h2>Painel demorando para carregar</h2><p class="mut">A operação continua protegida. Tente carregar novamente a página atual.</p><button class="btn primary" type="button">↻ Carregar painel</button>';
+      box.querySelector('button')?.addEventListener('click',()=>{box.remove();stableRender();});
+      document.body.appendChild(box);
+    }
+    document.body.classList.remove('rds-booting');
+  },8000);
   new MutationObserver(()=>{bindNavigation();stableSetNav();}).observe(document.body,{childList:true,subtree:true});
   setInterval(stableSetNav,500);
 })();
