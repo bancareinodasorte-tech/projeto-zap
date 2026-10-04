@@ -171,7 +171,75 @@ rdsPagBankCreatePix=rdsMercadoPagoCreatePix;
 rdsApplyPagBankResult=rdsMercadoPagoApplyResult;
 rdsPagBankWebhookValid=rdsMercadoPagoWebhookValid;
 rdsPagBankAutoReconcile=rdsMercadoPagoAutoReconcile;
-`;
+
+async function rdsCancelMercadoPagoForClosedOrder(order){
+  if(!order?.id || !order?.pagbank_order_id) return {ok:true,skipped:true};
+  const status=String(order.pagbank_status||'').toUpperCase();
+  if(['PROCESSED','APPROVED','ACCREDITED','PAID'].includes(status)){
+    await addAlert('PAGAMENTO_PEDIDO_CANCELADO','Pagamento identificado em pedido já cancelado',{order:order.code,order_id:order.id,pagbank_status:status});
+    await logEvent('PAGAMENTO_EM_PEDIDO_CANCELADO',{order:order.code,order_id:order.id,pagbank_status:status});
+    return {ok:false,paid:true};
+  }
+  if(['CANCELED','CANCELLED','EXPIRED','REJECTED'].includes(status)){
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancelled_at:order.payment_cancelled_at||nowISO(),payment_cancel_error:null,pagbank_status:status,updated_at:nowISO()}).catch(()=>{});
+    return {ok:true,already:true};
+  }
+  const cfg=await rdsMercadoPagoTenantConfig(order);
+  let lastError='';
+  try{
+    const data=await rdsMercadoPagoRequest('/v1/orders/'+encodeURIComponent(order.pagbank_order_id)+'/cancel',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({})},cfg.token);
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancelled_at:nowISO(),payment_cancel_error:null,pagbank_status:'CANCELLED',payment_updated_at:nowISO(),updated_at:nowISO()});
+    await logEvent('MERCADOPAGO_COBRANCA_CANCELADA',{order:order.code,order_id:order.id,source:'order_cancel',status:data?.status||'canceled'});
+    return {ok:true,method:'order_cancel'};
+  }catch(e){lastError=String(e?.message||e);}
+  if(order.pagbank_charge_id){
+    try{
+      const data=await rdsMercadoPagoRequest('/v1/payments/'+encodeURIComponent(order.pagbank_charge_id),{method:'PUT',body:JSON.stringify({status:'cancelled'})},cfg.token);
+      await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancelled_at:nowISO(),payment_cancel_error:null,pagbank_status:'CANCELLED',payment_updated_at:nowISO(),updated_at:nowISO()});
+      await logEvent('MERCADOPAGO_COBRANCA_CANCELADA',{order:order.code,order_id:order.id,source:'payment_cancel',status:data?.status||'cancelled'});
+      return {ok:true,method:'payment_cancel'};
+    }catch(e){lastError=lastError+' | fallback payment: '+String(e?.message||e);}
+  }
+  await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{payment_cancel_error:lastError.slice(0,1800),payment_updated_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+  await addAlert('MERCADO_PAGO_CANCELAMENTO_FALHOU','Não foi possível encerrar a cobrança do pedido '+order.code,{order:order.code,order_id:order.id,error:lastError});
+  return {ok:false,error:lastError};
+}
+
+async function rdsNotifyClosedOrder(order){
+  if(!order?.id || !order?.phone || order.expiration_notified_at)return false;
+  const reason=String(order.cancel_reason||'').toUpperCase();
+  const deadline=order.order_expires_at?new Date(order.order_expires_at):null;
+  const deadlineText=deadline&&!Number.isNaN(deadline.getTime())?deadline.toLocaleString('pt-BR',{timeZone:'America/Fortaleza',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'}):'o prazo informado anteriormente';
+  const message=reason==='EXPIRADO_PAGAMENTO'
+    ? '⚠️ *PEDIDO EXPIRADO E CANCELADO*\\n\\nPedido: *'+cleanText(order.code)+'*\\nPrazo encerrado em: *'+deadlineText+'*\\n\\nO pedido foi cancelado por falta de pagamento. *NÃO PAGUE O PIX ANTERIOR*, pois ele não deve mais ser utilizado.\\n\\nSe ainda quiser comprar, inicie um novo pedido pelo WhatsApp.'
+    : '⚠️ *PEDIDO CANCELADO*\\n\\nPedido: *'+cleanText(order.code)+'*\\n\\nEste pedido foi encerrado. *NÃO PAGUE O PIX ANTERIOR*.\\n\\nSe ainda quiser comprar, inicie um novo pedido pelo WhatsApp.';
+  try{
+    await sendTextPhone(order.phone,message);
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{expiration_notified_at:nowISO(),updated_at:nowISO()});
+    return true;
+  }catch(e){
+    await logEvent('AVISO_CANCELAMENTO_WHATSAPP_FALHOU',{order:order.code,order_id:order.id,error:String(e?.message||e)});
+    return false;
+  }
+}
+
+async function rdsCloseMercadoPagoOrders(){
+  try{
+    const sellerId=await rdsWhatsappSellerId();
+    if(!sellerId)return;
+    const rows=await list('rds10_orders','select=*&seller_id=eq.'+encodeURIComponent(sellerId)+'&status=eq.CANCELADO&cancel_reason=in.(EXPIRADO_PAGAMENTO,CANCELAMENTO_MANUAL,CANCELAMENTO_CLIENTE)&pagbank_order_id=not.is.null&order=updated_at.asc&limit=100');
+    for(const order of rows||[]){
+      try{
+        if(!order.payment_cancelled_at)await rdsCancelMercadoPagoForClosedOrder(order);
+        await rdsNotifyClosedOrder(order);
+      }catch(e){console.error('[RDS] fechamento MP '+String(order.code||order.id)+':',e?.message||e);}
+    }
+  }catch(e){console.error('[RDS] guard cancelamento MP:',e?.message||e);}
+}
+setTimeout(()=>rdsCloseMercadoPagoOrders().catch(()=>{}),20000);
+setInterval(()=>rdsCloseMercadoPagoOrders().catch(()=>{}),60000);
+console.log('[RDS] cancelamento Mercado Pago + aviso WhatsApp instalados');
+
 
 server=server.slice(0,pos)+block+'\n'+server.slice(pos);
 fs.writeFileSync(path,server,'utf8');
