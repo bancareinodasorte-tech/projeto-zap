@@ -21,6 +21,9 @@
     }catch(e){
       if(e?.code==='NAV_STALE'||e?.message==='NAV_STALE')return;
       if(appEl)appEl.innerHTML='<div class="card"><h2>Não foi possível carregar o painel</h2><p class="mut">'+String(e?.message||e).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))+'</p><button class="btn primary" type="button" onclick="window.rdsRenderCurrentPage()">Tentar novamente</button></div>';
+    }finally{
+      document.body.classList.remove('rds-booting');
+      stableSetNav();
     }
   }
 
@@ -85,7 +88,6 @@
   }
 
   bindNavigation();
-  window.addEventListener('load',revealBoot,{once:true});
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',bindNavigation,{once:true});
   }
