@@ -91,7 +91,12 @@ const block=`
     try{
       if(typeof rdsFinalRequest!=='function')throw new Error('Integração oficial REINO DA SORTE indisponível no runtime.');
       const draw=await rdsFinalRequest('/seller/draw-info');
-      if(!draw||draw.isDrawClosed)throw new Error('Sorteio oficial encerrado ou indisponível.');
+      if(!draw||draw.isDrawClosed||draw.isSalesClosed||draw.salesOpen===false){
+        const msg='Sorteio/vendas oficiais encerrados ou indisponíveis para novas emissões.';
+        if(previousIssueStatus!=='AGUARDANDO_CAMPANHA')await addAlert('PEDIDO_PAGO_AGUARDANDO_CAMPANHA','Pedido pago aguardando validação da campanha oficial — '+order.code,{order:order.code});
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:msg,updated_at:nowISO()});
+        return;
+      }
       const quantity=Math.max(1,Math.floor(Number(order.quantity||0)));
       const rawAvailable=draw?.availableBooklets ?? draw?.totalBooklets ?? draw?.bookletsAvailable ?? draw?.availableTickets;
       const available=rawAvailable===null||rawAvailable===undefined||rawAvailable===''?null:Number(rawAvailable);
