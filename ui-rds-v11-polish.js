@@ -34,11 +34,11 @@
       mod.querySelector('div')?.appendChild(box);
     }catch{}
   }
-  const rdsModalObserver=new MutationObserver(annotateOrderModal);
-  rdsModalObserver.observe(document.body,{childList:true,subtree:true});
+  window.rdsAnnotateOrderModal=annotateOrderModal;
   function settingsHook(){const app=document.querySelector('#app');if(!app||!app.innerHTML.includes('<h1>Ajustes</h1>')||document.getElementById('rdsIssuerCard'))return;const holder=document.createElement('div');holder.id='rdsIssuerCard';holder.className='card rds-issuer-card';holder.innerHTML=`<span class="eyebrow">Integração operacional</span><h2>Emissor de bilhetes</h2><p class="mut">A integração oficial é a rota principal. Este campo fica apenas como contingência manual.</p><label>URL do emissor manual</label><input id="rdsIssuerUrl" inputmode="url" placeholder="https://seu-emissor.exemplo/emitir" value="${esc(getIssuer())}"><p class="mini">No Android, a URL poderá abrir um aplicativo associado. No iPhone/PC, abrirá no navegador.</p><div class="row">${btn('Salvar emissor',"rdsSaveIssuer()",'btn primary')}${getIssuer()?btn('Testar abertura',"rdsTestIssuer()",'btn'):''}</div>`;app.appendChild(holder)}
   window.rdsSaveIssuer=()=>{setIssuer(document.getElementById('rdsIssuerUrl')?.value||'');toast('Emissor salvo neste dispositivo')};window.rdsTestIssuer=()=>{const u=getIssuer();if(u)window.open(u,'_blank','noopener,noreferrer')};
   function nav(){}
-  function boot(){header();addAboutNav();nav();compactWhatsApp();const obs=new MutationObserver(()=>{header();addAboutNav();nav();settingsHook()});obs.observe(document.getElementById('app')||document.body,{childList:true,subtree:true})}
+  window.rdsV11Refresh=()=>{header();addAboutNav();nav();settingsHook();annotateOrderModal()};
+  function boot(){header();addAboutNav();nav();compactWhatsApp();settingsHook();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
