@@ -24,6 +24,10 @@
     }finally{
       document.body.classList.remove('rds-booting');
       stableSetNav();
+      setTimeout(()=>{
+        try{window.rdsOfficialMaybeRender?.();}catch{}
+        try{window.rdsOfficialFinalMaybeRender?.();}catch{}
+      },0);
     }
   }
 
