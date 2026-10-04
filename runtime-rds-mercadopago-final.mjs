@@ -116,7 +116,8 @@ async function rdsMercadoPagoCreatePix(order){
   const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(payload)},cfg.token);
   const qr=rdsMercadoPagoQR(data);if(!qr?.text)throw new Error('Mercado Pago não retornou o PIX copia e cola.');
   const createdAt=data?.created_date?new Date(data.created_date).getTime():Date.now();
-  const expiresAt=new Date(createdAt+MERCADOPAGO_PIX_EXPIRATION_HOURS*3600000).toISOString();
+  const requestedOrderExpiry=Date.parse(order?.order_expires_at||'');
+  const expiresAt=Number.isFinite(requestedOrderExpiry)?new Date(requestedOrderExpiry).toISOString():new Date(createdAt+MERCADOPAGO_PIX_EXPIRATION_HOURS*3600000).toISOString();
   const status=rdsMercadoPagoStatus(data);
   await patch('rds10_orders','id=eq.'+order.id,{pagbank_order_id:data.id,pagbank_charge_id:qr.id,pagbank_status:status,pix_copy_paste:qr.text,pix_qr_code_url:qr.url||null,pix_expires_at:expiresAt,payment_method:'PIX_MERCADOPAGO',payment_created_at:nowISO(),payment_updated_at:nowISO(),payment_last_error:null,updated_at:nowISO()});
   await logEvent('MERCADOPAGO_PIX_CRIADO',{order_id:order.id,order:order.code,mercadopago_order_id:data.id,mercadopago_payment_id:qr.id,status});
