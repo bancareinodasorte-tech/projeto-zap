@@ -13,22 +13,32 @@ ${marker}
 async function rdsBillingControlRead(){
   let hours=4, enabled=true, interval_hours=1, max_reminders=3;
   try{
-    const e=await one('rds10_events','select=kind,payload,created_at&kind=in.(CONFIG_ORDER_EXPIRATION,CONFIG_PAYMENT_REMINDERS)&order=created_at.desc&limit=20');
-    for(const x of (Array.isArray(e)?e:[])){
-      if(x.kind==='CONFIG_ORDER_EXPIRATION' && hours===4){
-        const n=Number(x?.payload?.hours);
-        if(Number.isFinite(n)&&n>=0.25&&n<=168)hours=n;
-      }
-      if(x.kind==='CONFIG_PAYMENT_REMINDERS' && enabled===true && interval_hours===1 && max_reminders===3){
-        const p=x?.payload||{};
-        if(typeof p.enabled==='boolean')enabled=p.enabled;
-        const ih=Number(p.interval_hours), mr=Number(p.max_reminders);
-        if(Number.isFinite(ih)&&ih>=0.25&&ih<=24)interval_hours=ih;
-        if(Number.isFinite(mr)&&mr>=1&&mr<=10)max_reminders=mr;
-      }
-    }
+    const exp=await one('rds10_events','select=payload,created_at&kind=eq.CONFIG_ORDER_EXPIRATION&order=created_at.desc&limit=1');
+    const rem=await one('rds10_events','select=payload,created_at&kind=eq.CONFIG_PAYMENT_REMINDERS&order=created_at.desc&limit=1');
+    const eh=Number(exp?.payload?.hours);
+    if(Number.isFinite(eh)&&eh>=0.25&&eh<=168)hours=eh;
+    const p=rem?.payload||{};
+    if(typeof p.enabled==='boolean')enabled=p.enabled;
+    const ih=Number(p.interval_hours), mr=Number(p.max_reminders);
+    if(Number.isFinite(ih)&&ih>=0.25&&ih<=24)interval_hours=ih;
+    if(Number.isFinite(mr)&&mr>=1&&mr<=10)max_reminders=mr;
   }catch{}
-  return {hours,enabled,interval_hours,max_reminders};
+  return rdsNormalizeBillingControl({hours,enabled,interval_hours,max_reminders});
+}
+function rdsNormalizeBillingControl(input){
+  const hours=Math.max(0.25,Math.min(168,Number(input?.hours)||4));
+  const enabled=input?.enabled!==false;
+  let interval=Math.max(0.25,Math.min(24,Number(input?.interval_hours)||1));
+  let max=Math.max(1,Math.min(10,Math.floor(Number(input?.max_reminders)||3)));
+  if(enabled){
+    if(interval>=hours){
+      const candidates=[0.5,1,2,3,4,6,12].filter(x=>x<hours);
+      interval=candidates.length?candidates[candidates.length-1]:Math.max(0.25,hours/2);
+    }
+    const safeMax=Math.max(1,Math.min(10,Math.ceil(hours/interval)-1));
+    max=Math.min(max,safeMax);
+  }
+  return {hours,enabled,interval_hours:interval,max_reminders:max};
 }
 app.get('/api/billing-control',async(req,res)=>{
   try{res.json({ok:true,...await rdsBillingControlRead()});}
@@ -39,11 +49,12 @@ app.put('/api/billing-control',async(req,res)=>{
     const rawHours=Number(req.body?.hours);
     const rawInterval=Number(req.body?.interval_hours);
     const rawMax=Number(req.body?.max_reminders);
-    const hours=Math.max(0.25,Math.min(168,rawHours));
-    const interval_hours=Math.max(0.25,Math.min(24,rawInterval));
-    const max_reminders=Math.max(1,Math.min(10,rawMax));
     if(!Number.isFinite(rawHours)||!Number.isFinite(rawInterval)||!Number.isFinite(rawMax))throw new Error('Configuração de cobrança inválida.');
-    const enabled=req.body?.enabled===true;
+    const normalized=rdsNormalizeBillingControl({hours:rawHours,enabled:req.body?.enabled===true,interval_hours:rawInterval,max_reminders:rawMax});
+    const hours=normalized.hours;
+    const interval_hours=normalized.interval_hours;
+    const max_reminders=normalized.max_reminders;
+    const enabled=normalized.enabled;
     await logEvent('CONFIG_ORDER_EXPIRATION',{hours,source:'BILLING_CONTROL'});
     await logEvent('CONFIG_PAYMENT_REMINDERS',{enabled,interval_hours,max_reminders,source:'BILLING_CONTROL'});
     try{
