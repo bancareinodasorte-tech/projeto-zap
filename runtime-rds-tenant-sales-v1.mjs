@@ -61,7 +61,7 @@ ${marker}
   async function tenantSettings(sellerId){
     return one('rds10_seller_settings','select=seller_id,mp_public_key,mp_access_token_enc,mp_refresh_token_enc,mp_environment,pix_key,pix_name,official_email,official_authorized,official_device_id&seller_id=eq.'+encodeURIComponent(sellerId));
   }
-  function tenantOrderSelect(){return 'id,code,seller_id,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,pagbank_order_id,pagbank_charge_id,pagbank_status,pix_copy_paste,pix_qr_code_url,pix_expires_at,payment_method,payment_created_at,payment_updated_at,payment_last_error,cancel_reason,cancelled_at,cancel_history_hidden_at';}
+  function tenantOrderSelect(){return 'id,code,seller_id,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,pagbank_order_id,pagbank_charge_id,pagbank_status,pix_copy_paste,pix_qr_code_url,pix_expires_at,payment_method,payment_created_at,payment_updated_at,payment_last_error,cancel_reason,cancelled_at,cancel_history_hidden_at,order_expires_at';}
 
   app.get('/api/operator/context',async(req,res)=>{
     try{
@@ -100,7 +100,7 @@ ${marker}
         const cr=await insert('rds10_contacts',{seller_id:s.seller.id,name,phone,group_name:'CLIENTES',status:'ATIVO',origin:'VENDA_WEB',validated:true,created_at:nowISO(),updated_at:nowISO()});
         contactId=cr?.[0]?.id||null;
       }else await patch('rds10_contacts','id=eq.'+encodeURIComponent(contactId),{name,validated:true,last_seen_at:nowISO(),updated_at:nowISO()});
-      const rows=await insert('rds10_orders',{code,seller_id:s.seller.id,contact_id:contactId,phone,customer_name:name,contact_phone:phone,quantity,unit_price:unit,total_amount:total,status:paymentMethod==='DINHEIRO'?'AGUARDANDO_CONFERENCIA':'AGUARDANDO_PAGAMENTO',payment_method:paymentMethod,created_at:nowISO(),updated_at:nowISO()});
+      const createdAt=nowISO(); const expHours=typeof rdsOrderExpirationHours==='function'?await rdsOrderExpirationHours():4; const orderExpiresAt=new Date(Date.parse(createdAt)+Number(expHours)*3600000).toISOString(); const rows=await insert('rds10_orders',{code,seller_id:s.seller.id,contact_id:contactId,phone,customer_name:name,contact_phone:phone,quantity,unit_price:unit,total_amount:total,status:paymentMethod==='DINHEIRO'?'AGUARDANDO_CONFERENCIA':'AGUARDANDO_PAGAMENTO',payment_method:paymentMethod,order_expires_at:orderExpiresAt,created_at:createdAt,updated_at:createdAt});
       return res.status(201).json({success:true,order:rows?.[0]||null});
     }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
   });
