@@ -19,7 +19,7 @@
     const app=document.querySelector('#app');
     if(!app)return;
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
-    if(!['orders','account','settings'].includes(p))return;
+    if(!['orders','account'].includes(p))return;
     if(document.getElementById('rdsOfficialIntegrationV2'))return;
 
     const card=document.createElement('section');
@@ -89,7 +89,7 @@
 
   const obs=new MutationObserver(()=>{
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
-    if(['orders','account','settings'].includes(p))renderOfficialCard();
+    if(['orders','account'].includes(p))renderOfficialCard();
     if(p==='orders')renderAutoStatus();
   });
   obs.observe(document.getElementById('app')||document.body,{childList:true,subtree:true});
