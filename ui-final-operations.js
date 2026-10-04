@@ -12,11 +12,19 @@
 
   window.rdsOrderDetails=async function(id){
     try{
-      const o=(state.orders||[]).find(x=>x.id===id)||await api('/api/orders').then(xs=>xs.find(x=>x.id===id));
-      if(!o)throw new Error('Pedido não encontrado.');
+      const sid=String(id||'');
+      let o=(state.orders||[]).find(x=>String(x.id)===sid);
+      if(!o){const data=await api('/api/operator/orders');const rows=Array.isArray(data)?data:(data?.orders||[]);o=rows.find(x=>String(x.id)===sid);if(o)state.orders=rows;}
+      if(!o)throw new Error('Pedido não encontrado para este vendedor.');
       const paid=['PAGO_AGUARDANDO_BILHETES','CONCLUIDO'].includes(String(o.status||''));
-      modal(`<span class=eyebrow>Detalhes da compra</span><h2>${esc2(o.code)}</h2><div class=card style="margin:10px 0"><p><b>Cliente:</b> ${esc2(o.customer_name||'Não informado')}</p><p><b>WhatsApp:</b> ${esc2(o.phone||o.contact_phone||'—')}</p><p><b>Quantidade:</b> ${o.quantity||0} bilhete(s)</p><p><b>Total:</b> ${money(o.total_amount||0)}</p><p><b>Status:</b> ${badge(statusText(o.status))}</p><p><b>Criado:</b> ${dt(o.created_at)}</p>${o.updated_at?`<p><b>Atualizado:</b> ${dt(o.updated_at)}</p>`:''}${o.pagbank_status?`<p><b>PagBank:</b> ${esc2(o.pagbank_status)}</p>`:''}${o.pix_expires_at&&o.status==='AGUARDANDO_PAGAMENTO'?`<p><b>PIX válido até:</b> ${dt(o.pix_expires_at)}</p>`:''}</div><div class=row>${o.status==='AGUARDANDO_CONFERENCIA'?btn('Confirmar pagamento',`confirmPay('${o.id}')`,'btn success'):''}${o.status==='PAGO_AGUARDANDO_BILHETES'?btn('Bilhetes enviados',`ticketsSent('${o.id}')`,'btn primary'):''}${!paid&&!['CANCELADO'].includes(String(o.status||''))?btn('Cancelar pedido',`cancelOrder('${o.id}')`,'btn danger'):''}</div>`);
-    }catch(e){toast(e.message)}
+      const reason=String(o.cancel_reason||'').toUpperCase();
+      const nature=reason==='EXPIRADO_PAGAMENTO'?'Expirado por falta de pagamento':reason==='CANCELAMENTO_MANUAL'?'Cancelado manualmente':reason==='CANCELAMENTO_CLIENTE'?'Cancelado pelo cliente':reason?reason.replaceAll('_',' '):'Não registrada';
+      const actionConfirm=btn('Confirmar pagamento',"confirmPay('"+o.id+"')",'btn success');
+      const actionTickets=btn('Bilhetes enviados',"ticketsSent('"+o.id+"')",'btn primary');
+      const actionCancel=btn('Cancelar pedido',"cancelOrder('"+o.id+"')",'btn danger');
+      const html='<span class=eyebrow>Detalhes da compra</span><h2>'+esc2(o.code)+'</h2><div class=card style="margin:10px 0"><p><b>Cliente:</b> '+esc2(o.customer_name||'Não informado')+'</p><p><b>WhatsApp:</b> '+esc2(o.phone||o.contact_phone||'—')+'</p><p><b>Quantidade:</b> '+(o.quantity||0)+' bilhete(s)</p><p><b>Total:</b> '+money(o.total_amount||0)+'</p><p><b>Status:</b> '+badge(statusText(o.status))+'</p><p><b>Criado:</b> '+dt(o.created_at)+'</p>'+(o.updated_at?'<p><b>Atualizado:</b> '+dt(o.updated_at)+'</p>':'')+(o.payment_method?'<p><b>Pagamento:</b> '+esc2(String(o.payment_method).replaceAll('_',' '))+'</p>':'')+(o.cancel_reason?'<p><b>Natureza do encerramento:</b> '+esc2(nature)+'</p>':'')+(o.pagbank_status?'<p><b>PagBank:</b> '+esc2(o.pagbank_status)+'</p>':'')+(o.pix_expires_at&&o.status==='AGUARDANDO_PAGAMENTO'?'<p><b>PIX válido até:</b> '+dt(o.pix_expires_at)+'</p>':'')+'</div><div class=row>'+(o.status==='AGUARDANDO_CONFERENCIA'?actionConfirm:'')+(o.status==='PAGO_AGUARDANDO_BILHETES'?actionTickets:'')+(!paid&&o.status!=='CANCELADO'?actionCancel:'')+'</div>';
+      modal(html);
+    }catch(e){toast(e.message||'Não foi possível abrir os detalhes do pedido.')} 
   };
 
   window.orders=async function(){
