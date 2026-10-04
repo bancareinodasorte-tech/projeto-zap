@@ -8,12 +8,10 @@
     const sid=String(id||'');
     const local=(Array.isArray(window.state?.orders)?window.state.orders:[]).find(x=>String(x.id)===sid);
     if(local)return local;
-    const res=await fetch('/api/operator/orders',{headers:{'Accept':'application/json'}});
+    const res=await fetch('/api/operator/orders/'+encodeURIComponent(sid),{headers:{'Accept':'application/json'}});
     const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data?.error||'Não foi possível consultar os pedidos deste vendedor.');
-    const rows=Array.isArray(data)?data:(Array.isArray(data?.orders)?data.orders:[]);
-    const found=rows.find(x=>String(x.id)===sid);
-    if(found){window.state.orders=rows;return found;}
+    if(!res.ok)throw new Error(data?.error||'Não foi possível consultar este pedido.');
+    if(data?.order){return data.order;}
     throw new Error('Pedido não encontrado para este vendedor.');
   };
   window.rdsOrderDetails=async function(id){
