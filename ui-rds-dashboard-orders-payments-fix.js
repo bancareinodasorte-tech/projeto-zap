@@ -55,7 +55,7 @@ async function payments(){
   <div class="rds-section card rds-cancel-history"><div class=rds-section-title><div><h2>Histórico de cancelamentos</h2><p class=mut>Lista recolhida por pedido para manter a operação organizada.</p></div><span class=mini id=rdsCancelCount>${cancelled.length} pedido(s)</span></div>
   <div class="toolbar rds-cancel-toolbar"><input id="rdsCancelSearch" type="search" placeholder="Buscar pedido, cliente ou WhatsApp" autocomplete="off"><span class="mini">Toque no pedido para abrir os detalhes</span></div>
   <div id="rdsCancelList" class="rds-order-list">${cancelled.slice(0,100).map(o=>{const label=String(o.customer_name||o.phone||"Cliente");const reason=cancelReason(o);const search=String([o.code,label,o.phone,reason].filter(Boolean).join(" ")).toLowerCase().replace(/"/g,"&quot;");return '<details class="rds-cancel-item" data-search="'+search+'"><summary><span><b>'+E(o.code)+'</b><small>'+E(label)+' • Encerrado: '+D(o.cancelled_at||o.updated_at)+'</small></span><strong>›</strong></summary><div class="rds-cancel-body"><div class="rds-cancel-meta"><span>'+(o.quantity||0)+' bilhete(s)</span><b>'+M(o.total_amount)+'</b><span>CANCELADO</span></div><p class=mut><b>Natureza:</b> '+E(reason)+'</p><div class=rds-buttons><button class="btn" onclick="rdsOrderDetails(\'${o.id}\')">Ver detalhes</button></div></div></details>'}).join("")||"<div class=rds-empty>Nenhum cancelamento registrado.</div>"}</div>
-  </div>
+  </div>`;
 }
   function bindCancelHistory(){
     const input=document.getElementById("rdsCancelSearch");const list=document.getElementById("rdsCancelList");const count=document.getElementById("rdsCancelCount");
