@@ -26,77 +26,10 @@ async function refreshStatus(){try{const s=await api('/api/status'),txt=s.connec
 setInterval(refreshStatus,10000);refreshStatus();
 
 async function renderAccountNative(){
- const root=document.getElementById('app');
- if(!root)return;
- const sellerToken=localStorage.getItem('rds_operator_token')||'';
- const adminToken=localStorage.getItem('rds_admin_token')||'';
- if(!sellerToken&&!adminToken){
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Acesso</span><h1>Entrar no CANAL DE VENDAS RDS</h1><p class="mut">Sua sessão não está disponível neste aparelho.</p></div></div>';
-  return;
- }
- if(adminToken&&!sellerToken){
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p id="rdsNativeIdentity" class="mut">Sessão administrativa ativa.</p><div class="row"><button type="button" id="rdsNativeLogout" class="btn danger">Sair</button></div></div>';
- }else{
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsNativeName">Minha conta</h1><p id="rdsNativeIdentity" class="mut">Conta autenticada.</p></div><button id="rdsNativeLogout" class="btn danger">Sair</button></div><div class="card"><h2>👤 Minha conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><p class="mut">Área individual do vendedor. Os dados desta conta permanecem separados dos demais vendedores.</p></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsNativeMP" class="status warn">🟡 Verificando conexão…</div><p class="mut">Mercado Pago é o provedor oficial de pagamentos.</p><div class="row"><button type="button" id="rdsNativeMPConnect" class="btn primary">Conectar Mercado Pago</button></div></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsNativePix" value=""><label>Nome do favorecido</label><input id="rdsNativePixName" value=""><label>E-mail operacional</label><input id="rdsNativeEmail" type="email" value=""><div class="row" style="margin-top:14px"><button type="button" id="rdsNativeSave" class="btn primary">Salvar dados</button></div><p id="rdsNativeMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><div id="rdsNativeDevices" class="mut">Consultando dispositivos…</div></div>';
- }
- document.getElementById('rdsNativeLogout')?.addEventListener('click',async()=>{
-  try{await fetch('/api/rds/unified/logout',{method:'POST',headers:{Authorization:'Bearer '+(sellerToken||adminToken)}})}catch{}
-  localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');location.href='/?rds=login';
- });
- if(adminToken&&!sellerToken)return;
- const h={Authorization:'Bearer '+sellerToken};
- const jsonNative=async(u,o={})=>{
-  const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),5000);
-  try{const rr=await fetch(u,{cache:'no-store',...o,headers:{...h,...(o.headers||{})},signal:ac.signal});const dd=await rr.json().catch(()=>({}));if(!rr.ok)throw new Error(dd.error||dd.message||'Falha ao consultar dados.');return dd}
-  finally{clearTimeout(tm)}
- };
- try{
-  const me=await jsonNative('/api/operator/me');
-  const seller=me.seller||{};
-  const n=document.getElementById('rdsNativeName'),i=document.getElementById('rdsNativeIdentity');
-  if(n)n.textContent=seller.name||'Minha conta';
-  if(i)i.textContent=(seller.phone||'')+(seller.email?' • '+seller.email:'');
-  const [st,mp]=await Promise.allSettled([jsonNative('/api/operator/settings'),jsonNative('/api/operator/mercadopago/status')]);
-  if(st.status==='fulfilled'){
-   const s=st.value.settings||{};
-   document.getElementById('rdsNativePix').value=s.pix_key||'';
-   document.getElementById('rdsNativePixName').value=s.pix_name||'';
-   document.getElementById('rdsNativeEmail').value=s.official_email||'';
-   document.getElementById('rdsNativeSave').onclick=async()=>{
-    const msg=document.getElementById('rdsNativeMsg');msg.textContent='Salvando…';
-    try{await jsonNative('/api/operator/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mpEnvironment:s.mp_environment||'production',mpPublicKey:s.mp_public_key||'',pixKey:document.getElementById('rdsNativePix').value,pixName:document.getElementById('rdsNativePixName').value,officialEmail:document.getElementById('rdsNativeEmail').value})});msg.textContent='Dados salvos com segurança.'}catch(e){msg.textContent=e.message}
-   };
-  }
-  if(mp.status==='fulfilled'){
-   const connected=!!mp.value.configured,box=document.getElementById('rdsNativeMP');
-   if(box){box.className='status '+(connected?'ok':'warn');box.textContent=connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado'}
-   const b=document.getElementById('rdsNativeMPConnect');
-   if(b){
-    b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
-    b.onclick=async(ev)=>{
-     ev.preventDefault();
-     ev.stopPropagation();
-     ev.stopImmediatePropagation();
-     b.disabled=true;
-     b.textContent='Abrindo Mercado Pago…';
-     try{
-      window.location.assign('/api/mercadopago/oauth/start?redirect=1');
-     }catch(e){
-      b.disabled=false;
-      b.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
-      const m=document.getElementById('rdsNativeMsg');
-      if(m)m.textContent=e.message||'Não foi possível iniciar a conexão com o Mercado Pago.';
-     }
-    };
-   }
-  }
-  const devices=me.devices||[],el=document.getElementById('rdsNativeDevices');
-  if(el)el.innerHTML=devices.length?devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status||'')+'<br><span class="mini">'+esc(x.device_id||'')+'</span></div>').join(''):'Nenhum dispositivo registrado.';
- }catch(e){
-  const i=document.getElementById('rdsNativeIdentity');if(i)i.textContent='Conta carregada. Alguns dados complementares não responderam agora.';
- }
-}
-async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
+  if(typeof window.rdsUnifiedAccountPage==='function') return window.rdsUnifiedAccountPage();
+  const root=document.getElementById('app'); if(!root)return;
+  root.innerHTML='<div class="card"><span class="mut">Carregando conta...</span></div>';
+}async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
  if(page==='home'){if(typeof window.home==='function')await window.home();else await home();}
  else if(page==='contacts'){if(typeof window.rdsCrmPage==='function')await window.rdsCrmPage();else await contacts();}
  else if(page==='whatsapp'){
