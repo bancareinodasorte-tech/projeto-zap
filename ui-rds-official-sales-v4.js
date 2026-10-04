@@ -4,10 +4,10 @@ const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'B
 const clean=v=>String(v??'').trim();
 const json=async(u,o={})=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),8000);try{const r=await fetch(u,{cache:'no-store',...o,signal:ac.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('O sistema oficial demorou para responder.');throw e;}finally{clearTimeout(tm);}};
 let rendering=false;
-function isSettingsPage(){return !!document.querySelector('#nav button.active[data-page="settings"],#mobileNav button.active[data-page="settings"]');}
+function isOfficialPage(){return !!document.querySelector('#nav button.active[data-page="settings"],#mobileNav button.active[data-page="settings"],#nav button.active[data-page="account"],#mobileNav button.active[data-page="account"]');}
 async function card(){
   const app=document.querySelector('#app');
-  if(!app||!isSettingsPage())return;
+  if(!app||!isOfficialPage())return;
   if(document.getElementById('rdsOfficialSalesCard'))return;
   if(rendering)return;
   rendering=true;
@@ -43,7 +43,7 @@ window.rdsOfficialAuthorizeDevice=()=>{const old=document.querySelector('.rds-of
 window.rdsOfficialSubmitAuthorization=async()=>{const code=clean(document.getElementById('r4code')?.value),msg=document.getElementById('r4msg');if(!code){msg.textContent='Digite o código de autorização.';return;}msg.textContent='Autorizando dispositivo...';try{await json('/api/v1011/official-sales/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({authorizationCode:code})});document.querySelector('.rds-official-auth-modal')?.remove();alert('🟢 Dispositivo oficial autorizado com sucesso.');await rdsOfficialRefreshSettings();}catch(e){msg.textContent=e.message||'Código inválido ou expirado.';}};
 window.rdsOfficialRefreshSettings=async()=>{document.getElementById('rdsOfficialSalesCard')?.remove();await card();};
 window.rdsEmitTickets=async id=>{try{const d=await json('/api/operator/orders');const orders=Array.isArray(d?.orders)?d.orders:[];const o=orders.find(x=>x.id===id);if(!o)throw new Error('Pedido não encontrado para este vendedor.');if(o.status==='CONCLUIDO')throw new Error('Este pedido já foi concluído e os bilhetes já foram marcados como enviados.');if(o.status!=='PAGO_AGUARDANDO_BILHETES')throw new Error('O pedido precisa estar em PAGO_AGUARDANDO_BILHETES para emitir os bilhetes.');const r=await json('/api/v1011/official-sales/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id})});const saleId=String(r.data?.saleId||r.data?.id||'');let marked=false;try{await json('/api/operator/orders/'+encodeURIComponent(id)+'/tickets-sent',{method:'POST'});marked=true;}catch(e){console.warn('[RDS] emissão oficial concluída, mas não foi possível concluir o pedido:',e);}if(marked)alert('🟢 Emissão oficial concluída e pedido encerrado. Venda '+(saleId||'registrada')+'.');else alert('🟢 Emissão oficial concluída. Venda '+(saleId||'registrada')+'. O pedido permanece para conferência.');if(typeof render==='function')await render();return r;}catch(e){alert(e.message||'Falha na emissão oficial.');throw e;}};
-window.rdsOfficialMaybeRender=()=>{if(!rendering&&!document.getElementById('rdsOfficialSalesCard')&&isSettingsPage())card();};
+window.rdsOfficialMaybeRender=()=>{if(!rendering&&!document.getElementById('rdsOfficialSalesCard')&&isOfficialPage())card();};
 function boot(){setTimeout(()=>window.rdsOfficialMaybeRender?.(),0);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
