@@ -46,7 +46,8 @@ async function rdsFinalHandleOrderForm(identity,order,text){
       try{
         officialDraw=await rdsFinalRequest('/seller/draw-info');
         const closed=officialDraw?.isDrawClosed===true || officialDraw?.isSalesClosed===true || officialDraw?.salesOpen===false;
-        const available=Number(officialDraw?.totalBooklets);
+        const rawAvailable=officialDraw?.availableBooklets ?? officialDraw?.totalBooklets ?? officialDraw?.bookletsAvailable ?? officialDraw?.availableTickets;
+        const available=rawAvailable===null||rawAvailable===undefined||rawAvailable===''?null:Number(rawAvailable);
         await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
           official_inventory_available:Number.isFinite(available)?available:null,
           official_inventory_checked_at:nowISO(),
