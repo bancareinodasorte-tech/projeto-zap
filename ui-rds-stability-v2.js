@@ -45,10 +45,8 @@
   window.go=stableGo;
   window.rdsRenderCurrentPage=stableRender;
   window.render=stableRender;
-  window.addEventListener('load',async()=>{
-    try{await stableRender();}finally{document.body.classList.remove('rds-booting');stableSetNav();}
-  },{once:true});
 
+  const revealBoot=()=>{document.body.classList.remove('rds-booting');stableSetNav();};
   window.rdsRefreshCurrentPage=async()=>{
     if(refreshBusy)return;
     refreshBusy=true;
@@ -63,6 +61,7 @@
       if(typeof window.refreshStatus==='function')window.refreshStatus();
     }finally{
       if(b){b.disabled=false;b.textContent=old;b.removeAttribute('aria-busy');}
+      revealBoot();
       refreshBusy=false;
     }
   };
@@ -86,6 +85,7 @@
   }
 
   bindNavigation();
+  window.addEventListener('load',revealBoot,{once:true});
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',bindNavigation,{once:true});
   }
