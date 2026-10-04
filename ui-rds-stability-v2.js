@@ -6,18 +6,10 @@
     const target=window.page||localStorage.getItem('rds_current_page')||'home';
     window.page=target;
     try{
-      if(target==='home' && typeof window.home==='function') return await window.home();
-      if(target==='contacts' && typeof window.rdsCrmPage==='function') return await window.rdsCrmPage();
-      if(target==='whatsapp' && typeof window.rdsWaReload==='function') return await window.rdsWaReload();
-      if(target==='campaigns' && typeof window.campaigns==='function') return await window.campaigns();
-      if(target==='execution' && typeof window.automation==='function') return await window.automation();
-      if(target==='returns' && typeof window.returnsPage==='function') return await window.returnsPage();
-      if(target==='payments' && typeof window.paymentsPage==='function') return await window.paymentsPage();
-      if(target==='orders' && typeof window.orders==='function') return await window.orders();
-      if(target==='account' && typeof window.renderAccountNative==='function') return await window.renderAccountNative();
-      if(target==='settings' && typeof window.settings==='function') return await window.settings();
-      if(target==='about' && typeof window.rdsAbout==='function') return await window.rdsAbout();
-      throw new Error('Página não disponível: '+target);
+      if(typeof window.rdsCoreRender==='function'){
+        return await window.rdsCoreRender();
+      }
+      throw new Error('Controlador principal do painel ainda não foi carregado.');
     }catch(e){
       if(e?.code==='NAV_STALE'||e?.message==='NAV_STALE')return;
       if(appEl)appEl.innerHTML='<div class="card"><h2>Não foi possível carregar o painel</h2><p class="mut">'+String(e?.message||e).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))+'</p><button class="btn primary" type="button" onclick="window.rdsRenderCurrentPage()">Tentar novamente</button></div>';
