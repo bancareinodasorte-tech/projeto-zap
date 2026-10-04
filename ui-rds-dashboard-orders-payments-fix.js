@@ -33,7 +33,7 @@ async function payments(){
     return 'Em atendimento';
   };
   const waitingCard=o=>`<div class="rds-order rds-payment-open">
-    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Criado: ${D(o.created_at)} • Prazo: ${D(new Date(new Date(o.created_at).getTime()+Number(exp.hours||4)*3600000).toISOString())}</small></div><span class="rds-live-stage"><i></i>${E(stageLabel(o))}</span></div>
+    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Criado: ${D(o.created_at)} • Prazo: ${D(o.order_expires_at||new Date(new Date(o.created_at).getTime()+Number(exp.hours||4)*3600000).toISOString())}</small></div><span class="rds-live-stage"><i></i>${E(stageLabel(o))}</span></div>
     <div class="rds-buttons rds-payment-min-actions">
       ${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}
     </div>
