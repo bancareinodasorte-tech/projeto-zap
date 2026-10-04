@@ -92,7 +92,23 @@ const block=`
       const draw=await rdsFinalRequest('/seller/draw-info');
       if(!draw||draw.isDrawClosed)throw new Error('Sorteio oficial encerrado ou indisponível.');
       const quantity=Math.max(1,Math.floor(Number(order.quantity||0)));
-      if(Number(draw.totalBooklets||draw.availableBooklets||0)<quantity)throw new Error('Quantidade solicitada maior que a disponibilidade oficial.');
+      const available=Number(draw.totalBooklets||draw.availableBooklets||0);
+      await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
+        official_inventory_available:Number.isFinite(available)?available:null,
+        official_inventory_checked_at:nowISO(),
+        official_inventory_error:null,
+        updated_at:nowISO()
+      }).catch(()=>{});
+      if(Number.isFinite(available) && available<quantity){
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
+          official_issue_status:'AGUARDANDO_ESTOQUE',
+          official_issue_error:'Disponibilidade oficial insuficiente: '+available+' disponível(eis) para '+quantity+' solicitado(s).',
+          updated_at:nowISO()
+        });
+        await addAlert('PEDIDO_PAGO_AGUARDANDO_ESTOQUE','Pedido pago aguardando disponibilidade oficial — '+order.code,{order:order.code,requested:quantity,available});
+        await logEvent('PEDIDO_PAGO_AGUARDANDO_ESTOQUE',{order:order.code,order_id:order.id,requested:quantity,available});
+        return;
+      }
       const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{
         method:'POST',
         body:JSON.stringify({
