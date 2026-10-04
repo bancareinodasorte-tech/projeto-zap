@@ -5,14 +5,20 @@
   const statusName=s=>({COLETANDO_DADOS:'Coletando dados',AGUARDANDO_PAGAMENTO:'Aguardando PIX',AGUARDANDO_CONFERENCIA:'Pagamento recebido',PAGO_AGUARDANDO_BILHETES:'Pagamento confirmado',CONCLUIDO:'Concluído',CANCELADO:'Cancelado'}[String(s||'').toUpperCase()]||String(s||'—').replaceAll('_',' '));
   const cancelName=r=>({EXPIRADO_PAGAMENTO:'Expirado por falta de pagamento',CANCELAMENTO_MANUAL:'Cancelado manualmente',CANCELAMENTO_CLIENTE:'Cancelado pelo cliente'}[String(r||'').toUpperCase()]||(r?String(r).replaceAll('_',' '):'Natureza não registrada'));
   const findOrder=async id=>{
-    const sid=String(id||'');
-    const local=(Array.isArray(window.state?.orders)?window.state.orders:[]).find(x=>String(x.id)===sid);
+    const sid=String(id||'').trim();
+    if(!sid)throw new Error('Pedido não informado.');
+    const local=(Array.isArray(window.state?.orders)?window.state.orders:[]).find(x=>String(x.id)===sid||String(x.code)===sid);
     if(local)return local;
-    const res=await fetch('/api/operator/orders/'+encodeURIComponent(sid),{headers:{'Accept':'application/json'}});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data?.error||'Não foi possível consultar este pedido.');
-    if(data?.order){return data.order;}
-    throw new Error('Pedido não encontrado para este vendedor.');
+    const headers={'Accept':'application/json','Cache-Control':'no-cache'};
+    const direct=await fetch('/api/operator/orders/'+encodeURIComponent(sid)+'?rds='+Date.now(),{headers,cache:'no-store'});
+    const directData=await direct.json().catch(()=>({}));
+    if(direct.ok&&directData?.order)return directData.order;
+    const listRes=await fetch('/api/operator/orders?rds='+Date.now(),{headers,cache:'no-store'});
+    const listData=await listRes.json().catch(()=>({}));
+    const rows=Array.isArray(listData)?listData:(Array.isArray(listData?.orders)?listData.orders:[]);
+    const found=rows.find(x=>String(x.id)===sid||String(x.code)===sid);
+    if(found)return found;
+    throw new Error(directData?.error||'Pedido não encontrado para este vendedor.');
   };
   window.rdsOrderDetails=async function(id){
     try{
