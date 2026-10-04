@@ -22,14 +22,21 @@ async function payments(){
   const configured=Boolean(fin.financial?.configured);
   const provider=configured?'Mercado Pago':'Mercado Pago não configurado';
   const cancelReason=o=>String(o.cancel_reason||'').toUpperCase()==='EXPIRADO_PAGAMENTO'?'Expirado por falta de pagamento':String(o.cancel_reason||'').toUpperCase()==='CANCELAMENTO_MANUAL'?'Cancelado manualmente':String(o.cancel_reason||'').toUpperCase()==='CANCELAMENTO_CLIENTE'?'Cancelado pelo cliente':o.cancel_reason?'Cancelado: '+String(o.cancel_reason).replaceAll('_',' '):'Natureza não registrada';
-  const waitingCard=o=>`<div class="rds-order">
-    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Criado: ${D(o.created_at)} • Prazo: ${D(new Date(new Date(o.created_at).getTime()+Number(exp.hours||4)*3600000).toISOString())}</small></div>${B('AGUARDANDO PIX')}</div>
-    <div class="rds-flow-strip"><span class=active>1 Cobrança</span><span>2 Pagamento</span><span>3 Emissão</span><span>4 Conclusão</span></div>
-    <div class=rds-buttons>
-      ${T('Gerar PIX',`rdsCreatePix('${o.id}',false)`,'btn primary')}
-      ${T('Gerar e enviar no WhatsApp',`rdsCreatePix('${o.id}',true)`,'btn success')}
-      ${T('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`)}
-      <a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a>
+  const stageLabel=o=>{
+    const s=String(o?.status||'').toUpperCase();
+    if(s==='AGUARDANDO_PAGAMENTO') return o?.payment_id||o?.payment_provider_id||o?.payment_created_at ? 'PIX enviado • aguardando pagamento' : 'Gerando PIX';
+    if(s==='AGUARDANDO_CONFERENCIA') return 'Pagamento recebido • aguardando conferência';
+    if(s==='PAGO_AGUARDANDO_BILHETES') return 'Pagamento confirmado • emitindo bilhetes';
+    if(s==='CONCLUIDO') return 'Venda concluída';
+    if(s==='CANCELADO') return 'Pedido cancelado';
+    return 'Em atendimento';
+  };
+  const waitingCard=o=>`<div class="rds-order rds-payment-open">
+    <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Criado: ${D(o.created_at)} • Prazo: ${D(new Date(new Date(o.created_at).getTime()+Number(exp.hours||4)*3600000).toISOString())}</small></div><span class="rds-live-stage"><i></i>${E(stageLabel(o))}</span></div>
+    <div class="rds-payment-progress" aria-label="Progresso do pedido">
+      <span class="done">Pedido</span><span class="current">PIX</span><span>Pagamento</span><span>Bilhetes</span><span>Conclusão</span>
+    </div>
+    <div class="rds-buttons rds-payment-min-actions">
       ${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}
     </div>
   </div>`;
@@ -48,7 +55,15 @@ async function payments(){
     <div class="card metric-card"><span class=eyebrow>Emitir bilhetes</span><div class=metric>${paid.length}</div><small>Pagamentos confirmados</small></div>
     <div class="card metric-card"><span class=eyebrow>Concluídas</span><div class=metric>${done.length}</div><small>Compras finalizadas</small></div>
   </div>
-  <div class="rds-section card"><div class=rds-section-title><div><h2>Controle da cobrança</h2><p class=mut>Mercado Pago ${mp.connected?'conectado':'não confirmado'} • Expiração do pedido: <b>${Number(exp.hours||4)}h</b> • Lembretes: <b>${rem.enabled!==false?'ativos':'desativados'}</b> a cada <b>${Number(rem.interval_hours||1)}h</b>, máximo <b>${Number(rem.max_reminders||3)}</b></p></div></div><div class=rds-flow-strip><span class=ok>1 Pedido criado</span><span class=active>2 PIX Mercado Pago</span><span>3 Pagamento confirmado automaticamente</span><span>4 Bilhetes</span><span>5 Conclusão</span></div></div>
+  <div class="rds-section card rds-billing-control"><div class=rds-section-title><div><h2>Controle da cobrança</h2><p class=mut>Mercado Pago ${mp.connected?'conectado':'não confirmado'} • Expiração do pedido: <b>${Number(exp.hours||4)}h</b> • Lembretes: <b>${rem.enabled!==false?'ativos':'desativados'}</b> a cada <b>${Number(rem.interval_hours||1)}h</b>, máximo <b>${Number(rem.max_reminders||3)}</b></p></div><span class="rds-control-status ${rem.enabled!==false?'on':'off'}">${rem.enabled!==false?'COBRANÇA ATIVA':'COBRANÇA INATIVA'}</span></div>
+    <div class="rds-control-grid">
+      <label class="rds-control-toggle"><span><b>Lembretes de pagamento</b><small>Envia automaticamente o lembrete para pedidos que continuam aguardando PIX.</small></span><input id="rdsReminderEnabled" type="checkbox" ${rem.enabled!==false?'checked':''}></label>
+      <label><span>Expiração do pedido</span><select id="rdsExpirationHours"><option value="1" ${Number(exp.hours)==1?'selected':''}>1 hora</option><option value="2" ${Number(exp.hours)==2?'selected':''}>2 horas</option><option value="3" ${Number(exp.hours)==3?'selected':''}>3 horas</option><option value="4" ${Number(exp.hours)==4?'selected':''}>4 horas</option><option value="6" ${Number(exp.hours)==6?'selected':''}>6 horas</option><option value="12" ${Number(exp.hours)==12?'selected':''}>12 horas</option><option value="24" ${Number(exp.hours)==24?'selected':''}>24 horas</option></select></label>
+      <label><span>Intervalo dos lembretes</span><select id="rdsReminderInterval"><option value="1" ${Number(rem.interval_hours)==1?'selected':''}>A cada 1 hora</option><option value="2" ${Number(rem.interval_hours)==2?'selected':''}>A cada 2 horas</option><option value="3" ${Number(rem.interval_hours)==3?'selected':''}>A cada 3 horas</option><option value="6" ${Number(rem.interval_hours)==6?'selected':''}>A cada 6 horas</option><option value="12" ${Number(rem.interval_hours)==12?'selected':''}>A cada 12 horas</option></select></label>
+      <label><span>Máximo de lembretes</span><select id="rdsReminderMax"><option value="1" ${Number(rem.max_reminders)==1?'selected':''}>1 lembrete</option><option value="2" ${Number(rem.max_reminders)==2?'selected':''}>2 lembretes</option><option value="3" ${Number(rem.max_reminders)==3?'selected':''}>3 lembretes</option><option value="4" ${Number(rem.max_reminders)==4?'selected':''}>4 lembretes</option><option value="5" ${Number(rem.max_reminders)==5?'selected':''}>5 lembretes</option></select></label>
+    </div>
+    <div class="rds-control-footer"><small>As alterações valem para os próximos ciclos de cobrança. Um pedido pago ou encerrado não recebe novos lembretes.</small><button class="btn primary" type="button" id="rdsSaveBillingControl">Salvar controle</button></div>
+  </div>
   <div class="rds-section card"><div class=rds-section-title><h2>Cobranças PIX abertas</h2><span class=mini>${w.length} pedido(s)</span></div><div class=rds-order-list>${w.map(waitingCard).join('')||'<div class=rds-empty>Nenhum pedido aguardando PIX no momento.</div>'}</div></div>
   <div class="rds-section card"><div class=rds-section-title><h2>Comprovantes recebidos</h2><span class=mini>${p.length} pedido(s)</span></div><div class=rds-order-list>${p.map(proofCard).join('')||'<div class=rds-empty>Nenhum comprovante aguardando conferência.</div>'}</div></div>
   <div class="rds-section card"><div class=rds-section-title><h2>Pagamentos confirmados</h2><span class=mini>${paid.length} pedido(s)</span></div><div class=rds-order-list>${paid.map(paidCard).join('')||'<div class=rds-empty>Nenhum pagamento confirmado aguardando emissão.</div>'}</div></div>
@@ -57,6 +72,30 @@ async function payments(){
   <div id="rdsCancelList" class="rds-order-list">${cancelled.slice(0,10).map(o=>{const label=String(o.customer_name||o.phone||"Cliente");const reason=cancelReason(o);const search=String([o.code,label,o.phone,reason].filter(Boolean).join(" ")).toLowerCase().replace(/"/g,"&quot;");return '<details class="rds-cancel-item" data-search="'+search+'"><summary><span><b>'+E(o.code)+'</b><small>'+E(label)+' • Encerrado: '+D(o.cancelled_at||o.updated_at)+'</small></span><strong>›</strong></summary><div class="rds-cancel-body"><div class="rds-cancel-meta"><span>'+(o.quantity||0)+' bilhete(s)</span><b>'+M(o.total_amount)+'</b><span>CANCELADO</span></div><p class=mut><b>Natureza:</b> '+E(reason)+'</p><div class=rds-buttons><button class="btn" onclick="rdsOrderDetails(\'${o.id}\')">Ver detalhes</button></div></div></details>'}).join("")||"<div class=rds-empty>Nenhum cancelamento registrado.</div>"}</div>
   </div>`;;
 }
+  function bindBillingControl(){
+    const b=document.getElementById('rdsSaveBillingControl'); if(!b||b.dataset.bound==='1')return; b.dataset.bound='1';
+    const enabled=document.getElementById('rdsReminderEnabled'), expH=document.getElementById('rdsExpirationHours'), interval=document.getElementById('rdsReminderInterval'), max=document.getElementById('rdsReminderMax'), status=document.querySelector('.rds-control-status');
+    const sync=()=>{if(status){status.textContent=enabled?.checked?'COBRANÇA ATIVA':'COBRANÇA INATIVA';status.className='rds-control-status '+(enabled?.checked?'on':'off');}};
+    enabled?.addEventListener('change',sync); sync();
+    b.addEventListener('click',async()=>{
+      b.disabled=true;b.textContent='Salvando...';
+      try{
+        const a=await fetch('/api/order-expiration',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({hours:Number(expH?.value||4)})});
+        const ad=await a.json().catch(()=>({}));if(!a.ok)throw new Error(ad.error||'Não foi possível salvar a expiração.');
+        const x=await fetch('/api/payment-reminders',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:Boolean(enabled?.checked),interval_hours:Number(interval?.value||1),max_reminders:Number(max?.value||3)})});
+        const xd=await x.json().catch(()=>({}));if(!x.ok)throw new Error(xd.error||'Não foi possível salvar os lembretes.');
+        toast?.('Controle da cobrança salvo.'); await payments();
+      }catch(e){toast?.(e.message||'Não foi possível salvar.');b.disabled=false;b.textContent='Salvar controle';}
+    });
+  }
+  function ensureBillingStyles(){
+    if(document.getElementById('rdsBillingStyles'))return;const s=document.createElement('style');s.id='rdsBillingStyles';
+    s.textContent=".rds-billing-control .rds-section-title{align-items:flex-start}.rds-control-status{font-size:10px;font-weight:900;letter-spacing:.08em;border-radius:999px;padding:7px 10px;white-space:nowrap}.rds-control-status.on{background:#e6f7ed;color:#207444}.rds-control-status.off{background:#f8e9e9;color:#a13c3c}.rds-control-grid{display:grid;grid-template-columns:1.2fr repeat(3,1fr);gap:12px;margin-top:14px;align-items:stretch}.rds-control-grid label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:800;color:#5e7089}.rds-control-grid label>span{font-size:12px}.rds-control-grid select{min-height:42px;border:1px solid rgba(30,70,120,.18);border-radius:12px;padding:0 11px;background:#fff;color:#17355d;font-weight:800}.rds-control-toggle{display:flex!important;flex-direction:row!important;justify-content:space-between;align-items:center;border:1px solid rgba(30,70,120,.12);border-radius:14px;padding:10px 12px;background:#f8fbff}.rds-control-toggle span{display:flex;flex-direction:column;gap:3px}.rds-control-toggle b{color:#17355d}.rds-control-toggle small{font-weight:500;color:#71809a;line-height:1.25}.rds-control-toggle input{width:46px;height:24px;accent-color:#1684dc}.rds-control-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px;padding-top:12px;border-top:1px solid rgba(30,70,120,.10)}.rds-control-footer small{color:#71809a;line-height:1.3}.rds-live-stage{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:900;color:#1f6e49;background:#eaf8ef;border-radius:999px;padding:7px 9px;white-space:nowrap}.rds-live-stage i{width:7px;height:7px;border-radius:50%;background:#27a565;box-shadow:0 0 0 4px rgba(39,165,101,.10)}.rds-payment-progress{display:flex;gap:5px;margin:12px 0 0;overflow:hidden}.rds-payment-progress span{font-size:10px;font-weight:800;color:#77879d;background:#f0f3f8;border-radius:999px;padding:5px 8px;white-space:nowrap}.rds-payment-progress .done{color:#28704b;background:#e8f7ee}.rds-payment-progress .current{color:#145aa0;background:#e7f1ff;box-shadow:inset 0 0 0 1px rgba(20,90,160,.12)}.rds-payment-min-actions{margin-top:9px}.rds-payment-open{transition:transform .15s,box-shadow .15s}.rds-payment-open:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(23,53,93,.08)}@media(max-width:760px){.rds-control-grid{grid-template-columns:1fr 1fr}.rds-control-toggle{grid-column:1/-1}.rds-control-footer{align-items:stretch;flex-direction:column}.rds-control-footer .btn{width:100%}.rds-payment-progress span{padding:5px 6px;font-size:9px}}";
+    document.head.appendChild(s);
+  }
+  ensureBillingStyles();
+  function bindBillingObserver(){bindBillingControl();}
+
   function bindCancelHistory(){
     const input=document.getElementById("rdsCancelSearch");const list=document.getElementById("rdsCancelList");const count=document.getElementById("rdsCancelCount");const limit=document.getElementById("rdsCancelLimit");const clear=document.getElementById("rdsCancelClear");
     if(!input||!list||input.dataset.bound==="1")return;input.dataset.bound="1";
@@ -72,6 +111,8 @@ async function payments(){
     document.head.appendChild(s);
   }
   ensureCancelStyles();
+  bindBillingControl();
+  const billingObserver=new MutationObserver(bindBillingControl);billingObserver.observe(document.getElementById('app')||document.body,{childList:true,subtree:true});
   const cancelObserver=new MutationObserver(bindCancelHistory);cancelObserver.observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
   setTimeout(bindCancelHistory,0);window.paymentsPage=payments;
 window.rdsLegacyPaymentsPage=payments;
