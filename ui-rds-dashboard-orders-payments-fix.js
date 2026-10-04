@@ -34,19 +34,20 @@ async function payments(){
   };
   const waitingCard=o=>`<div class="rds-order rds-payment-open">
     <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Criado: ${D(o.created_at)} • Prazo: ${D(o.order_expires_at||new Date(new Date(o.created_at).getTime()+Number(exp.hours||4)*3600000).toISOString())}</small></div><span class="rds-live-stage"><i></i>${E(stageLabel(o))}</span></div>
+    <div class="rds-stage-pills"><span class="done">Pedido</span><span class="active">PIX</span><span>Pagamento</span><span>Bilhetes</span><span>Conclusão</span></div>
     <div class="rds-buttons rds-payment-min-actions">
       ${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}
     </div>
   </div>`;
   const proofCard=o=>`<div class="rds-order">
     <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Comprovante recebido: ${D(o.proof_received_at||o.updated_at)}</small></div>${B('CONFERIR PAGAMENTO')}</div>
-    <div class=rds-buttons>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div>
+    <div class=rds-buttons>${T('Confirmar pagamento',`rdsApproveProof('${o.id}')`,'btn success')}${T('Rejeitar comprovante',`rdsRejectProof('${o.id}')`,'btn danger')}${T('Consultar Mercado Pago',`rdsReconcilePix('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div>
   </div>`;
   const paidCard=o=>`<div class="rds-order">
     <div class="rds-order-top"><div><h3>${E(o.customer_name||o.phone)}</h3><p>${E(o.code)} • ${o.quantity||0} bilhete(s) • <b>${M(o.total_amount)}</b></p><small class=mini>Pagamento confirmado: ${D(o.payment_confirmed_at||o.updated_at)}</small></div>${B('PAGO — AGUARDA BILHETES')}</div>
-    <div class=rds-buttons>${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}</div>
+    <div class=rds-buttons>${T('Ir para emissão',`go('orders')`,'btn primary')}${T('Ver detalhes',`rdsOrderDetails('${o.id}')`)}<a target="_blank" href="${W(o.phone)}">${T('Abrir WhatsApp','')}</a></div>
   </div>`;
-  app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="rds-clean-sub">Uma central para cobrar, confirmar, conciliar e encaminhar cada pedido sem perder o histórico.</p></div><div class="row">${B(provider, '', configured?'btn success':'btn danger')}</div></div>
+  app.innerHTML=`<div class="rds-clean-head"><div><span class="eyebrow">Financeiro e pós-pagamento</span><h1>Pagamentos</h1><p class="rds-clean-sub">Uma central para cobrar, confirmar, conciliar e encaminhar cada pedido sem perder o histórico.</p></div><div class="row">${T('Configurar Mercado Pago',`go('account')`,'btn')}${B(provider, '', configured?'btn success':'btn danger')}</div></div>
   <div class="rds-mini-grid">
     <div class="card metric-card"><span class=eyebrow>Aguardando PIX</span><div class=metric>${w.length}</div><small>${w.length?'Cobranças abertas':'Nenhuma cobrança pendente'}</small></div>
     <div class="card metric-card"><span class=eyebrow>Conferir pagamento</span><div class=metric>${p.length}</div><small>Comprovantes recebidos</small></div>
@@ -67,7 +68,7 @@ async function payments(){
   <div class="rds-section card"><div class=rds-section-title><h2>Pagamentos confirmados</h2><span class=mini>${paid.length} pedido(s)</span></div><div class=rds-order-list>${paid.map(paidCard).join('')||'<div class=rds-empty>Nenhum pagamento confirmado aguardando emissão.</div>'}</div></div>
   <div class="rds-section card rds-cancel-history"><div class=rds-section-title><h2>Histórico de cancelamentos</h2><span class=mini id=rdsCancelCount>${cancelled.length} pedido(s)</span></div>
   <div class="toolbar rds-cancel-toolbar"><input id="rdsCancelSearch" type="search" placeholder="Buscar pedido, cliente ou WhatsApp" autocomplete="off"><select id="rdsCancelLimit" aria-label="Quantidade de cancelamentos"><option value="10" selected>Mostrar 10</option><option value="25">Mostrar 25</option><option value="50">Mostrar 50</option><option value="100">Mostrar 100</option></select><button class="btn danger" type="button" id="rdsCancelClear">Limpar histórico</button></div>
-  <div id="rdsCancelList" class="rds-order-list">${cancelled.slice(0,10).map(o=>{const label=String(o.customer_name||o.phone||"Cliente");const reason=cancelReason(o);const search=String([o.code,label,o.phone,reason].filter(Boolean).join(" ")).toLowerCase().replace(/"/g,"&quot;");return '<details class="rds-cancel-item" data-search="'+search+'"><summary><span><b>'+E(o.code)+'</b><small>'+E(label)+' • Encerrado: '+D(o.cancelled_at||o.updated_at)+'</small></span><strong>›</strong></summary><div class="rds-cancel-body"><div class="rds-cancel-meta"><span>'+(o.quantity||0)+' bilhete(s)</span><b>'+M(o.total_amount)+'</b><span>CANCELADO</span></div><p class=mut><b>Natureza:</b> '+E(reason)+'</p><div class=rds-buttons><button class="btn" onclick="rdsOrderDetails('${o.id}')">Ver detalhes</button></div></div></details>'}).join("")||"<div class=rds-empty>Nenhum cancelamento registrado.</div>"}</div>
+  <div id="rdsCancelList" class="rds-order-list">${cancelled.slice(0,10).map(o=>{const label=String(o.customer_name||o.phone||"Cliente");const reason=cancelReason(o);const search=String([o.code,label,o.phone,reason].filter(Boolean).join(" ")).toLowerCase().replace(/"/g,"&quot;");return '<details class="rds-cancel-item" data-search="'+search+'"><summary><span><b>'+E(o.code)+'</b><small>'+E(label)+' • Encerrado: '+D(o.cancelled_at||o.updated_at)+'</small></span><strong>›</strong></summary><div class="rds-cancel-body"><div class="rds-cancel-meta"><span>'+(o.quantity||0)+' bilhete(s)</span><b>'+M(o.total_amount)+'</b><span>CANCELADO</span></div><p class=mut><b>Natureza:</b> '+E(reason)+'</p><div class=rds-buttons><button class="btn" onclick="rdsOrderDetails(\'${o.id}\')">Ver detalhes</button></div></div></details>'}).join("")||"<div class=rds-empty>Nenhum cancelamento registrado.</div>"}</div>
   </div>`;;
 }
   function bindBillingControl(){
@@ -119,16 +120,14 @@ async function payments(){
     document.head.appendChild(s);
   }
   ensureCancelStyles();
-
-  // O renderer fica disponível antes das rotinas auxiliares.
-  // Não usamos MutationObserver contínuo: a navegação principal chama
-  // explicitamente este renderer quando a aba Pagamentos é aberta.
+  if(!document.getElementById('rdsPaymentStageStyles')){
+    const s=document.createElement('style');s.id='rdsPaymentStageStyles';
+    s.textContent=".rds-stage-pills{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;margin-top:9px;overflow:hidden}.rds-stage-pills span{font-size:9px;font-weight:800;color:#71809a;background:#f1f5fa;border:1px solid rgba(30,70,120,.08);border-radius:999px;padding:4px 7px;white-space:nowrap}.rds-stage-pills span.done{color:#24764c;background:#eaf8ef}.rds-stage-pills span.active{color:#1c5f96;background:#eaf4ff;border-color:rgba(28,95,150,.16)}@media(max-width:430px){.rds-stage-pills{gap:3px}.rds-stage-pills span{font-size:8px;padding:4px 5px}}";
+    document.head.appendChild(s);
+  }
+  bindBillingControl();
+  bindCancelHistory();
   window.paymentsPage=payments;
   window.rdsPaymentsRefined=payments;
   window.rdsLegacyPaymentsPage=payments;
-
-  try{
-    bindBillingControl();
-    bindCancelHistory();
-  }catch(_e){}
 })();
