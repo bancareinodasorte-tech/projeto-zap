@@ -14,6 +14,7 @@ if(pos<0)throw new Error('app.listen não localizado para fluxo final.');
 
 const block=String.raw`
 ${marker}
+function rdsOfficialScheduleFields(draw){const pick=(keys)=>{for(const k of keys){const v=draw?.[k];if(v!==undefined&&v!==null&&String(v).trim()!==''){const d=new Date(v);if(Number.isFinite(d.getTime()))return d.toISOString();}}return null;};return {sales_deadline_at:pick(['salesDeadlineAt','sales_deadline_at','salesDeadline','sales_deadline','salesEndAt','sales_end_at']),campaign_end_at:pick(['campaignEndAt','campaign_end_at','campaignEnd','campaign_end','endAt','end_at','drawEndAt','draw_end_at'])};}
 async function rdsFinalHandleOrderForm(identity,order,text){
   const t=cleanText(text);
   if(!order||order.status!=='COLETANDO_DADOS')return;
@@ -48,10 +49,13 @@ async function rdsFinalHandleOrderForm(identity,order,text){
         const closed=officialDraw?.isDrawClosed===true || officialDraw?.isSalesClosed===true || officialDraw?.salesOpen===false;
         const rawAvailable=officialDraw?.availableBooklets ?? officialDraw?.totalBooklets ?? officialDraw?.bookletsAvailable ?? officialDraw?.availableTickets;
         const available=rawAvailable===null||rawAvailable===undefined||rawAvailable===''?null:Number(rawAvailable);
+        const schedule=rdsOfficialScheduleFields(officialDraw);
         await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
           official_inventory_available:Number.isFinite(available)?available:null,
           official_inventory_checked_at:nowISO(),
           official_inventory_error:null,
+          sales_deadline_at:schedule.sales_deadline_at||null,
+          campaign_end_at:schedule.campaign_end_at||null,
           updated_at:nowISO()
         }).catch(()=>{});
         if(closed)return replyInbound(identity,'⚠️ *VENDAS ENCERRADAS*\\n\\nO sorteio oficial não está recebendo novas vendas neste momento. Não foi gerada nenhuma cobrança.');
