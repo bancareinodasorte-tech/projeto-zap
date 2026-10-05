@@ -11,6 +11,7 @@ const block=`
 // RDS OFFICIAL TICKET AUTO DELIVERY V2
 (()=>{
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
+  const RDS_Readable=require('node:stream').Readable;
   const logoB64=(()=>{try{const s=fs.readFileSync('runtime-rds-official-ticket-auto-v1.mjs','utf8');const m=s.match(/const RDS_TICKET_LOGO_JPG_B64='([^']+)'/);return m?.[1]||'';}catch{return '';}})();
   const logoBuf=Buffer.from(logoB64,'base64');
   const NL=String.fromCharCode(10);
