@@ -178,9 +178,10 @@ const block=`
     console.log('[RDS AUTO] ciclo de emissão automática iniciado; WhatsApp='+String(connected));
     try{
       const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
+      const issueFilter='&or=(official_issue_status.is.null,official_issue_status.not.in.(AGUARDANDO_AUTORIZACAO))';
       const filter=sellerId
-        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&official_issue_status=not.in.(AGUARDANDO_AUTORIZACAO)&order=updated_at.asc&limit=50'
-        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=not.in.(AGUARDANDO_AUTORIZACAO)&order=updated_at.asc&limit=50';
+        ? 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+issueFilter+'&order=updated_at.asc&limit=50'
+        : 'select=*&status=eq.PAGO_AGUARDANDO_BILHETES'+issueFilter+'&order=updated_at.asc&limit=50';
       const rows=await list('rds10_orders',filter);
       for(const o of rows)await issueOne(o);
 
