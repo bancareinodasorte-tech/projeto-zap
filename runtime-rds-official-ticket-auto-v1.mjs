@@ -84,7 +84,7 @@ const block=`
       });
       pages.push(o);
     }
-    const objs=[null,{id:1,b:'<< /Type /Catalog /Pages 2 0 R >>'},{id:2,b:null},{id:4,b:'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'},{id:5,b:'<< /Type /XObject /Subtype /Image /Width 100 /Height 92 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+logoBuf.length+' >>',raw:logoBuf,tail:NL+'endstream'}];
+    const objs=[{id:1,b:'<< /Type /Catalog /Pages 2 0 R >>'},{id:2,b:null},{id:4,b:'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'},{id:5,b:'<< /Type /XObject /Subtype /Image /Width 100 /Height 92 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+logoBuf.length+' >>',raw:logoBuf,tail:NL+'endstream'}];
     let next=6;const pids=[],cids=[];for(let i=0;i<pages.length;i++){pids.push(next++);cids.push(next++);}
     objs[1]={id:1,b:'<< /Type /Catalog /Pages 2 0 R >>'};objs[2]={id:2,b:'<< /Type /Pages /Kids ['+pids.map(x=>x+' 0 R').join(' ') +'] /Count '+pages.length+' >>'};
     pages.forEach((ops,i)=>{objs.push({id:pids[i],b:'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+W+' '+H+'] /Resources << /Font << /F1 4 0 R >> /XObject << /Im1 5 0 R >> >> /Contents '+cids[i]+' 0 R >>'});const body=ops.join(NL)+NL;objs.push({id:cids[i],b:'<< /Length '+Buffer.byteLength(body,'latin1')+' >>'+NL+'stream'+NL+body+'endstream'});});
