@@ -279,11 +279,11 @@ const block=`
     const saleId=String(info?.saleId||order.official_sale_id||'').trim();
     if(!phone||!saleId)return false;
     try{
-      const rows=await list('rds10_messages','select=body,created_at&phone=eq.'+encodeURIComponent(phone)+'&direction=eq.OUT&status=eq.ENVIADA&order=created_at.desc&limit=50');
+      const rows=await list('rds10_messages','select=body,message_type,created_at&phone=eq.'+encodeURIComponent(phone)+'&direction=eq.OUT&status=eq.ENVIADA&order=created_at.desc&limit=50');
       const code=String(order.code||'');
       return rows.some(m=>{
         const body=String(m?.body||'');
-        const type=String(m?.type||'');
+        const type=String(m?.message_type||'');
         return type==='document'&&body.includes('PDF DOS BILHETES')&&body.includes(code)&&body.includes(saleId);
       });
     }catch{return false;}
