@@ -125,7 +125,7 @@ const block=`
           customerPhone:normalizeBR(order.phone||order.contact_phone),
           quantityBooklets:quantity,
           lotNumber:1,
-          paymentMethod:String(order.payment_method||'pix').toLowerCase()
+          paymentMethod:(/^(pix|pix_mercado_pago|pix_mercadopago)$/i.test(String(order.payment_method||''))?'pix':String(order.payment_method||'pix').toLowerCase())
         })
       });
       const info=extractSaleInfo(sale);
