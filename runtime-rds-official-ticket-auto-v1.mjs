@@ -84,7 +84,13 @@ const block=`
 
     const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
     if(sellerId&&String(order.seller_id||'')!==String(sellerId))return;
-    if(String(order.official_issue_status||'')==='EMITINDO')return;
+    if(String(order.official_issue_status||'')==='EMITINDO'){
+      const age=Date.now()-new Date(order.updated_at||0).getTime();
+      if(order.official_sale_id || !Number.isFinite(age) || age<5*60*1000)return;
+      console.warn('[RDS AUTO] recuperando emissão EMITINDO sem venda oficial '+String(order.code||order.id));
+      await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
+      order.official_issue_status=null;
+    }
     const previousIssueStatus=String(order.official_issue_status||'');
 
     await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
@@ -144,7 +150,7 @@ const block=`
 
       try{
         await sendOfficialProof(order,info);
-        await patch('rds10_orders','id=eq.'+order.id,{status:'CONCLUIDO',tickets_sent_at:nowISO(),completed_at:nowISO(),official_issue_status:'CONCLUIDO',updated_at:nowISO()});
+        await patch('rds10_orders','id=eq.'+order.id,{status:'CONCLUIDO',completed_at:nowISO(),official_issue_status:'CONCLUIDO',updated_at:nowISO()});
         await logEvent('BILHETES_ENVIADOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,phone:order.phone});
       }catch(e){
         await patch('rds10_orders','id=eq.'+order.id,{official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:String(e?.message||e),updated_at:nowISO()});
@@ -170,6 +176,20 @@ const block=`
         await logEvent('ERRO_EMISSAO_OFICIAL',{order:order.code,order_id:order.id,error:err});
       }
     }
+  }
+
+  async function officialProofAlreadySent(order,info){
+    const phone=normalizeBR(order.phone||order.contact_phone||'');
+    const saleId=String(info?.saleId||order.official_sale_id||'').trim();
+    if(!phone||!saleId)return false;
+    try{
+      const rows=await list('rds10_messages','select=body,created_at&phone=eq.'+encodeURIComponent(phone)+'&direction=eq.OUT&status=eq.ENVIADA&order=created_at.desc&limit=50');
+      const code=String(order.code||'');
+      return rows.some(m=>{
+        const body=String(m?.body||'');
+        return body.includes('Pedido: *'+code+'*')&&body.includes('Venda oficial: *'+saleId+'*');
+      });
+    }catch{return false;}
   }
 
   async function retryOfficialDelivery(){
@@ -207,8 +227,13 @@ const block=`
       for(const o of pending){
         try{
           const info=extractSaleInfo(o.official_ticket_payload||{saleId:o.official_sale_id,pdfUrl:o.official_ticket_url});
+          if(await officialProofAlreadySent(o,info)){
+            await patch('rds10_orders','id=eq.'+o.id,{status:'CONCLUIDO',completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
+            console.log('[RDS AUTO] envio oficial já registrado; concluindo '+String(o.code||o.id));
+            continue;
+          }
           await sendOfficialProof(o,info);
-          await patch('rds10_orders','id=eq.'+o.id,{status:'CONCLUIDO',tickets_sent_at:nowISO(),completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
+          await patch('rds10_orders','id=eq.'+o.id,{status:'CONCLUIDO',completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
         }catch(e){
           await patch('rds10_orders','id=eq.'+o.id,{official_issue_error:String(e?.message||e),updated_at:nowISO()}).catch(()=>{});
         }
