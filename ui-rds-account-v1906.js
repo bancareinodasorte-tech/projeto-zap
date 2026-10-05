@@ -56,7 +56,7 @@ async function account(){
   root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p id="rdsAdminEmail" class="mut">Validando sessão…</p><div class="row"><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
   document.getElementById('rdsUnifiedLogout').onclick=()=>{if(confirm('Deseja realmente sair da conta?'))logout();};
  }else{
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsAccountName">Minha conta</h1><p id="rdsAccountIdentity" class="mut">Carregando seus dados…</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Dados da conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><div id="rdsAccountSummary" class="rds-account-summary"><div><small>Nome da conta</small><b id="rdsAccountSummaryName">—</b></div><div><small>Nome do favorecido</small><b id="rdsAccountSummaryPixName">—</b></div><div><small>Chave PIX cadastrada</small><b id="rdsAccountSummaryPix">—</b></div><div><small>E-mail</small><b id="rdsAccountSummaryEmail">—</b></div><div><small>Telefone</small><b id="rdsAccountSummaryPhone">—</b></div></div></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value=""><label>Nome do favorecido</label><input id="rdsAccountPixName" value=""><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value=""><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
+  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsAccountName">Minha conta</h1><p id="rdsAccountIdentity" class="mut">Dados reais da conta e das configurações operacionais</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Dados da conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><div id="rdsAccountSummary" class="rds-account-summary"><div><small>Vendedor / conta</small><b id="rdsAccountSummaryName">—</b></div><div><small>Favorecido do PIX</small><b id="rdsAccountSummaryPixName">—</b></div><div><small>Chave PIX cadastrada</small><b id="rdsAccountSummaryPix">—</b></div><div><small>E-mail da conta</small><b id="rdsAccountSummaryEmail">—</b></div><div><small>Telefone da conta</small><b id="rdsAccountSummaryPhone">—</b></div></div></div><div class="card"><h2>💳 Mercado Pago</h2><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p></div><div class="card"><h2>💰 Dados operacionais</h2><label>Chave PIX</label><input id="rdsAccountPix" value=""><label>Nome do favorecido</label><input id="rdsAccountPixName" value=""><label>E-mail operacional</label><input id="rdsAccountEmail" type="email" value=""><div class="row" style="margin-top:14px"><button id="rdsAccountSave" class="btn primary">Salvar dados</button></div><p id="rdsAccountMsg" class="mut"></p></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Dispositivos registrados nesta conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
   document.getElementById('rdsUnifiedLogout').onclick=logout;
  }
 
@@ -80,7 +80,7 @@ async function account(){
   const name=document.getElementById('rdsAccountName');
   const identity=document.getElementById('rdsAccountIdentity');
   if(name)name.textContent=seller.name||'Minha conta';
-  if(identity)identity.textContent=(seller.phone||'')+(seller.email?' • '+seller.email:'');
+  if(identity)identity.textContent='Dados reais da conta e das configurações operacionais';
   await loadSellerAccountDetails();
  }catch(e){
   // The account remains visible even when the validation/data APIs are temporarily slow.
@@ -103,7 +103,7 @@ async function loadSellerAccountDetails(){
   catch(e){mpMsg.textContent=e.message;mpConnect.disabled=false;}
  };
  mpDisconnect.onclick=async()=>{
-  if(!confirm('Desconectar a conta Mercado Pago deste vendedor?'))return;
+  if(!confirm('Deseja realmente desconectar a conta?'))return;
   try{await json('/api/operator/mercadopago/oauth/disconnect',{method:'POST',headers:headers()});account();}
   catch(e){toast(e.message);}
  };
