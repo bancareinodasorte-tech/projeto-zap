@@ -126,36 +126,15 @@ const block=`
     return Buffer.concat(chunks);
   }
 
-  function ticketText(order,info){
-    const lines=[
-      '🎟️ *BILHETES GERADOS*','',
-      'Pedido: *'+order.code+'*',
-      'Cliente: *'+cleanText(order.customer_name||'Cliente')+'*'
-    ];
-    if(info.saleId)lines.push('Venda oficial: *'+info.saleId+'*');
-    const list=Array.isArray(info.numbers)?info.numbers:[];
-    if(list.length){
-      lines.push('', '🎫 *Bilhetes:*');
-      for(const item of list)lines.push('• '+cleanText(item));
-    }else if(Array.isArray(info.booklets)&&info.booklets.length){
-      lines.push('', '🎫 *Blocos:*');
-      for(const item of info.booklets)lines.push('• Bloco '+cleanText(firstValue(item,['bookletNumber','number','code','id'])||'—'));
-    }
-    lines.push('','✅ Pagamento confirmado e bilhetes emitidos pelo sistema oficial REINO DA SORTE.','Boa sorte! 🍀');
-    return lines.join(NL);
-  }
-
   async function sendOfficialProof(order,info){
     const phone=normalizeBR(order.phone||order.contact_phone||'');
     if(!phone)throw new Error('Telefone do cliente não informado.');
     const target=await ensureTargetJid(phone);
-    const caption=ticketText(order,info);
-    if(info.pdfUrl){
+        if(info.pdfUrl){
       const r=await sendToJid(target.jid,{
         document:{url:info.pdfUrl},
         mimetype:'application/pdf',
-        fileName:'bilhetes-'+order.code+'.pdf',
-        caption
+        fileName:'bilhetes-'+order.code+'.pdf'
       });
       await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||''),status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfUrl:info.pdfUrl}});
       return r;
