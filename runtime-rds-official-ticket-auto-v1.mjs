@@ -37,39 +37,41 @@ const block=`
   }
 
   function pdfAscii(v){
-    return String(v??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^\\x20-\\x7E]/g,'?');
+    return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?');
   }
   function pdfEsc(v){
-    return pdfAscii(v).replace(/\\/g,'\\\\').replace(/\\(/g,'\\\\(').replace(/\\)/g,'\\\\)');
+    return pdfAscii(v).replaceAll('\\','\\\\').replaceAll('(','\\(').replaceAll(')','\\)');
   }
   function buildTicketPdf(order,info){
+    const NL=String.fromCharCode(10);
     const payload=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
     const booklets=Array.isArray(info?.booklets)?info.booklets:[];
     const numbers=Array.isArray(info?.numbers)?info.numbers:[];
     const tickets=numbers.map(v=>String(v??'').trim()).filter(Boolean);
     const drawDate=payload.drawDate?new Date(payload.drawDate):null;
-    const drawDateText=drawDate&&!Number.isNaN(drawDate.getTime())?drawDate.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'—';
-    const lines=[];
-    lines.push('REINO DA SORTE');
-    lines.push('BILHETES DA VENDA OFICIAL');
-    lines.push('');
-    lines.push('Pedido: '+String(order?.code||'—'));
-    lines.push('Venda oficial: '+String(info?.saleId||payload.saleId||order?.official_sale_id||'—'));
-    lines.push('Cliente: '+String(order?.customer_name||payload.customerName||'—'));
-    lines.push('Sorteio: '+String(payload.drawTitle||'—'));
-    lines.push('Data do sorteio: '+drawDateText);
-    lines.push('Bloco(s): '+(booklets.length?booklets.map(b=>String(b?.bookletNumber||'—')).join(', '):'—'));
-    lines.push('Quantidade de bilhetes: '+String(tickets.length||payload.totalTickets||'—'));
-    lines.push('');
-    lines.push('NUMEROS DOS BILHETES');
+    const drawDateText=drawDate&&!Number.isNaN(drawDate.getTime())?drawDate.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'-';
+    const lines=[
+      'REINO DA SORTE',
+      'BILHETES DA VENDA OFICIAL',
+      '',
+      'Pedido: '+String(order?.code||'-'),
+      'Venda oficial: '+String(info?.saleId||payload.saleId||order?.official_sale_id||'-'),
+      'Cliente: '+String(order?.customer_name||payload.customerName||'-'),
+      'Sorteio: '+String(payload.drawTitle||'-'),
+      'Data do sorteio: '+drawDateText,
+      'Bloco(s): '+(booklets.length?booklets.map(b=>String(b?.bookletNumber||'-')).join(', '):'-'),
+      'Quantidade de bilhetes: '+String(tickets.length||payload.totalTickets||'-'),
+      '',
+      'NUMEROS DOS BILHETES'
+    ];
     const perCol=Math.max(1,Math.ceil(tickets.length/2));
     const left=tickets.slice(0,perCol),right=tickets.slice(perCol);
     for(let i=0;i<perCol;i++)lines.push(String(i+1).padStart(2,'0')+'. '+(left[i]||'').padEnd(18,' ')+'    '+(right[i]?String(i+1+perCol).padStart(2,'0')+'. '+right[i]:''));
     lines.push('');
-    lines.push('Valor pago: R$ '+String(payload.totalAmount||order?.total_amount||'—'));
-    lines.push('Valor por bilhete: R$ '+String(payload.pricePerTicket||order?.unit_price||'—'));
+    lines.push('Valor pago: R$ '+String(payload.totalAmount||order?.total_amount||'-'));
+    lines.push('Valor por bilhete: R$ '+String(payload.pricePerTicket||order?.unit_price||'-'));
     lines.push('');
-    lines.push('Este PDF foi gerado automaticamente a partir dos numeros retornados');
+    lines.push('PDF gerado automaticamente a partir dos numeros retornados');
     lines.push('pela emissao oficial da REINO DA SORTE. Nao altera a venda oficial.');
     if(payload.publicUrl){
       lines.push('');
@@ -79,44 +81,40 @@ const block=`
 
     const pageW=595,pageH=842,margin=42;
     const ops=[];
-    function text(x,y,size,value){ops.push('BT /F1 '+size+' Tf 0 0 0 rg 1 0 0 1 '+x+' '+y+' Tm ('+pdfEsc(value)+') Tj ET');}
-    function line(x1,y1,x2,y2){ops.push(x1+' '+y1+' m '+x2+' '+y2+' l S');}
+    const text=(x,y,size,value)=>ops.push('BT /F1 '+size+' Tf 0 0 0 rg 1 0 0 1 '+x+' '+y+' Tm ('+pdfEsc(value)+') Tj ET');
+    const line=(x1,y1,x2,y2)=>ops.push(x1+' '+y1+' m '+x2+' '+y2+' l S');
     text(margin,800,18,lines[0]);
     text(margin,776,13,lines[1]);
     let y=748;
     for(let i=2;i<lines.length;i++){
-      const value=lines[i];
-      if(i===12){
-        text(margin,y,12,value);
-        y-=24;
-      }else{
-        text(margin,y,10,value);
-        y-=17;
-      }
+      text(margin,y,i===12?12:10,lines[i]);
+      y-=i===12?24:17;
       if(y<55)break;
     }
     line(margin,760,pageW-margin,760);
     line(margin,55,pageW-margin,55);
 
-    const content=ops.join('\\n')+'\\n';
+    const content=ops.join(NL)+NL;
     const objects=[
       null,
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pageW+' '+pageH+'] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
       '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-      '<< /Length '+Buffer.byteLength(content,'latin1')+' >>\\nstream\\n'+content+'endstream'
+      '<< /Length '+Buffer.byteLength(content,'latin1')+' >>'+NL+'stream'+NL+content+'endstream'
     ];
-    const chunks=[Buffer.from('%PDF-1.4\\n','latin1')];
+    const chunks=[Buffer.from('%PDF-1.4'+NL,'latin1')];
     const offsets=[0];
+    let total=chunks[0].length;
     for(let i=1;i<objects.length;i++){
-      offsets[i]=chunks.reduce((n,b)=>n+b.length,0);
-      chunks.push(Buffer.from(i+' 0 obj\\n'+objects[i]+'\\nendobj\\n','latin1'));
+      offsets[i]=total;
+      const b=Buffer.from(i+' 0 obj'+NL+objects[i]+NL+'endobj'+NL,'latin1');
+      chunks.push(b);total+=b.length;
     }
-    const xrefOffset=chunks.reduce((n,b)=>n+b.length,0);
-    let xref='xref\\n0 '+objects.length+'\\n0000000000 65535 f \\n';
-    for(let i=1;i<objects.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \\n';
-    xref+='trailer\\n<< /Size '+objects.length+' /Root 1 0 R >>\\nstartxref\\n'+xrefOffset+'\\n%%EOF\\n';
+    const xrefOffset=total;
+    let xref='xref'+NL+'0 '+objects.length+NL+'0000000000 65535 f '+NL;
+    for(let i=1;i<objects.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n '+NL;
+    xref+='trailer'+NL+'<< /Size '+objects.length+' /Root 1 0 R >>'+NL+'startxref'+NL+xrefOffset+NL+'%%EOF'+NL;
     chunks.push(Buffer.from(xref,'latin1'));
     return Buffer.concat(chunks);
   }
