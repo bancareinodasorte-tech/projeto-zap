@@ -30,9 +30,95 @@ const block=`
   function extractSaleInfo(sale){
     const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
     const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl']);
-    const booklets=firstValue(sale,['booklets','tickets','data.booklets','data.tickets']);
-    const numbers=firstValue(sale,['ticketNumbers','bookletNumbers','numbers','data.ticketNumbers','data.bookletNumbers']);
+    const booklets=firstValue(sale,['booklets','data.booklets']);
+    const rawTickets=firstValue(sale,['tickets','data.tickets','ticketNumbers','data.ticketNumbers','numbers','data.numbers']);
+    const numbers=Array.isArray(rawTickets)?rawTickets:(Array.isArray(booklets)?booklets.flatMap(b=>Array.isArray(b?.tickets)?b.tickets:[]):null);
     return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,booklets,numbers};
+  }
+
+  function pdfAscii(v){
+    return String(v??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^\\x20-\\x7E]/g,'?');
+  }
+  function pdfEsc(v){
+    return pdfAscii(v).replace(/\\/g,'\\\\').replace(/\\(/g,'\\\\(').replace(/\\)/g,'\\\\)');
+  }
+  function buildTicketPdf(order,info){
+    const payload=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
+    const booklets=Array.isArray(info?.booklets)?info.booklets:[];
+    const numbers=Array.isArray(info?.numbers)?info.numbers:[];
+    const tickets=numbers.map(v=>String(v??'').trim()).filter(Boolean);
+    const drawDate=payload.drawDate?new Date(payload.drawDate):null;
+    const drawDateText=drawDate&&!Number.isNaN(drawDate.getTime())?drawDate.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'—';
+    const lines=[];
+    lines.push('REINO DA SORTE');
+    lines.push('BILHETES DA VENDA OFICIAL');
+    lines.push('');
+    lines.push('Pedido: '+String(order?.code||'—'));
+    lines.push('Venda oficial: '+String(info?.saleId||payload.saleId||order?.official_sale_id||'—'));
+    lines.push('Cliente: '+String(order?.customer_name||payload.customerName||'—'));
+    lines.push('Sorteio: '+String(payload.drawTitle||'—'));
+    lines.push('Data do sorteio: '+drawDateText);
+    lines.push('Bloco(s): '+(booklets.length?booklets.map(b=>String(b?.bookletNumber||'—')).join(', '):'—'));
+    lines.push('Quantidade de bilhetes: '+String(tickets.length||payload.totalTickets||'—'));
+    lines.push('');
+    lines.push('NUMEROS DOS BILHETES');
+    const perCol=Math.max(1,Math.ceil(tickets.length/2));
+    const left=tickets.slice(0,perCol),right=tickets.slice(perCol);
+    for(let i=0;i<perCol;i++)lines.push(String(i+1).padStart(2,'0')+'. '+(left[i]||'').padEnd(18,' ')+'    '+(right[i]?String(i+1+perCol).padStart(2,'0')+'. '+right[i]:''));
+    lines.push('');
+    lines.push('Valor pago: R$ '+String(payload.totalAmount||order?.total_amount||'—'));
+    lines.push('Valor por bilhete: R$ '+String(payload.pricePerTicket||order?.unit_price||'—'));
+    lines.push('');
+    lines.push('Este PDF foi gerado automaticamente a partir dos numeros retornados');
+    lines.push('pela emissao oficial da REINO DA SORTE. Nao altera a venda oficial.');
+    if(payload.publicUrl){
+      lines.push('');
+      lines.push('Consulta oficial:');
+      lines.push(String(payload.publicUrl));
+    }
+
+    const pageW=595,pageH=842,margin=42;
+    const ops=[];
+    function text(x,y,size,value){ops.push('BT /F1 '+size+' Tf 0 0 0 rg 1 0 0 1 '+x+' '+y+' Tm ('+pdfEsc(value)+') Tj ET');}
+    function line(x1,y1,x2,y2){ops.push(x1+' '+y1+' m '+x2+' '+y2+' l S');}
+    text(margin,800,18,lines[0]);
+    text(margin,776,13,lines[1]);
+    let y=748;
+    for(let i=2;i<lines.length;i++){
+      const value=lines[i];
+      if(i===12){
+        text(margin,y,12,value);
+        y-=24;
+      }else{
+        text(margin,y,10,value);
+        y-=17;
+      }
+      if(y<55)break;
+    }
+    line(margin,760,pageW-margin,760);
+    line(margin,55,pageW-margin,55);
+
+    const content=ops.join('\\n')+'\\n';
+    const objects=[
+      null,
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pageW+' '+pageH+'] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      '<< /Length '+Buffer.byteLength(content,'latin1')+' >>\\nstream\\n'+content+'endstream'
+    ];
+    const chunks=[Buffer.from('%PDF-1.4\\n','latin1')];
+    const offsets=[0];
+    for(let i=1;i<objects.length;i++){
+      offsets[i]=chunks.reduce((n,b)=>n+b.length,0);
+      chunks.push(Buffer.from(i+' 0 obj\\n'+objects[i]+'\\nendobj\\n','latin1'));
+    }
+    const xrefOffset=chunks.reduce((n,b)=>n+b.length,0);
+    let xref='xref\\n0 '+objects.length+'\\n0000000000 65535 f \\n';
+    for(let i=1;i<objects.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \\n';
+    xref+='trailer\\n<< /Size '+objects.length+' /Root 1 0 R >>\\nstartxref\\n'+xrefOffset+'\\n%%EOF\\n';
+    chunks.push(Buffer.from(xref,'latin1'));
+    return Buffer.concat(chunks);
   }
 
   function ticketText(order,info){
@@ -42,15 +128,13 @@ const block=`
       'Cliente: *'+cleanText(order.customer_name||'Cliente')+'*'
     ];
     if(info.saleId)lines.push('Venda oficial: *'+info.saleId+'*');
-    const list=Array.isArray(info.numbers)?info.numbers:Array.isArray(info.booklets)?info.booklets:null;
-    if(list?.length){
+    const list=Array.isArray(info.numbers)?info.numbers:[];
+    if(list.length){
       lines.push('', '🎫 *Bilhetes:*');
-      for(const item of list){
-        if(item&&typeof item==='object'){
-          const n=firstValue(item,['number','ticketNumber','bookletNumber','code','id']);
-          lines.push('• '+cleanText(n||JSON.stringify(item)));
-        }else lines.push('• '+cleanText(item));
-      }
+      for(const item of list)lines.push('• '+cleanText(item));
+    }else if(Array.isArray(info.booklets)&&info.booklets.length){
+      lines.push('', '🎫 *Blocos:*');
+      for(const item of info.booklets)lines.push('• Bloco '+cleanText(firstValue(item,['bookletNumber','number','code','id'])||'—'));
     }
     lines.push('','✅ Pagamento confirmado e bilhetes emitidos pelo sistema oficial REINO DA SORTE.','Boa sorte! 🍀');
     return lines.join(NL);
@@ -60,19 +144,26 @@ const block=`
     const phone=normalizeBR(order.phone||order.contact_phone||'');
     if(!phone)throw new Error('Telefone do cliente não informado.');
     const target=await ensureTargetJid(phone);
+    const caption=ticketText(order,info);
     if(info.pdfUrl){
       const r=await sendToJid(target.jid,{
         document:{url:info.pdfUrl},
         mimetype:'application/pdf',
         fileName:'bilhetes-'+order.code+'.pdf',
-        caption:ticketText(order,info)
+        caption
       });
-      await logMessage({phone,direction:'OUT',type:'document',body:'Bilhetes gerados — '+order.code,status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfUrl:info.pdfUrl}});
+      await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||''),status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfUrl:info.pdfUrl}});
       return r;
     }
-    const text=ticketText(order,info);
-    const r=await sendToJid(target.jid,{text});
-    await logMessage({phone,direction:'OUT',type:'text',body:text,status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId}});
+    const pdf=buildTicketPdf(order,info);
+    if(!pdf?.length)throw new Error('Não foi possível gerar o PDF dos bilhetes oficiais.');
+    const r=await sendToJid(target.jid,{
+      document:pdf,
+      mimetype:'application/pdf',
+      fileName:'bilhetes-'+order.code+'.pdf',
+      caption
+    });
+    await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||''),status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfFallback:true,publicUrl:order?.official_ticket_payload?.publicUrl||null}});
     return r;
   }
 
@@ -187,9 +278,32 @@ const block=`
       const code=String(order.code||'');
       return rows.some(m=>{
         const body=String(m?.body||'');
-        return body.includes('Pedido: *'+code+'*')&&body.includes('Venda oficial: *'+saleId+'*');
+        const type=String(m?.type||'');
+        return type==='document'&&body.includes('PDF DOS BILHETES')&&body.includes(code)&&body.includes(saleId);
       });
     }catch{return false;}
+  }
+
+  async function repairMissingOfficialPdfs(){
+    try{
+      const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
+      const filter=sellerId
+        ? 'select=*&status=eq.CONCLUIDO&official_sale_id=not.is.null&official_ticket_url=is.null&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=completed_at.desc&limit=20'
+        : 'select=*&status=eq.CONCLUIDO&official_sale_id=not.is.null&official_ticket_url=is.null&order=completed_at.desc&limit=20';
+      const rows=await list('rds10_orders',filter).catch(()=>[]);
+      for(const o of rows){
+        const info=extractSaleInfo(o.official_ticket_payload||{saleId:o.official_sale_id,pdfUrl:o.official_ticket_url});
+        if(!info.saleId||!Array.isArray(info.numbers)||!info.numbers.length)continue;
+        if(await officialProofAlreadySent(o,info))continue;
+        try{
+          await sendOfficialProof(o,info);
+          await logEvent('BILHETES_PDF_ENVIADOS_AUTOMATICAMENTE',{order:o.code,order_id:o.id,sale_id:info.saleId,source:info.pdfUrl?'OFICIAL_URL':'PDF_GERADO_A_PARTIR_DOS_DADOS_OFICIAIS'});
+          console.log('[RDS AUTO] PDF de bilhetes enviado para '+String(o.code||o.id));
+        }catch(e){
+          console.error('[RDS AUTO] falha no PDF de '+String(o.code||o.id)+': '+String(e?.message||e));
+        }
+      }
+    }catch(e){console.error('[RDS AUTO] reparo de PDFs:',e?.message||e);}
   }
 
   async function retryOfficialDelivery(){
@@ -239,6 +353,7 @@ const block=`
         }
       }
     }catch(e){console.error('[RDS] emissão automática:',e?.message||e);}
+    try{ await repairMissingOfficialPdfs(); }catch(e){ console.error('[RDS AUTO] PDF de bilhetes:',e?.message||e); }
     finally{console.log('[RDS AUTO] ciclo de emissão automática finalizado');running=false;}
   }
 
