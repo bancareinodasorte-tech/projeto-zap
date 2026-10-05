@@ -88,18 +88,30 @@ const block=`
 
     const pageW=595,pageH=842,margin=42;
     const ops=[];
-    const text=(x,y,size,value)=>ops.push('BT /F1 '+size+' Tf 0 0 0 rg 1 0 0 1 '+x+' '+y+' Tm ('+pdfEsc(value)+') Tj ET');
-    const line=(x1,y1,x2,y2)=>ops.push(x1+' '+y1+' m '+x2+' '+y2+' l S');
-    text(margin,800,18,lines[0]);
-    text(margin,776,13,lines[1]);
-    let y=748;
+    const rect=(x,y,w,h,fill)=>ops.push(fill+' rg '+x+' '+y+' '+w+' '+h+' re f');
+    const stroke=(x,y,w,h)=>ops.push('0.86 0.68 0.18 RG 1.2 w '+x+' '+y+' '+w+' '+h+' re S');
+    const text=(x,y,size,value,fill='0 0 0')=>ops.push('BT /F1 '+size+' Tf '+fill+' rg 1 0 0 1 '+x+' '+y+' Tm ('+pdfEsc(value)+') Tj ET');
+    const line=(x1,y1,x2,y2)=>ops.push('0.86 0.68 0.18 RG 1 w '+x1+' '+y1+' m '+x2+' '+y2+' l S');
+    rect(0,765,pageW,77,'0.04 0.16 0.45');
+    rect(0,758,pageW,7,'0.86 0.68 0.18');
+    text(margin,806,21,'REINO DA SORTE','1 1 1');
+    text(margin,782,12,'DOCUMENTO DE BILHETES • VENDA CONFIRMADA','1 0.92 0.55');
+    stroke(margin,55,pageW-2*margin,687);
+    let y=734;
     for(let i=2;i<lines.length;i++){
-      text(margin,y,i===12?12:10,lines[i]);
-      y-=i===12?24:17;
-      if(y<55)break;
+      if(y<82)break;
+      const isTitle=i===12;
+      if(isTitle){
+        rect(margin-6,y-7,pageW-2*margin+12,20,'0.04 0.16 0.45');
+        text(margin,y,12,lines[i],'1 1 1');
+        y-=30;
+      }else{
+        text(margin,y,10,lines[i],i===0?'0.04 0.16 0.45':'0 0 0');
+        y-=17;
+      }
     }
-    line(margin,760,pageW-margin,760);
     line(margin,55,pageW-margin,55);
+    text(margin,35,8,'Documento gerado com os dados retornados pela emissão oficial.','0.35 0.35 0.35');
 
     const content=ops.join(NL)+NL;
     const objects=[
@@ -145,7 +157,6 @@ const block=`
       document:pdf,
       mimetype:'application/pdf',
       fileName:'bilhetes-'+order.code+'.pdf',
-      caption
     });
     await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||''),status:'ENVIADA',waId:r?.key?.id,raw:{jid:target.jid,automatic:true,order:order.code,saleId:info.saleId,pdfFallback:true,publicUrl:order?.official_ticket_payload?.publicUrl||null}});
     return r;
