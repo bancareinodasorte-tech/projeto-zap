@@ -37,10 +37,17 @@ const block=`
   }
 
   function pdfAscii(v){
-    return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?');
+    return Array.from(String(v??'').normalize('NFD')).filter(ch=>{
+      const n=ch.charCodeAt(0);
+      return !(n>=768&&n<=879);
+    }).map(ch=>{
+      const n=ch.charCodeAt(0);
+      return n>=32&&n<=126?ch:'?';
+    }).join('');
   }
   function pdfEsc(v){
-    return pdfAscii(v).replaceAll('\\','\\\\').replaceAll('(','\\(').replaceAll(')','\\)');
+    const bs=String.fromCharCode(92);
+    return pdfAscii(v).split(bs).join(bs+bs).split('(').join(bs+'(').split(')').join(bs+')');
   }
   function buildTicketPdf(order,info){
     const NL=String.fromCharCode(10);
