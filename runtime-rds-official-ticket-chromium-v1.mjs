@@ -161,7 +161,7 @@ const block=String.raw`
   app.post('/api/rds/ticket-pdf/:id/resend',async(req,res)=>{
     try{
       const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-      const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id));
+      const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id);
       const o=await one('rds10_orders',f);
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
