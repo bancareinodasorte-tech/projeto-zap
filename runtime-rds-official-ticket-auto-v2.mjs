@@ -59,7 +59,22 @@ const block=`
     try{const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id),o=await one('rds10_orders',f);if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');if(!phone)throw new Error('Telefone do cliente não informado.');const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp não localizado.');const b=pdf(o);await archive(o,b,nowISO());const s=await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'});if(!s?.key?.id)throw new Error('WhatsApp não confirmou o envio.');await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:s.key.id,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(o.id),{sent_at:nowISO(),updated_at:nowISO()}).catch(()=>{});res.json({ok:true,waMessageId:s.key.id});}catch(e){res.status(500).json({ok:false,error:e.message});}
   });
   app.get('/api/rds/ticket-archive',async(req,res)=>{
-    try{const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,q=String(req.query.search||'').trim();let f=sid?'select=*&seller_id=eq.'+encodeURIComponent(sid):'select=*';if(q)f+='&or=(order_code.ilike.*'+encodeURIComponent(q)+'*,customer_name.ilike.*'+encodeURIComponent(q)+'*,customer_phone.ilike.*'+encodeURIComponent(q)+'*)';f+='&order=created_at.desc&limit=100';res.json({ok:true,rows:await list('rds10_ticket_documents',f)});}catch(e){res.status(500).json({ok:false,error:e.message});}
+    try{
+      const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,q=String(req.query.search||'').trim();
+      let af=sid?'select=*&seller_id=eq.'+encodeURIComponent(sid):'select=*';
+      if(q)af+='&or=(order_code.ilike.*'+encodeURIComponent(q)+'*,customer_name.ilike.*'+encodeURIComponent(q)+'*,customer_phone.ilike.*'+encodeURIComponent(q)+'*,official_sale_id.ilike.*'+encodeURIComponent(q)+'*)';
+      af+='&order=created_at.desc&limit=200';
+      const docs=await list('rds10_ticket_documents',af);
+      const seen=new Set((docs||[]).map(x=>String(x.order_id||'')));
+      let of=sid?'select=*&seller_id=eq.'+encodeURIComponent(sid)+'&status=eq.CONCLUIDO&official_sale_id=not.is.null':'select=*&status=eq.CONCLUIDO&official_sale_id=not.is.null';
+      if(q)of+='&or=(code.ilike.*'+encodeURIComponent(q)+'*,customer_name.ilike.*'+encodeURIComponent(q)+'*,phone.ilike.*'+encodeURIComponent(q)+'*,contact_phone.ilike.*'+encodeURIComponent(q)+'*,official_sale_id.ilike.*'+encodeURIComponent(q)+'*)';
+      of+='&order=created_at.desc&limit=200';
+      const orders=await list('rds10_orders',of);
+      const rows=[...(docs||[])];
+      for(const o of (orders||[]))if(!seen.has(String(o.id)))rows.push({id:o.id,order_id:o.id,order_code:o.code||'',customer_name:o.customer_name||null,customer_phone:o.phone||o.contact_phone||null,official_sale_id:o.official_sale_id||null,created_at:o.created_at||o.completed_at||null,sent_at:null,updated_at:o.updated_at||null,pdf_base64:null});
+      rows.sort((a,b)=>new Date(b.created_at||b.updated_at||0)-new Date(a.created_at||a.updated_at||0));
+      res.json({ok:true,rows:rows.slice(0,200)});
+    }catch(e){res.status(500).json({ok:false,error:e.message});}
   });
 })();
 `;
