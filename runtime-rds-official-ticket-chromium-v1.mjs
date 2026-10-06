@@ -12,7 +12,7 @@ const oldEnd=server.indexOf('\n})();\n',oldStart);
 if(oldEnd<0)throw new Error('Fim do runtime V6 dos bilhetes não localizado.');
 server=server.slice(0,oldStart)+server.slice(oldEnd+1);
 
-const block=String.raw\`
+const block=String.raw`
 // RDS OFFICIAL TICKET CHROMIUM V1
 (()=>{
   const {chromium}=require('playwright-core');
@@ -194,7 +194,7 @@ const block=String.raw\`
     }catch(e){res.status(500).json({ok:false,error:String(e?.message||e)});}
   });
 })();
-\`;
+`;
 const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
 const pos=server.indexOf(catchAll);
 if(pos<0)throw new Error('catch-all não localizado.');
