@@ -40,7 +40,7 @@ const block=`
     const fmtDateTime=v=>v?new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
     const dd=fmtDate(p.drawDate),sd=fmtDateTime(p.createdAt||order?.created_at);
     const W=1660,TW=800,TH=560,PAD=20,GAP=20,opsPages=[];
-    const t=(o,x,y,s,v,c='0.12 0.17 0.24')=>o.push('BT /F1 '+s+' Tf '+c+' rg 1 0 0 1 '+x.toFixed(1)+' '+y.toFixed(1)+' Tm ('+esc(v)+') Tj ET');
+    const t=(o,x,y,s,v,c='0.12 0.17 0.24')=>o.push(c+' rg BT /F1 '+s+' Tf 1 0 0 1 '+x.toFixed(1)+' '+y.toFixed(1)+' Tm ('+esc(v)+') Tj ET');
     const r=(o,x,y,w,h,c)=>o.push(c+' rg '+x+' '+y+' '+w+' '+h+' re f');
     const line=(o,x1,y1,x2,y2,c='0.42 0.48 0.56',w=.7)=>o.push(c+' RG '+w+' w '+x1+' '+y1+' m '+x2+' '+y2+' l S');
     const border=(o,x,y,w,h)=>o.push('0.61 0.67 0.74 RG 1.4 w [6 4] 0 d '+x+' '+y+' '+w+' '+h+' re S [] 0 d');
