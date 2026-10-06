@@ -58,9 +58,9 @@ const block=String.raw`
   const dateBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric'});};
   const dateTimeBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});};
 
-  async function makeHtml(order){
+  async function makeHtml(order,booksOverride=null){
     const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const books=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}];
+    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}]);
     const name=String(p.customerName||order?.customer_name||'-');
     const phone=String(p.customerPhone||order?.phone||order?.contact_phone||'-');
     const seller=String(p.sellerName||'—')+(p.sellerPhone?' – '+String(p.sellerPhone):'');
@@ -103,12 +103,13 @@ const block=String.raw`
         '</div>'+
       '</div>');
     }
-    const cols=cards.length>1?2:1;
-    const sheetWidth=cols===2?1660:840;
-    const sheetHeight=600;
+    const cols=2;
+    const sheetWidth=1660;
+    const rows=Math.max(1,Math.ceil(cards.length/2));
+    const sheetHeight=20+(rows*580);
     return '<!doctype html><html><head><meta charset="utf-8"><style>'+
       '@page{margin:0;size:'+sheetWidth+'px '+sheetHeight+'px}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1f2937}'+
-      '.sheet{width:'+sheetWidth+'px;padding:20px;display:grid;grid-template-columns:repeat('+cols+',800px);gap:20px;background:#fff;align-items:start}'+
+      '.sheet{width:'+sheetWidth+'px;height:'+sheetHeight+'px;padding:20px;display:grid;grid-template-columns:repeat(2,800px);grid-auto-rows:560px;gap:20px;background:#fff;align-items:start}'+
       '.ticket-horizontal{width:800px;height:560px;background:#fff;border:2px dashed #9ca3af;border-radius:12px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:Montserrat,"Segoe UI",sans-serif;color:#1f2937;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}'+
       '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
       '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
@@ -123,23 +124,23 @@ const block=String.raw`
       '</style></head><body><div class="sheet">'+cards.join('')+'</div></body></html>';
   }
 
-  async function getSheetSize(order){
+  async function getSheetSize(order,booksOverride=null){
     const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const books=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{tickets:[]}];
-    const cols=books.length>1?2:1;
-    return {width:cols===2?1660:840,height:600};
+    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{tickets:[]}]);
+    const rows=Math.max(1,Math.ceil(books.length/2));
+    return {width:1660,height:20+(rows*580)};
   }
 
-  async function renderPng(order){
+  async function renderPng(order,booksOverride=null){
     let lastErr=null;
     for(let attempt=1;attempt<=2;attempt++){
       let browser=null,page=null;
       try{
         browser=await getBrowser();
         if(!browser?.isConnected())throw new Error('Chromium desconectado.');
-        const sheet=await getSheetSize(order);
+        const sheet=await getSheetSize(order,booksOverride);
         page=await browser.newPage({viewport:{width:sheet.width,height:sheet.height},deviceScaleFactor:1});
-        await page.setContent(await makeHtml(order),{waitUntil:'load'});
+        await page.setContent(await makeHtml(order,booksOverride),{waitUntil:'load'});
         await page.evaluate(()=>document.fonts?.ready);
         await page.waitForTimeout(150);
         return await page.locator('.sheet').screenshot({type:'png'});
@@ -155,13 +156,26 @@ const block=String.raw`
   }
 
   async function renderPdf(order){
-    const png=await renderPng(order);
-    const sheet=await getSheetSize(order);
+    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
+    const allBooks=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}];
+    const MAX_BOOKLETS_PER_PAGE=50;
+    const pages=[];
+    for(let i=0;i<allBooks.length;i+=MAX_BOOKLETS_PER_PAGE){
+      const pageBooks=allBooks.slice(i,i+MAX_BOOKLETS_PER_PAGE);
+      const png=await renderPng(order,pageBooks);
+      const sheet=await getSheetSize(order,pageBooks);
+      pages.push({png,sheet});
+    }
+    const first=pages[0];
     const chunks=[];
-    const doc=new PDFDocument({size:[sheet.width,sheet.height],margin:0,compress:true});
+    const doc=new PDFDocument({size:[first.sheet.width,first.sheet.height],margin:0,compress:true});
     doc.on('data',c=>chunks.push(c));
     const done=new Promise((resolve,reject)=>{doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject);});
-    doc.image(png,0,0,{width:sheet.width,height:sheet.height});
+    for(let i=0;i<pages.length;i++){
+      const pg=pages[i];
+      if(i>0)doc.addPage({size:[pg.sheet.width,pg.sheet.height],margin:0});
+      doc.image(pg.png,0,0,{width:pg.sheet.width,height:pg.sheet.height});
+    }
     doc.end();
     return done;
   }
