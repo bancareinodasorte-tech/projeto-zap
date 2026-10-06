@@ -25,11 +25,10 @@ const block=`
   const logoBuf=Buffer.from(logoB64,'base64');
   const NL=String.fromCharCode(10);
   const esc=v=>{const bs=String.fromCharCode(92);return Array.from(String(v??'').normalize('NFD')).filter(c=>{const n=c.charCodeAt(0);return n<768||n>879;}).map(c=>{const n=c.charCodeAt(0);return n>=32&&n<=126?c:'?';}).join('').split(bs).join(bs+bs).split('(').join(bs+'(').split(')').join(bs+')');};
-  function pdf(order){
+  async function pdf(order){
     const p=order?.official_ticket_payload||{};
     const books=Array.isArray(p.booklets)?p.booklets:[];
     const items=books.length?books:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}];
-    const sale=String(p.saleId||order?.official_sale_id||'-');
     const name=String(p.customerName||order?.customer_name||'-');
     const phone=String(p.customerPhone||order?.phone||order?.contact_phone||'-');
     const seller=String(p.sellerName||'—')+(p.sellerPhone?(' – '+String(p.sellerPhone)):'');
@@ -39,126 +38,85 @@ const block=`
     const fmtDate=v=>v?new Date(v).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric'}):'';
     const fmtDateTime=v=>v?new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
     const dd=fmtDate(p.drawDate),sd=fmtDateTime(p.createdAt||order?.created_at);
-    const W=1660,TW=800,TH=560,PAD=20,GAP=20,opsPages=[];
-    const t=(o,x,y,s,v,c='0.12 0.17 0.24')=>o.push('BT /F1 '+s+' Tf '+c+' rg 0 Tr 1 0 0 1 '+x.toFixed(1)+' '+y.toFixed(1)+' Tm ('+esc(v)+') Tj ET');
-    const r=(o,x,y,w,h,c)=>o.push(c+' rg '+x+' '+y+' '+w+' '+h+' re f');
-    const line=(o,x1,y1,x2,y2,c='0.42 0.48 0.56',w=.7)=>o.push(c+' RG '+w+' w '+x1+' '+y1+' m '+x2+' '+y2+' l S');
-    const border=(o,x,y,w,h)=>o.push('0.61 0.67 0.74 RG 1.4 w [6 4] 0 d '+x+' '+y+' '+w+' '+h+' re S [] 0 d');
-    const dashed=(o,x1,y1,x2,y2)=>o.push('0.42 0.45 0.50 RG 1 w [3 3] 0 d '+x1+' '+y1+' m '+x2+' '+y2+' l S [] 0 d');
-    const qr=(o,v,x,y,s)=>{
+    const W=1660,H=600,PAD=20,GAP=20,TW=800,TH=560;
+    const chunks=[];
+    const doc=new PDFDocument({size:[W,H],margin:0,autoFirstPage:true,compress:true});
+    doc.on('data',c=>chunks.push(c));
+    const done=new Promise((resolve,reject)=>{doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject);});
+    const rgb=c=>{const a=c.split(' ').map(Number);return {r:Math.round(a[0]*255),g:Math.round(a[1]*255),b:Math.round(a[2]*255)};};
+    const text=(v,x,y,size,color='0.12 0.17 0.24',opts={})=>{
+      doc.font('Helvetica').fontSize(size).fillColor(rgb(color)).text(String(v??''),x,y,{lineBreak:false,width:opts.width||500,ellipsis:false});
+    };
+    const rect=(x,y,w,h,color)=>{
+      doc.fillColor(rgb(color)).rect(x,y,w,h).fill();
+    };
+    const line=(x1,y1,x2,y2,color='0.42 0.48 0.56',width=.7)=>{
+      doc.strokeColor(rgb(color)).lineWidth(width).moveTo(x1,y1).lineTo(x2,y2).stroke();
+    };
+    const dashed=(x1,y1,x2,y2)=>{
+      doc.save().dash(3,{space:3}).strokeColor({r:107,g:115,b:128}).lineWidth(1).moveTo(x1,y1).lineTo(x2,y2).stroke().undash().restore();
+    };
+    const border=(x,y,w,h)=>{
+      doc.save().dash(6,{space:4}).strokeColor({r:156,g:171,b:189}).lineWidth(1.4).rect(x,y,w,h).stroke().undash().restore();
+    };
+    const qr=(value,x,y,size)=>{
       if(!QR)return;
       try{
-        const q=QR.create(String(v),{errorCorrectionLevel:'M'}),n=q.modules.size,z=s/n;
-        r(o,x-5,y-5,s+10,s+10,'1 1 1');
-        for(let a=0;a<n;a++)for(let b=0;b<n;b++)if(q.modules.get(a,b))r(o,x+b*z,y+(n-1-a)*z,z+.05,z+.05,'0 0 0');
-      }catch{}
+        const q=QR.create(String(value),{errorCorrectionLevel:'M'}),n=q.modules.size,z=size/n;
+        rect(x-5,y-5,size+10,size+10,'1 1 1');
+        for(let row=0;row<n;row++)for(let col=0;col<n;col++)if(q.modules.get(row,col))rect(x+col*z,y+row*z,z+.05,z+.05,'0 0 0');
+      }catch(e){console.error('[RDS TICKET] QR:',e?.message||e);}
     };
-    const draw=(o,x,y,b)=>{
-      const top=325,bottom=235;
-      const blue='0.78 0.87 0.94',gray='0.94 0.95 0.97',navy='0.09 0.14 0.32',ink='0.12 0.17 0.24';
-      r(o,x,y+bottom,TW,top,blue);
-      r(o,x,y,TW,bottom,gray);
-      border(o,x,y,TW,TH);
-      line(o,x,y+bottom,x+TW,y+bottom,'0.61 0.67 0.74',1.2);
-
-      t(o,x+24,y+530,14,'Data do Sorteio: '+dd,navy);
-      t(o,x+515,y+530,13,'Data da Venda: '+sd,navy);
-
-      if(logoBuf.length)o.push('q 190 0 0 145 '+(x+25)+' '+(y+302)+' cm /Im1 Do Q');
-      
-
+    const draw=(x,y,b)=>{
+      const top=325,bottom=235,blue='0.78 0.87 0.94',gray='0.94 0.95 0.97',navy='0.09 0.14 0.32',ink='0.12 0.17 0.24';
+      rect(x,y+bottom,TW,top,blue); rect(x,y,TW,bottom,gray); border(x,y,TW,TH);
+      line(x,y+bottom,x+TW,y+bottom,'0.61 0.67 0.74',1.2);
+      text('Data do Sorteio: '+dd,x+24,y+18,14,navy,{width:300});
+      text('Data da Venda: '+sd,x+515,y+18,13,navy,{width:260});
+      if(logoBuf.length)try{doc.image(logoBuf,x+25,y+23,{width:190,height:145,fit:[190,145]});}catch(e){console.error('[RDS TICKET] logo:',e?.message||e);}
       const rx=x+225,rw=550;
-      line(o,rx,y+492,rx+rw,y+492,'0.55 0.62 0.72',1);
-      t(o,rx+175,y+503,13,'NÚMEROS DA SORTE',navy);
-      line(o,rx,y+488,rx+rw,y+488,'0.55 0.62 0.72',1);
-
+      line(rx,y+68,rx+rw,y+68,'0.55 0.62 0.72',1);
+      text('NÚMEROS DA SORTE',rx+175,y+73,13,navy,{width:250});
+      line(rx,y+76,rx+rw,y+76,'0.55 0.62 0.72',1);
       const tk=Array.isArray(b?.tickets)?b.tickets:[];
-      // A quantidade de bilhetes vem exclusivamente da Integração Oficial.
-      // Não existe limite artificial de 20: a grade continua em 5 colunas e
-      // reduz o espaçamento/tamanho apenas quando houver muitas linhas.
-      const cols=5;
-      const rows=Math.max(1,Math.ceil(tk.length/cols));
-      const gridTop=y+449;
-      const gridBottom=y+238;
-      const availableH=gridTop-gridBottom;
+      const cols=5,rows=Math.max(1,Math.ceil(tk.length/cols));
+      const gridTop=y+96,gridBottom=y+307,availableH=gridBottom-gridTop;
       const rowGap=Math.min(38,Math.max(18,availableH/rows));
       const bh=Math.min(30,Math.max(16,rowGap-7));
       const bw=(rw-32)/cols;
       tk.forEach((v,k)=>{
-        const rr=Math.floor(k/cols),cc=k%cols,bx=rx+cc*(bw+8),by=gridTop-bh-rr*rowGap;
-        r(o,bx,by,bw,bh,'0.98 0.99 1');
-        line(o,bx,by,bx+bw,by,'0.58 0.77 0.96',1);
-        line(o,bx,by+bh,bx+bw,by+bh,'0.58 0.77 0.96',1);
-        line(o,bx,by,bx,by+bh,'0.58 0.77 0.96',1);
-        line(o,bx+bw,by,bx+bw,by+bh,'0.58 0.77 0.96',1);
+        const rr=Math.floor(k/cols),cc=k%cols,bx=rx+cc*(bw+8),by=gridTop+rr*rowGap;
+        rect(bx,by,bw,bh,'0.98 0.99 1');
+        line(bx,by,bx+bw,by,'0.58 0.77 0.96',1); line(bx,by+bh,bx+bw,by+bh,'0.58 0.77 0.96',1);
+        line(bx,by,bx,by+bh,'0.58 0.77 0.96',1); line(bx+bw,by,bx+bw,by+bh,'0.58 0.77 0.96',1);
         const val=String(v??'').includes('-')?String(v).split('-')[0]:String(v??'');
         const fs=bh<22?10:(bh<26?11:13);
-        t(o,bx+Math.max(2,bw/2-val.length*(fs*.24)),by+Math.max(5,(bh-fs)/2),fs,val,ink);
+        text(val,bx+Math.max(2,(bw-doc.widthOfString(val,{font:'Helvetica',size:fs}))/2),by+Math.max(2,(bh-fs)/2),fs,ink,{width:bw-4});
       });
-
-      // Aviso oficial exibido no canto inferior direito da área azul.
-      t(o,x+468,y+250,10,'PRAZO PARA O GANHADOR SE APRESENTAR',navy);
-      t(o,x+520,y+238,10,'ATÉ AS 09H DO DIA SEGUINTE',navy);
-
-      t(o,x+24,y+220,14,'Vendedor: '+seller,ink);
-
-      t(o,x+24,y+188,16,'Nome:',ink);
-      t(o,x+100,y+188,15,name,ink);
-      dashed(o,x+100,y+181,x+545,y+181);
-
-      t(o,x+24,y+157,16,'Telefone:',ink);
-      t(o,x+100,y+157,15,phone,ink);
-      dashed(o,x+100,y+150,x+545,y+150);
-
-      t(o,x+24,y+126,16,'Prêmio:',ink);
-      t(o,x+100,y+126,15,prize,ink);
-      dashed(o,x+100,y+119,x+545,y+119);
-
-      t(o,x+24,y+62,11,'@reinodasorteoficial',ink);
-      t(o,x+215,y+62,11,'(88) 9 9494-3632',ink);
-
-      const qx=x+620,qy=y+48,qw=155,qh=172;
-      o.push('0.61 0.67 0.74 RG 1.2 w [2 3] 0 d '+qx+' '+qy+' '+qw+' '+qh+' re S [] 0 d');
-      t(o,qx+24,qy+150,12,'Acompanhar sorteio',ink);
-      qr(o,String(p.publicUrl||'https://admin.reinodasorte.com.br/'),qx+27,qy+42,100);
+      text('PRAZO PARA O GANHADOR SE APRESENTAR',x+468,y+312,10,navy,{width:300});
+      text('ATÉ AS 09H DO DIA SEGUINTE',x+520,y+324,10,navy,{width:250});
+      text('Vendedor: '+seller,x+24,y+333,14,ink,{width:520});
+      text('Nome:',x+24,y+365,16,ink,{width:80}); text(name,x+100,y+365,15,ink,{width:445}); dashed(x+100,y+384,x+545,y+384);
+      text('Telefone:',x+24,y+396,16,ink,{width:80}); text(phone,x+100,y+396,15,ink,{width:445}); dashed(x+100,y+415,x+545,y+415);
+      text('Prêmio:',x+24,y+427,16,ink,{width:80}); text(prize,x+100,y+427,15,ink,{width:445}); dashed(x+100,y+446,x+545,y+446);
+      text('@reinodasorteoficial',x+24,y+490,11,ink,{width:180}); text('(88) 9 9494-3632',x+215,y+490,11,ink,{width:180});
+      const qx=x+620,qy=y+368,qw=155,qh=172;
+      doc.save().dash(2,{space:3}).strokeColor({r:156,g:171,b:189}).lineWidth(1.2).rect(qx,qy,qw,qh).stroke().undash().restore();
+      text('Acompanhar sorteio',qx+24,qy+8,12,ink,{width:130});
+      qr(String(p.publicUrl||'https://admin.reinodasorte.com.br/'),qx+27,qy+42,100);
       const label=String(b?.bookletLabel||((b?.bookletNumber||'-')+'-'+(b?.lotNumber||1)));
-      t(o,qx+45,qy+20,16,label,navy);
+      text(label,qx+45,qy+147,16,navy,{width:80});
     };
     for(let i=0;i<items.length;i+=2){
-      const ops=[],slice=items.slice(i,i+2);
-      r(ops,0,0,W,TH+PAD*2,'1 1 1');
-      slice.forEach((b,j)=>draw(ops,PAD+j*(TW+GAP),PAD,b));
-      opsPages.push(ops);
+      if(i>0)doc.addPage({size:[W,H],margin:0});
+      rect(0,0,W,H,'1 1 1');
+      draw(PAD,PAD,items[i]);
+      if(items[i+1])draw(PAD+TW+GAP,PAD,items[i+1]);
     }
-    const objs=[
-      {id:1,b:'<< /Type /Catalog /Pages 2 0 R >>'},
-      {id:2,b:null},
-      {id:3,b:'<< /Type /Font /Subtype /Type1 /Name /F1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'},
-      {id:4,b:'<< /Type /XObject /Subtype /Image /Width 100 /Height 92 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+logoBuf.length+' >>',raw:logoBuf,tail:NL+'endstream'}
-    ];
-    let next=5,pids=[],cids=[];
-    opsPages.forEach(()=>{pids.push(next++);cids.push(next++);});
-    objs[2]={id:2,b:'<< /Type /Pages /Kids ['+pids.map(x=>x+' 0 R').join(' ')+'] /Count '+opsPages.length+' >>'};
-    opsPages.forEach((ops,i)=>{
-      objs.push({id:pids[i],b:'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+W+' '+(TH+PAD*2)+'] /Resources << /ProcSet [/PDF /Text /ImageB /ImageC /ImageI] /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R >> >> /Contents '+cids[i]+' 0 R >>'});
-      const body=ops.join(NL)+NL;
-      objs.push({id:cids[i],b:'<< /Length '+Buffer.byteLength(body,'latin1')+' >>'+NL+'stream'+NL+body+'endstream'});
-    });
-    objs.sort((a,b)=>a.id-b.id);
-    const chunks=[Buffer.from('%PDF-1.4'+NL,'latin1')],off=[];let total=chunks[0].length;
-    for(const z of objs){
-      off[z.id]=total;
-      const h=Buffer.from(z.id+' 0 obj'+NL+z.b+NL,'latin1');chunks.push(h);total+=h.length;
-      if(z.raw){chunks.push(z.raw);total+=z.raw.length;const tail=Buffer.from(z.tail+'endobj'+NL,'latin1');chunks.push(tail);total+=tail.length;}
-      else{const e=Buffer.from('endobj'+NL,'latin1');chunks.push(e);total+=e.length;}
-    }
-    const xo=total;
-    let x='xref'+NL+'0 '+next+NL+'0000000000 65535 f '+NL;
-    for(let i=1;i<next;i++)x+=String(off[i]||0).padStart(10,'0')+' 00000 n '+NL;
-    x+='trailer'+NL+'<< /Size '+next+' /Root 1 0 R >>'+NL+'startxref'+NL+xo+NL+'%%EOF'+NL;
-    chunks.push(Buffer.from(x,'latin1'));
-    return Buffer.concat(chunks);
+    doc.end();
+    return done;
   }
+
   async function archive(order,pdf,sentAt=null){
     const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,row={order_id:order.id,seller_id:sid||order.seller_id||null,order_code:String(order.code||''),customer_name:order.customer_name||null,customer_phone:normalizeBR(order.phone||order.contact_phone||'')||null,official_sale_id:String(order.official_sale_id||'')||null,file_name:'bilhetes-'+order.code+'.pdf',mime_type:'application/pdf',pdf_base64:pdf.toString('base64'),sent_at:sentAt,updated_at:nowISO()};
     const ex=await one('rds10_ticket_documents','select=id&order_id=eq.'+encodeURIComponent(order.id));if(ex?.id)await patch('rds10_ticket_documents','id=eq.'+encodeURIComponent(ex.id),row);else await insert('rds10_ticket_documents',row);
