@@ -1,9 +1,16 @@
 import fs from 'node:fs';
 
-const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V2';
+const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V3';
 let server=fs.readFileSync('server.js','utf8');
 if(server.includes(marker)){process.exit(0);}
 const listen="app.listen(PORT,async()=>{";
+const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V2';
+const oldStart=server.indexOf(oldMarker);
+if(oldStart>=0){
+  const oldEnd=server.indexOf('\n})();\n'+listen,oldStart);
+  if(oldEnd>=0)server=server.slice(0,oldStart)+server.slice(oldEnd+1);
+}
+
 const pos=server.indexOf(listen);
 if(pos<0)throw new Error('app.listen não localizado.');
 
