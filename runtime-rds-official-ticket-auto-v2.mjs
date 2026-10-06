@@ -44,7 +44,7 @@ const block=`
     const doc=new PDFDocument({size:[W,H],margin:0,autoFirstPage:true,compress:true});
     doc.on('data',c=>chunks.push(c));
     const done=new Promise((resolve,reject)=>{doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject);});
-    const rgb=c=>{const a=c.split(' ').map(Number);return {r:Math.round(a[0]*255),g:Math.round(a[1]*255),b:Math.round(a[2]*255)};};
+    const rgb=c=>{const a=String(c).trim().split(/\s+/).map(Number);const h=n=>Math.max(0,Math.min(255,Math.round(n*255))).toString(16).padStart(2,'0');return '#'+h(a[0]??0)+h(a[1]??0)+h(a[2]??0);};
     const text=(v,x,y,size,color='0.12 0.17 0.24',opts={})=>{
       doc.font('Helvetica').fontSize(size).fillColor(rgb(color)).text(String(v??''),x,y,{lineBreak:false,width:opts.width||500,ellipsis:false});
     };
@@ -55,10 +55,10 @@ const block=`
       doc.strokeColor(rgb(color)).lineWidth(width).moveTo(x1,y1).lineTo(x2,y2).stroke();
     };
     const dashed=(x1,y1,x2,y2)=>{
-      doc.save().dash(3,{space:3}).strokeColor({r:107,g:115,b:128}).lineWidth(1).moveTo(x1,y1).lineTo(x2,y2).stroke().undash().restore();
+      doc.save().dash(3,{space:3}).strokeColor('#6B7380').lineWidth(1).moveTo(x1,y1).lineTo(x2,y2).stroke().undash().restore();
     };
     const border=(x,y,w,h)=>{
-      doc.save().dash(6,{space:4}).strokeColor({r:156,g:171,b:189}).lineWidth(1.4).rect(x,y,w,h).stroke().undash().restore();
+      doc.save().dash(6,{space:4}).strokeColor('#9CABBD').lineWidth(1.4).rect(x,y,w,h).stroke().undash().restore();
     };
     const qr=(value,x,y,size)=>{
       if(!QR)return;
@@ -127,7 +127,7 @@ const block=`
     try{const m=String(content?.fileName||'').match(/bilhetes-(RDS-[A-Z0-9]{6,12})\.pdf/i);if(m&&content?.document){const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,f=sid?'select=*&code=eq.'+encodeURIComponent(m[1])+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&code=eq.'+encodeURIComponent(m[1]),o=await one('rds10_orders',f);if(o){const b=await pdf(o);await archive(o,b);console.log('[RDS TICKET] modelo oficial aplicado '+o.code);return rawSend(jid,{...content,document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf'});}}}catch(e){console.error('[RDS TICKET] modelo oficial:',e?.message||e);}return rawSend(jid,content);
   };
   app.get('/api/rds/ticket-pdf/:id',async(req,res)=>{
-    try{const f='select=*&id=eq.'+encodeURIComponent(req.params.id),o=await one('rds10_orders',f);if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});const b=await pdf(o);await archive(o,b);const d=await one('rds10_ticket_documents','select=*&order_id=eq.'+encodeURIComponent(o.id));if(!d?.pdf_base64)return res.status(404).json({ok:false,error:'PDF não arquivado.'});res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="bilhetes-'+o.code+'.pdf"');res.end(Buffer.from(d.pdf_base64,'base64'));}catch(e){res.status(500).json({ok:false,error:e.message});}
+    try{const f='select=*&id=eq.'+encodeURIComponent(req.params.id),o=await one('rds10_orders',f);if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});const b=await pdf(o);await archive(o,b);const d=await one('rds10_ticket_documents','select=*&order_id=eq.'+encodeURIComponent(o.id));if(!d?.pdf_base64)return res.status(404).json({ok:false,error:'PDF não arquivado.'});res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="bilhetes-'+o.code+'.pdf"');res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.end(Buffer.from(d.pdf_base64,'base64'));}catch(e){res.status(500).json({ok:false,error:e.message});}
   });
   app.post('/api/rds/ticket-pdf/:id/resend',async(req,res)=>{
     try{const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id),o=await one('rds10_orders',f);if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');if(!phone)throw new Error('Telefone do cliente não informado.');const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp não localizado.');const b=pdf(o);await archive(o,b,nowISO());const s=await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'});if(!s?.key?.id)throw new Error('WhatsApp não confirmou o envio.');await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:s.key.id,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(o.id),{sent_at:nowISO(),updated_at:nowISO()}).catch(()=>{});res.json({ok:true,waMessageId:s.key.id});}catch(e){res.status(500).json({ok:false,error:e.message});}
