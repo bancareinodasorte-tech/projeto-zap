@@ -103,13 +103,16 @@ const block=String.raw`
         '</div>'+
       '</div>');
     }
-    const cols=2;
-    const sheetWidth=1660;
-    const rows=Math.max(1,Math.ceil(cards.length/2));
-    const sheetHeight=20+(rows*580);
+    const singleCard=cards.length===1;
+    const cols=singleCard?1:2;
+    const sheetWidth=singleCard?800:1660;
+    const rows=Math.max(1,Math.ceil(cards.length/cols));
+    const sheetHeight=singleCard?560:20+(rows*580);
+    const pad=singleCard?0:20;
+    const gap=singleCard?0:20;
     return '<!doctype html><html><head><meta charset="utf-8"><style>'+
       '@page{margin:0;size:'+sheetWidth+'px '+sheetHeight+'px}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1f2937}'+
-      '.sheet{width:'+sheetWidth+'px;height:'+sheetHeight+'px;padding:20px;display:grid;grid-template-columns:repeat(2,800px);grid-auto-rows:560px;gap:20px;background:#fff;align-items:start}'+
+      '.sheet{width:'+sheetWidth+'px;height:'+sheetHeight+'px;padding:'+pad+'px;display:grid;grid-template-columns:repeat('+cols+',800px);grid-auto-rows:560px;gap:'+gap+'px;background:#fff;align-items:start}'+
       '.ticket-horizontal{width:800px;height:560px;background:#fff;border:2px dashed #9ca3af;border-radius:12px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:Montserrat,"Segoe UI",sans-serif;color:#1f2937;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}'+
       '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
       '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
@@ -127,8 +130,10 @@ const block=String.raw`
   async function getSheetSize(order,booksOverride=null){
     const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
     const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{tickets:[]}]);
-    const rows=Math.max(1,Math.ceil(books.length/2));
-    return {width:1660,height:20+(rows*580)};
+    const singleCard=books.length===1;
+    const cols=singleCard?1:2;
+    const rows=Math.max(1,Math.ceil(books.length/cols));
+    return {width:singleCard?800:1660,height:singleCard?560:20+(rows*580)};
   }
 
   async function renderPng(order,booksOverride=null){
