@@ -103,9 +103,12 @@ const block=String.raw`
         '</div>'+
       '</div>');
     }
+    const cols=cards.length>1?2:1;
+    const sheetWidth=cols===2?1660:840;
+    const sheetHeight=600;
     return '<!doctype html><html><head><meta charset="utf-8"><style>'+
-      '@page{margin:0;size:1660px 600px}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1f2937}'+
-      '.sheet{width:1660px;padding:20px;display:grid;grid-template-columns:repeat(2,800px);gap:20px;background:#fff;align-items:start}'+
+      '@page{margin:0;size:'+sheetWidth+'px '+sheetHeight+'px}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1f2937}'+
+      '.sheet{width:'+sheetWidth+'px;padding:20px;display:grid;grid-template-columns:repeat('+cols+',800px);gap:20px;background:#fff;align-items:start}'+
       '.ticket-horizontal{width:800px;height:560px;background:#fff;border:2px dashed #9ca3af;border-radius:12px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:Montserrat,"Segoe UI",sans-serif;color:#1f2937;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}'+
       '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
       '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
@@ -120,6 +123,13 @@ const block=String.raw`
       '</style></head><body><div class="sheet">'+cards.join('')+'</div></body></html>';
   }
 
+  async function getSheetSize(order){
+    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
+    const books=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{tickets:[]}];
+    const cols=books.length>1?2:1;
+    return {width:cols===2?1660:840,height:600};
+  }
+
   async function renderPng(order){
     let lastErr=null;
     for(let attempt=1;attempt<=2;attempt++){
@@ -127,7 +137,8 @@ const block=String.raw`
       try{
         browser=await getBrowser();
         if(!browser?.isConnected())throw new Error('Chromium desconectado.');
-        page=await browser.newPage({viewport:{width:1660,height:600},deviceScaleFactor:1});
+        const sheet=await getSheetSize(order);
+        page=await browser.newPage({viewport:{width:sheet.width,height:sheet.height},deviceScaleFactor:1});
         await page.setContent(await makeHtml(order),{waitUntil:'load'});
         await page.evaluate(()=>document.fonts?.ready);
         await page.waitForTimeout(150);
@@ -145,11 +156,12 @@ const block=String.raw`
 
   async function renderPdf(order){
     const png=await renderPng(order);
+    const sheet=await getSheetSize(order);
     const chunks=[];
-    const doc=new PDFDocument({size:[1660,600],margin:0,compress:true});
+    const doc=new PDFDocument({size:[sheet.width,sheet.height],margin:0,compress:true});
     doc.on('data',c=>chunks.push(c));
     const done=new Promise((resolve,reject)=>{doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject);});
-    doc.image(png,0,0,{width:1660,height:600});
+    doc.image(png,0,0,{width:sheet.width,height:sheet.height});
     doc.end();
     return done;
   }
