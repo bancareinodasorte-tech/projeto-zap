@@ -32,12 +32,24 @@ const block=String.raw`
 
   let browserPromise=null;
   async function getBrowser(){
-    if(!browserPromise){
-      browserPromise=(async()=>{
-        const executablePath=await chromiumBinary.executablePath();
-        return chromium.launch({executablePath,args:[...chromiumBinary.args,'--no-sandbox','--disable-setuid-sandbox'],headless:true});
-      })().catch(e=>{browserPromise=null;throw e;});
+    if(browserPromise){
+      try{
+        const b=await browserPromise;
+        if(b?.isConnected())return b;
+      }catch{}
+      browserPromise=null;
     }
+    browserPromise=(async()=>{
+      const executablePath=await chromiumBinary.executablePath();
+      const baseArgs=Array.isArray(chromiumBinary.args)?chromiumBinary.args:[];
+      const args=baseArgs.filter(a=>String(a)!=='--single-process');
+      for(const a of ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage']){
+        if(!args.includes(a))args.push(a);
+      }
+      const b=await chromium.launch({executablePath,args,headless:true});
+      b.on('disconnected',()=>{browserPromise=null;});
+      return b;
+    })().catch(e=>{browserPromise=null;throw e;});
     return browserPromise;
   }
 
@@ -109,14 +121,26 @@ const block=String.raw`
   }
 
   async function renderPng(order){
-    const browser=await getBrowser();
-    const page=await browser.newPage({viewport:{width:1660,height:600},deviceScaleFactor:1});
-    try{
-      await page.setContent(await makeHtml(order),{waitUntil:'load'});
-      await page.evaluate(()=>document.fonts?.ready);
-      await page.waitForTimeout(150);
-      return await page.locator('.sheet').screenshot({type:'png'});
-    }finally{await page.close();}
+    let lastErr=null;
+    for(let attempt=1;attempt<=2;attempt++){
+      let browser=null,page=null;
+      try{
+        browser=await getBrowser();
+        if(!browser?.isConnected())throw new Error('Chromium desconectado.');
+        page=await browser.newPage({viewport:{width:1660,height:600},deviceScaleFactor:1});
+        await page.setContent(await makeHtml(order),{waitUntil:'load'});
+        await page.evaluate(()=>document.fonts?.ready);
+        await page.waitForTimeout(150);
+        return await page.locator('.sheet').screenshot({type:'png'});
+      }catch(e){
+        lastErr=e;
+        browserPromise=null;
+        try{if(page)await page.close().catch(()=>{});}catch{}
+        try{if(browser&&browser.isConnected())await browser.close().catch(()=>{});}catch{}
+        if(attempt<2)continue;
+      }
+    }
+    throw lastErr||new Error('Falha ao renderizar bilhete.');
   }
 
   async function renderPdf(order){
