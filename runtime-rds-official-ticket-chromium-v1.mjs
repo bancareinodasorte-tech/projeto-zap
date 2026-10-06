@@ -23,11 +23,8 @@ const block=String.raw`
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
 
   const logoB64=(()=>{
-    try{
-      const s=fs.readFileSync('runtime-rds-official-ticket-auto-v1.mjs','utf8');
-      const m=s.match(/const RDS_TICKET_LOGO_JPG_B64='([^']+)'/);
-      return m?.[1]||'';
-    }catch{return '';}
+    try{return fs.readFileSync('assets/rds-official-logo.webp').toString('base64');}
+    catch{return '';}
   })();
 
   let browserPromise=null;
@@ -68,7 +65,7 @@ const block=String.raw`
     const prize=p.drawDescription?drawTitle+' - '+String(p.drawDescription):drawTitle;
     const dd=dateBR(p.drawDate),sd=dateTimeBR(p.createdAt||order?.created_at);
     const publicUrl=String(p.publicUrl||'https://admin.reinodasorte.com.br/');
-    const logo=logoB64?'data:image/jpeg;base64,'+logoB64:'';
+    const logo=logoB64?'data:image/webp;base64,'+logoB64:'';
     const cards=[];
     for(const b of books){
       const nums=Array.isArray(b?.tickets)?b.tickets:[];
