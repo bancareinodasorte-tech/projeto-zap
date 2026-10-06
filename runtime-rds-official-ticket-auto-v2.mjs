@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 
-const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V4';
+const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V5';
 let server=fs.readFileSync('server.js','utf8');
 if(server.includes(marker)){process.exit(0);}
 const listen="app.listen(PORT,async()=>{";
-const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V3';
+const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V4';
 const oldStart=server.indexOf(oldMarker);
 if(oldStart>=0){
   const oldEnd=server.indexOf('\n})();\n'+listen,oldStart);
@@ -17,7 +17,7 @@ if(pos<0)throw new Error('catch-all não localizado.');
 
 
 const block=`
-// RDS OFFICIAL TICKET AUTO DELIVERY V4
+// RDS OFFICIAL TICKET AUTO DELIVERY V5
 (()=>{
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
   const RDS_Readable=require('node:stream').Readable;
