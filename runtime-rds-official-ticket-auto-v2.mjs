@@ -61,15 +61,15 @@ const block=`
       border(o,x,y,TW,TH);
       line(o,x,y+bottom,x+TW,y+bottom,'0.61 0.67 0.74',1.2);
 
-      t(o,x+24,y+530,18,'Data do Sorteio: '+dd,navy);
-      t(o,x+515,y+530,14,'Data da Venda: '+sd,navy);
+      t(o,x+24,y+530,14,'Data do Sorteio: '+dd,navy);
+      t(o,x+515,y+530,13,'Data da Venda: '+sd,navy);
 
       if(logoBuf.length)o.push('q 190 0 0 145 '+(x+25)+' '+(y+302)+' cm /Im1 Do Q');
-      t(o,x+65,y+284,10,'JARDIM - CEARÁ',navy);
+      
 
       const rx=x+225,rw=550;
       line(o,rx,y+492,rx+rw,y+492,'0.55 0.62 0.72',1);
-      t(o,rx+175,y+503,14,'NÚMEROS DA SORTE',navy);
+      t(o,rx+175,y+503,13,'NÚMEROS DA SORTE',navy);
       line(o,rx,y+488,rx+rw,y+488,'0.55 0.62 0.72',1);
 
       const tk=Array.isArray(b?.tickets)?b.tickets:[];
