@@ -73,6 +73,14 @@ await import('./runtime-rds-whatsapp-tenant-v1.mjs');
 await import('./runtime-rds-whatsapp-crm-tenant-fix-v1.mjs');
 await import('./runtime-rds-sales-route-final-v3.mjs');
 await import('./runtime-rds-official-ticket-auto-v2.mjs');
+// RDS ORDERS API OFFICIAL SALE FIELD V1
+{
+  let s=fs.readFileSync('server.js','utf8');
+  const needle='select=id,code,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,pagbank_order_id,pagbank_charge_id,pagbank_status,payment_method,payment_created_at,payment_updated_at,payment_last_error&order=updated_at.desc';
+  const fixed='select=id,code,seller_id,contact_id,phone,customer_name,contact_phone,quantity,unit_price,total_amount,status,proof_type,proof_received_at,payment_confirmed_at,completed_at,last_inbound_text,created_at,updated_at,campaign_code,official_sale_id,pagbank_order_id,pagbank_charge_id,pagbank_status,payment_method,payment_created_at,payment_updated_at,payment_last_error&order=updated_at.desc';
+  if(s.includes(needle)){s=s.replace(needle,fixed);fs.writeFileSync('server.js',s,'utf8');console.log('[RDS] official_sale_id adicionado à API /api/orders');}
+}
+
 // PagBank legado desativado para produção. Mercado Pago é o provedor oficial.
 // API legada de Pagamentos Safe removida do boot: o núcleo de pedidos já está ativo e o Mercado Pago é o provedor oficial.
 // UX PIX V7 problemática desativada no boot; o núcleo Mercado Pago permanece ativo.
