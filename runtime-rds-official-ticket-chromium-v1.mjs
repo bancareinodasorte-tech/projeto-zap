@@ -22,10 +22,12 @@ const block=String.raw`
   const RDS_Readable=require('node:stream').Readable;
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
 
+  // A tela oficial do APK usa /assets/logo.png. No servidor, usamos a cópia oficial enviada pela banca.
   const logoB64=(()=>{
     try{
-      const logoPath=require('node:path').join(__dirname,'assets','rds-official-logo.webp');
-      return fs.readFileSync(logoPath).toString('base64');
+      const logoPath=require('node:path').resolve(process.cwd(),'assets','rds-official-logo.webp');
+      const raw=fs.readFileSync(logoPath);
+      return raw.toString('base64');
     }catch(e){
       console.error('[RDS TICKET] logo oficial não carregada:',e?.message||e);
       return '';
