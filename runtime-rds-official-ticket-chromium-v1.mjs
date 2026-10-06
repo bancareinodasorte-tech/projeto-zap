@@ -60,35 +60,51 @@ const block=String.raw`
     const cards=[];
     for(const b of books){
       const nums=Array.isArray(b?.tickets)?b.tickets:[];
-      const rows=Math.max(1,Math.ceil(nums.length/5));
       let cells='';
       for(const v of nums)cells+='<div class="num">'+esc(ticketNumber(v))+'</div>';
       let qr='';
-      try{if(QR)qr=await QR.toDataURL(publicUrl,{errorCorrectionLevel:'M',margin:0,width:140});}catch{}
+      try{if(QR)qr=await QR.toDataURL(publicUrl,{errorCorrectionLevel:'M',margin:0,width:100});}catch{}
       const label=esc(String(b?.bookletLabel||((b?.bookletNumber||'-')+'-'+(b?.lotNumber||1))));
+      const logoHtml=logo?'<img class="official-logo" src="'+logo+'" alt="Reino da Sorte">':'<div class="logo-fallback">REINO<br><strong>DA SORTE</strong></div>';
       cards.push('<div class="ticket-horizontal">'+
         '<div class="ticket-blue">'+
-          '<div class="dates"><span>Data do Sorteio: '+esc(dd)+'</span><span>Data da Venda: '+esc(sd)+'</span></div>'+
-          '<div class="main-row"><div class="brand">'+(logo?'<img src="'+logo+'">':'')+'</div>'+
-          '<div class="numbers-area"><div class="section-title">NÚMEROS DA SORTE</div>'+
-          '<div class="numbers-grid" style="grid-template-rows:repeat('+rows+',38px)">'+cells+'</div></div></div>'+
+          '<div class="topline"><div>Data do Sorteio: '+esc(dd)+'</div><div>Data da Venda: '+esc(sd)+'</div></div>'+
+          '<div class="main-blue">'+
+            '<div class="logo-col">'+logoHtml+'<span>JARDIM - CEARÁ</span></div>'+
+            '<div class="numbers-col">'+
+              '<div class="numbers-title"><i></i><span>Números da Sorte</span><i></i></div>'+
+              '<div class="numbers-grid">'+cells+'</div>'+
+            '</div>'+
+          '</div>'+
           '<div class="deadline">PRAZO PARA O GANHADOR SE APRESENTAR<br><b>ATÉ AS 09H DO DIA SEGUINTE</b></div>'+
         '</div>'+
+        '<div class="split-line"></div>'+
         '<div class="ticket-gray">'+
-          '<div class="field"><b>Vendedor:</b> '+esc(seller)+'</div>'+
-          '<div class="field"><b>Nome:</b> <span>'+esc(name)+'</span></div><div class="rule"></div>'+
-          '<div class="field"><b>Telefone:</b> <span>'+esc(phone)+'</span></div><div class="rule"></div>'+
-          '<div class="field"><b>Prêmio:</b> <span>'+esc(prize)+'</span></div><div class="rule"></div>'+
-          '<div class="footer"><span>@reinodasorteoficial</span><span>(88) 9 9494-3632</span></div>'+
-          '<div class="qrbox"><div>Acompanhar sorteio</div>'+(qr?'<img src="'+qr+'">':'')+'<strong>'+label+'</strong></div>'+
-        '</div></div>');
+          '<div class="info-col">'+
+            '<div class="seller"><b>Vendedor:</b> '+esc(seller)+'</div>'+
+            '<div class="line-field"><b>Nome:</b><span>'+esc(name)+'</span></div>'+
+            '<div class="line-field"><b>Telefone:</b><span>'+esc(phone)+'</span></div>'+
+            '<div class="line-field"><b>Prêmio:</b><span>'+esc(prize)+'</span></div>'+
+            '<div class="contacts"><span class="ig">◎</span><span>@reinodasorteoficial</span><span class="wa">◉</span><span>(88) 9 9494-3632</span></div>'+
+          '</div>'+
+          '<div class="qrbox"><span>Acompanhar sorteio</span>'+(qr?'<img src="'+qr+'">':'<div class="qr-placeholder">QR Code</div>')+'<strong>'+label+'</strong></div>'+
+        '</div>'+
+      '</div>');
     }
     return '<!doctype html><html><head><meta charset="utf-8"><style>'+
       '@page{margin:0;size:1660px 600px}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1f2937}'+
-      '.sheet{width:1660px;height:600px;padding:20px;display:grid;grid-template-columns:800px 800px;gap:20px;background:#fff}'+
-      '.ticket-horizontal{width:800px;height:560px;border:2px dashed #9ca3af;border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column}'+
-      '.ticket-blue{height:325px;background:#c7def0;padding:18px 24px 0;position:relative;flex:none}.ticket-gray{height:235px;background:#f0f2f7;padding:8px 24px;position:relative;flex:none;border-top:1px solid #9ca3af}'+
-      '.dates{display:flex;justify-content:space-between;font-size:14px;color:#172b55}.main-row{display:flex;margin-top:10px}.brand{width:201px;height:225px;display:flex;align-items:center}.brand img{width:190px;height:145px;object-fit:contain}.numbers-area{width:550px}.section-title{height:35px;border-top:1px solid #8c9caf;border-bottom:1px solid #8c9caf;text-align:center;padding-top:8px;font-size:13px;color:#172b55}.numbers-grid{margin-top:20px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.num{height:30px;background:#fbfdff;border:1px solid #94c4ef;display:flex;align-items:center;justify-content:center;font-size:13px;color:#1f2937}.deadline{position:absolute;right:24px;bottom:5px;text-align:center;font-size:10px;line-height:14px;color:#172b55}.field{height:27px;font-size:15px;line-height:27px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:230px}.field b{font-weight:600}.rule{border-bottom:1px dashed #6b7380;width:445px;margin-left:76px;height:1px}.footer{position:absolute;left:24px;bottom:12px;display:flex;gap:30px;font-size:11px}.qrbox{position:absolute;right:24px;top:34px;width:155px;height:172px;border:1px dashed #9cabbd;text-align:center;padding-top:8px;font-size:12px}.qrbox img{display:block;width:100px;height:100px;margin:18px auto 4px}.qrbox strong{display:block;font-size:16px;color:#172b55}'+
+      '.sheet{width:1660px;padding:20px;display:grid;grid-template-columns:repeat(2,800px);gap:20px;background:#fff;align-items:start}'+
+      '.ticket-horizontal{width:800px;height:560px;background:#fff;border:2px dashed #9ca3af;border-radius:12px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:Montserrat,"Segoe UI",sans-serif;color:#1f2937;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}'+
+      '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
+      '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
+      '.main-blue{display:flex;justify-content:space-between;align-items:center;flex:1;margin-top:8px;position:relative;z-index:1}'+
+      '.logo-col{width:28%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-right:16px;text-align:center}.official-logo{width:100%;max-width:200px;height:auto;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.1))}.logo-col>span{font-size:10px;font-weight:800;color:#1e3a8a;letter-spacing:.1em;margin-top:4px}.logo-fallback{font-size:28px;line-height:.85;color:#17458a;font-weight:800;text-align:center;text-shadow:0 2px 2px rgba(255,255,255,.5)}.logo-fallback strong{font-size:32px}'+
+      '.numbers-col{width:72%;display:flex;flex-direction:column}.numbers-title{display:flex;align-items:center;justify-content:center;margin-bottom:12px}.numbers-title i{flex-grow:1;height:2px;background:rgba(30,58,138,.2);border-radius:999px}.numbers-title span{margin:0 12px;font-size:14px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.1em;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
+      '.numbers-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.num{background:rgba(255,255,255,.95);border-radius:6px;box-shadow:0 2px 6px rgba(30,58,138,.18);border:1px solid #93c5fd;text-align:center;padding:6px 0;font-weight:700;font-size:14px;letter-spacing:-.02em;color:#1f2937}'+
+      '.deadline{width:100%;text-align:right;margin-top:12px;position:relative;z-index:1;font-size:11px;font-weight:700;line-height:1.3;text-transform:uppercase;color:#1e3a5f;text-shadow:0 1px 1px rgba(255,255,255,.9)}'+
+      '.split-line{width:100%;height:0;border-top:2px dashed #9ca3af;position:absolute;top:58%;left:0;z-index:20}'+
+      '.ticket-gray{background:#f0f2f5;height:42%;width:100%;padding:32px 24px 24px;display:flex;justify-content:space-between;z-index:10}.info-col{width:72%;display:flex;flex-direction:column;justify-content:space-between;padding-right:16px}.seller{font-size:14px;margin-bottom:12px;color:#374151}.line-field{display:flex;align-items:flex-end;width:100%;margin-top:16px}.line-field b{font-weight:700;font-size:16px;margin-right:12px;color:#1f2937;padding-bottom:4px}.line-field span{flex-grow:1;border-bottom:1px dashed #6b7280;font-size:15px;font-weight:700;color:#111827;padding:0 0 4px 8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.contacts{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:14px;font-weight:600;color:#374151}.contacts .ig{color:#db2777;font-size:22px}.contacts .wa{color:#22c55e;font-size:18px;margin-left:16px}'+
+      '.qrbox{width:26%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dotted #9ca3af;border-radius:8px;padding:8px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05)}.qrbox>span{font-size:12px;font-weight:700;letter-spacing:-.02em;color:#1f2937;margin-bottom:8px}.qrbox img{display:block;width:100px;height:100px}.qrbox strong{font-weight:700;font-size:18px;letter-spacing:.05em;color:#1e3a8a;margin-top:4px}.qr-placeholder{width:100px;height:100px;background:#e5e7eb;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af}'+
       '</style></head><body><div class="sheet">'+cards.join('')+'</div></body></html>';
   }
 
