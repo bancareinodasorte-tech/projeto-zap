@@ -31,6 +31,14 @@
   async function loadArchive(){
     try{const r=await fetch('/api/rds/ticket-archive?rds='+Date.now(),{cache:'no-store'});const d=await r.json();archiveRows=Array.isArray(d.rows)?d.rows:[];}
     catch{archiveRows=[]}
+    const liveOrders=Array.isArray(window.state?.orders)?window.state.orders:[];
+    const byId=new Map((archiveRows||[]).map(o=>[String(o.order_id||o.id),o]));
+    for(const o of liveOrders){
+      if(o?.status!=='CONCLUIDO'||!o?.official_sale_id)continue;
+      const id=String(o.id||'');if(!id||byId.has(id))continue;
+      byId.set(id,{id:o.id,order_id:o.id,order_code:o.code||'',customer_name:o.customer_name||null,customer_phone:o.phone||o.contact_phone||null,official_sale_id:o.official_sale_id||null,created_at:o.created_at||o.completed_at||null,sent_at:null,updated_at:o.updated_at||null,pdf_base64:null});
+    }
+    archiveRows=[...byId.values()];
   }
   function archiveCard(){
     return '<section class="card rds-ticket-archive-card" id="rdsTicketArchiveCard">'+
