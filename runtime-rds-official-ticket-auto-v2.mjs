@@ -11,8 +11,10 @@ if(oldStart>=0){
   if(oldEnd>=0)server=server.slice(0,oldStart)+server.slice(oldEnd+1);
 }
 
-const pos=server.indexOf(listen);
-if(pos<0)throw new Error('app.listen não localizado.');
+const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const pos=server.indexOf(catchAll);
+if(pos<0)throw new Error('catch-all não localizado.');
+
 
 const block=`
 // RDS OFFICIAL TICKET AUTO DELIVERY V2
