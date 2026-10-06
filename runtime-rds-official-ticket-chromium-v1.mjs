@@ -23,8 +23,13 @@ const block=String.raw`
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
 
   const logoB64=(()=>{
-    try{return fs.readFileSync('assets/rds-official-logo.webp').toString('base64');}
-    catch{return '';}
+    try{
+      const logoPath=require('node:path').join(__dirname,'assets','rds-official-logo.webp');
+      return fs.readFileSync(logoPath).toString('base64');
+    }catch(e){
+      console.error('[RDS TICKET] logo oficial não carregada:',e?.message||e);
+      return '';
+    }
   })();
 
   let browserPromise=null;
