@@ -150,7 +150,7 @@ const block=String.raw`
 
   app.get('/api/rds/ticket-pdf/:id',async(req,res)=>{
     try{
-      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id);
+      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const b=await renderPdf(o);await archive(o,b);
       res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="bilhetes-'+o.code+'.pdf"');
@@ -161,7 +161,7 @@ const block=String.raw`
   app.post('/api/rds/ticket-pdf/:id/resend',async(req,res)=>{
     try{
       const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-      const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id);
+      const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id));
       const o=await one('rds10_orders',f);
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
