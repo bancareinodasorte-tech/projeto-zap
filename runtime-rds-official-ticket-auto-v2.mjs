@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 
-const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V5';
+const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V6';
 let server=fs.readFileSync('server.js','utf8');
 if(server.includes(marker)){process.exit(0);}
 const listen="app.listen(PORT,async()=>{";
-const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V4';
+const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V5';
 const oldStart=server.indexOf(oldMarker);
 if(oldStart>=0){
   const oldEnd=server.indexOf('\n})();\n'+listen,oldStart);
@@ -17,7 +17,7 @@ if(pos<0)throw new Error('catch-all não localizado.');
 
 
 const block=`
-// RDS OFFICIAL TICKET AUTO DELIVERY V5
+// RDS OFFICIAL TICKET AUTO DELIVERY V6
 (()=>{
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
   const RDS_Readable=require('node:stream').Readable;
@@ -133,14 +133,14 @@ const block=`
     const objs=[
       {id:1,b:'<< /Type /Catalog /Pages 2 0 R >>'},
       {id:2,b:null},
-      {id:3,b:'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'},
+      {id:3,b:'<< /Type /Font /Subtype /Type1 /Name /F1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'},
       {id:4,b:'<< /Type /XObject /Subtype /Image /Width 100 /Height 92 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+logoBuf.length+' >>',raw:logoBuf,tail:NL+'endstream'}
     ];
     let next=5,pids=[],cids=[];
     opsPages.forEach(()=>{pids.push(next++);cids.push(next++);});
     objs[2]={id:2,b:'<< /Type /Pages /Kids ['+pids.map(x=>x+' 0 R').join(' ')+'] /Count '+opsPages.length+' >>'};
     opsPages.forEach((ops,i)=>{
-      objs.push({id:pids[i],b:'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+W+' '+(TH+PAD*2)+'] /Resources << /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R >> >> /Contents '+cids[i]+' 0 R >>'});
+      objs.push({id:pids[i],b:'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+W+' '+(TH+PAD*2)+'] /Resources << /ProcSet [/PDF /Text /ImageB /ImageC /ImageI] /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R >> >> /Contents '+cids[i]+' 0 R >>'});
       const body=ops.join(NL)+NL;
       objs.push({id:cids[i],b:'<< /Length '+Buffer.byteLength(body,'latin1')+' >>'+NL+'stream'+NL+body+'endstream'});
     });
