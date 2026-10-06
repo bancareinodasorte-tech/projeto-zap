@@ -18,6 +18,7 @@ const block=String.raw`
 (()=>{
   const {chromium}=require('playwright-core');
   const chromiumBinary=require('@sparticuz/chromium');
+  const PDFDocument=require('pdfkit');
   const RDS_Readable=require('node:stream').Readable;
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
 
