@@ -45,7 +45,13 @@
     const period=q('#rdsTicketPeriod')?.value||'today';let from='',to='';
     if(period==='custom'){from=q('#rdsTicketFrom')?.value||'';to=q('#rdsTicketTo')?.value||from;}else [from,to]=periodRange(period);
     const term=(q('#rdsTicketSearch')?.value||'').trim().toLowerCase();
-    return archiveRows.filter(o=>{const d=rowDate(o),inDate=!from||(d>=from&&d<=to),hay=[o.order_code,o.customer_name,o.customer_phone,o.official_sale_id].join(' ').toLowerCase();return inDate&&(!term||hay.includes(term));});
+    const byId=new Map((archiveRows||[]).map(o=>[String(o.order_id||o.id),o]));
+    for(const o of (state.orders||[])){
+      if(o.status!=='CONCLUIDO'||!o.official_sale_id)continue;
+      const id=String(o.id||'');if(!id||byId.has(id))continue;
+      byId.set(id,{id:o.id,order_id:o.id,order_code:o.code||'',customer_name:o.customer_name||null,customer_phone:o.phone||o.contact_phone||null,official_sale_id:o.official_sale_id||null,created_at:o.created_at||o.completed_at||null,sent_at:null,updated_at:o.updated_at||null,pdf_base64:null});
+    }
+    return [...byId.values()].filter(o=>{const d=rowDate(o),inDate=!from||(d>=from&&d<=to),hay=[o.order_code,o.customer_name,o.customer_phone,o.official_sale_id].join(' ').toLowerCase();return inDate&&(!term||hay.includes(term));}).sort((a,b)=>new Date(b.created_at||b.updated_at||0)-new Date(a.created_at||a.updated_at||0));
   }
   function renderArchiveTable(){
     const box=q('#rdsTicketArchiveTable'),sum=q('#rdsTicketArchiveSummary');if(!box)return;const rows=getFilteredRows();
