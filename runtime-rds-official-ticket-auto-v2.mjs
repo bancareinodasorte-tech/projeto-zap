@@ -72,12 +72,24 @@ const block=`
       t(o,rx+175,y+503,14,'NÚMEROS DA SORTE',navy);
       line(o,rx,y+488,rx+rw,y+488,'0.55 0.62 0.72',1);
 
-      const tk=Array.isArray(b?.tickets)?b.tickets:[],bw=(rw-32)/5,bh=30;
-      tk.slice(0,20).forEach((v,k)=>{
-        const rr=Math.floor(k/5),cc=k%5,bx=rx+cc*(bw+8),by=y+449-rr*38;
+      const tk=Array.isArray(b?.tickets)?b.tickets:[];
+      // A quantidade de bilhetes vem exclusivamente da Integração Oficial.
+      // Não existe limite artificial de 20: a grade continua em 5 colunas e
+      // reduz o espaçamento/tamanho apenas quando houver muitas linhas.
+      const cols=5;
+      const rows=Math.max(1,Math.ceil(tk.length/cols));
+      const gridTop=y+449;
+      const gridBottom=y+238;
+      const availableH=gridTop-gridBottom;
+      const rowGap=Math.min(38,Math.max(18,availableH/rows));
+      const bh=Math.min(30,Math.max(16,rowGap-7));
+      const bw=(rw-32)/cols;
+      tk.forEach((v,k)=>{
+        const rr=Math.floor(k/cols),cc=k%cols,bx=rx+cc*(bw+8),by=gridTop-bh-rr*rowGap;
         r(o,bx,by,bw,bh,'1 1 1');
         const val=String(v??'').includes('-')?String(v).split('-')[0]:String(v??'');
-        t(o,bx+Math.max(2,bw/2-val.length*3.2),by+10,13,val,ink);
+        const fs=bh<22?10:(bh<26?11:13);
+        t(o,bx+Math.max(2,bw/2-val.length*(fs*.24)),by+Math.max(5,(bh-fs)/2),fs,val,ink);
       });
 
       t(o,x+24,y+220,14,'Vendedor: '+seller,ink);
