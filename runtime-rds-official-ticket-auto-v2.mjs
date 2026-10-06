@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 
-const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V3';
+const marker='// RDS OFFICIAL TICKET AUTO DELIVERY V4';
 let server=fs.readFileSync('server.js','utf8');
 if(server.includes(marker)){process.exit(0);}
 const listen="app.listen(PORT,async()=>{";
-const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V2';
+const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V3';
 const oldStart=server.indexOf(oldMarker);
 if(oldStart>=0){
   const oldEnd=server.indexOf('\n})();\n'+listen,oldStart);
@@ -17,7 +17,7 @@ if(pos<0)throw new Error('catch-all não localizado.');
 
 
 const block=`
-// RDS OFFICIAL TICKET AUTO DELIVERY V2
+// RDS OFFICIAL TICKET AUTO DELIVERY V4
 (()=>{
   const QR=(()=>{try{return require('qrcode');}catch{return null;}})();
   const RDS_Readable=require('node:stream').Readable;
@@ -55,7 +55,7 @@ const block=`
     };
     const draw=(o,x,y,b)=>{
       const top=325,bottom=235;
-      const blue='0.78 0.87 0.94',gray='0.94 0.95 0.97',navy='0.09 0.14 0.32',ink='0.12 0.17 0.24',gold='0.78 0.59 0.12';
+      const blue='0.78 0.87 0.94',gray='0.94 0.95 0.97',navy='0.09 0.14 0.32',ink='0.12 0.17 0.24';
       r(o,x,y+bottom,TW,top,blue);
       r(o,x,y,TW,bottom,gray);
       border(o,x,y,TW,TH);
@@ -86,11 +86,19 @@ const block=`
       const bw=(rw-32)/cols;
       tk.forEach((v,k)=>{
         const rr=Math.floor(k/cols),cc=k%cols,bx=rx+cc*(bw+8),by=gridTop-bh-rr*rowGap;
-        r(o,bx,by,bw,bh,'1 1 1');
+        r(o,bx,by,bw,bh,'0.98 0.99 1');
+        line(o,bx,by,bx+bw,by,'0.58 0.77 0.96',1);
+        line(o,bx,by+bh,bx+bw,by+bh,'0.58 0.77 0.96',1);
+        line(o,bx,by,bx,by+bh,'0.58 0.77 0.96',1);
+        line(o,bx+bw,by,bx+bw,by+bh,'0.58 0.77 0.96',1);
         const val=String(v??'').includes('-')?String(v).split('-')[0]:String(v??'');
         const fs=bh<22?10:(bh<26?11:13);
         t(o,bx+Math.max(2,bw/2-val.length*(fs*.24)),by+Math.max(5,(bh-fs)/2),fs,val,ink);
       });
+
+      // Aviso oficial exibido no canto inferior direito da área azul.
+      t(o,x+468,y+250,10,'PRAZO PARA O GANHADOR SE APRESENTAR',navy);
+      t(o,x+520,y+238,10,'ATÉ AS 09H DO DIA SEGUINTE',navy);
 
       t(o,x+24,y+220,14,'Vendedor: '+seller,ink);
 
