@@ -8,9 +8,10 @@ if(server.includes(marker))process.exit(0);
 const oldMarker='// RDS OFFICIAL TICKET AUTO DELIVERY V6';
 const oldStart=server.indexOf(oldMarker);
 if(oldStart<0)throw new Error('Runtime V6 dos bilhetes não localizado.');
-const oldEnd=server.indexOf('\n})();\n',oldStart);
-if(oldEnd<0)throw new Error('Fim do runtime V6 dos bilhetes não localizado.');
-server=server.slice(0,oldStart)+server.slice(oldEnd+1);
+const catchAllMarker="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
+const oldEnd=server.indexOf(catchAllMarker,oldStart);
+if(oldEnd<0)throw new Error('Catch-all não localizado para substituir o runtime V6.');
+server=server.slice(0,oldStart)+server.slice(oldEnd);
 
 const block=String.raw`
 // RDS OFFICIAL TICKET CHROMIUM V1
