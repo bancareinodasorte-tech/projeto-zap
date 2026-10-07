@@ -86,9 +86,9 @@ create index if not exists idx_rds10_campaigns_company on public.rds10_campaigns
 create index if not exists idx_rds10_ticket_documents_company on public.rds10_ticket_documents(company_id);
 
 insert into public.rds10_company_connections(company_id,connection_type,provider,status,metadata)
-select c.id,'PAGAMENTO','MERCADO_PAGO','CONFIGURADO','{"environment":"production"}'::jsonb
+select c.id,'PAGAMENTO','MERCADO_PAGO','DISPONIVEL','{"environment":"production"}'::jsonb
 from public.rds10_companies c where c.code='RDS'
-on conflict (company_id,connection_type,provider) do update set status='CONFIGURADO',metadata=excluded.metadata,updated_at=now();
+on conflict (company_id,connection_type,provider) do update set status='DISPONIVEL',metadata=excluded.metadata,updated_at=now();
 
 insert into public.rds10_company_connections(company_id,connection_type,provider,status,metadata)
 select c.id,'SISTEMA_OFICIAL','REINO_DA_SORTE','CONFIGURADO','{"role":"emissor_oficial"}'::jsonb
