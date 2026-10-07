@@ -91,7 +91,11 @@
       card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2>'+
         '<p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p>'+
         stateHtml+
-        (activeDraws.length?'<div class="priority" style="margin-top:10px"><strong>Sorteios oficiais disponíveis</strong><span class="mut">'+activeDraws.length+' ativo(s)</span></div>'+activeDraws.map(x=>'<div class="priority"><strong>'+esc(x.title||x.drawTitle||x.name||'Sorteio sem título')+'</strong><span class="mut">'+esc(x.external_draw_id||x.drawId||x.id||'—')+(x.price_per_ticket!=null?' • '+money(x.price_per_ticket):'')+(x.available_booklets!=null?' • '+esc(x.available_booklets)+' disponível(is)':'')+'</span></div>').join(''):'<div class="priority" style="margin-top:10px"><strong>Sorteio oficial</strong><span class="mut">'+esc(draw?.drawTitle||draw?.title||draw?.name||'Nenhum sorteio disponível')+'</span></div>')+
+        (activeDraws.length?'<div style="margin-top:14px"><div class="priority" style="margin-bottom:8px"><strong>Sorteios oficiais disponíveis</strong><span class="mut">'+activeDraws.length+' ativo(s)</span></div>'+activeDraws.map(x=>{
+        const available=x.available_booklets;
+        const availableText=available!=null?Number(available).toLocaleString('pt-BR')+' bilhetes disponíveis':'Disponibilidade não informada';
+        return '<div class="priority" style="display:block;padding:14px 16px;margin-top:8px"><div style="font-weight:700;font-size:16px;line-height:1.25">'+esc(x.title||x.drawTitle||x.name||'Sorteio sem título')+'</div><div class="mut" style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px 14px;line-height:1.35"><span>Sorteio '+esc(x.external_draw_id||x.drawId||x.id||'—')+'</span>'+(x.price_per_ticket!=null?'<span>'+money(x.price_per_ticket)+'</span>':'')+'<span>'+esc(availableText)+'</span></div></div>';
+      }).join('')+'</div>':'<div class="priority" style="margin-top:10px"><strong>Sorteio oficial</strong><span class="mut">'+esc(draw?.drawTitle||draw?.title||draw?.name||'Nenhum sorteio disponível')+'</span></div>')+
         '<div class="row" style="margin-top:12px">'+action+'</div>'+
         (d.statusError&&!authorized?'<p class="mut" style="margin-top:8px">'+esc(d.statusError.message||d.statusError)+'</p>':'')+
         (d.drawError?'<p class="mut" style="margin-top:8px">'+esc(d.drawError.message||d.drawError)+'</p>':'')+
