@@ -23,7 +23,9 @@
     }
     if(status?.authenticated||b?.authorized){
       try{const d=await json('/api/v1011/official-sales/draws');draws=Array.isArray(d?.data)?d.data:[];}catch(e){drawError=e;}
-      try{const d=await json('/api/v1011/official-sales/draw-info');draw=d?.data||d;}catch(e){if(!drawError)drawError=e;}
+      if(!draws.length){
+        try{const d=await json('/api/v1011/official-sales/draw-info');draw=d?.data||d;}catch(e){if(!drawError)drawError=e;}
+      }
     }
     return {bootstrap:b||{},status,draw,draws,statusError,drawError};
   }
@@ -57,13 +59,14 @@
     if(p!=='orders')return;
     const old=document.getElementById('rdsOfficialIntegrationV2');
     if(old&&!force)return;
-    old?.remove();
 
-    const card=document.createElement('section');
-    card.id='rdsOfficialIntegrationV2';
-    card.className='card rds-issuer-card';
-    card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p><div class="priority"><strong>Verificando integração oficial...</strong></div>';
-    app.prepend(card);
+    const card=old||document.createElement('section');
+    if(!old){
+      card.id='rdsOfficialIntegrationV2';
+      card.className='card rds-issuer-card';
+      card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p><div class="priority"><strong>Verificando integração oficial...</strong></div>';
+      app.prepend(card);
+    }
 
     try{
       const d=await loadOfficial();
@@ -147,7 +150,10 @@
   if(!window.__rdsOfficialInventoryTimer){
     window.__rdsOfficialInventoryTimer=setInterval(()=>{
       const p=window.page||localStorage.getItem('rds_current_page')||'home';
-      if(p==='orders')renderOfficialCard(true);
+      if(p==='orders'&&!window.__rdsOfficialRefreshBusy){
+        window.__rdsOfficialRefreshBusy=true;
+        Promise.resolve(renderOfficialCard(true)).finally(()=>{window.__rdsOfficialRefreshBusy=false;});
+      }
     },30000);
   }
 
