@@ -151,8 +151,8 @@ async function rdsOfficialSyncDrawsV3(){
     if(!id)continue;
     const current=inventoryByDraw.get(id)||{count:0,explicit:null};
     const explicit=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.quantityAvailable;
-    const n=Number(explicit);
-    if(Number.isFinite(n)) current.explicit=n;
+    const rawCount=Array.isArray(explicit)?explicit.length:(explicit?.length!=null?Number(explicit.length):Number(explicit));
+    if(Number.isFinite(rawCount)) current.explicit=rawCount;
     else current.count++;
     inventoryByDraw.set(id,current);
   }
