@@ -67,7 +67,7 @@ const block=String.raw`
     const prize=p.drawDescription?drawTitle+' - '+String(p.drawDescription):drawTitle;
     const dd=dateBR(p.drawDate),sd=dateTimeBR(p.createdAt||order?.created_at);
     const publicUrl=String(p.publicUrl||'https://admin.reinodasorte.com.br/');
-    const logo=logoB64?'data:image/png;base64,'+logoB64:'';
+    const logo=logoB64?'data:image/webp;base64,'+logoB64:'';
     const cards=[];
     for(const b of books){
       const nums=Array.isArray(b?.tickets)?b.tickets:[];
