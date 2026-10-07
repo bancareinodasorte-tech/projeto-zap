@@ -17,14 +17,15 @@
 
   async function loadOfficial(){
     const b=await json('/api/v1011/official-sales/bootstrap');
-    let status=null,draw=null,statusError=null,drawError=null;
+    let status=null,draw=null,draws=[],statusError=null,drawError=null;
     if(b?.emailConfigured){
       try{status=await json('/api/v1011/official-sales/status');}catch(e){statusError=e;}
     }
     if(status?.authenticated||b?.authorized){
-      try{const d=await json('/api/v1011/official-sales/draw-info');draw=d?.data||d;}catch(e){drawError=e;}
+      try{const d=await json('/api/v1011/official-sales/draws');draws=Array.isArray(d?.data)?d.data:[];}catch(e){drawError=e;}
+      try{const d=await json('/api/v1011/official-sales/draw-info');draw=d?.data||d;}catch(e){if(!drawError)drawError=e;}
     }
-    return {bootstrap:b||{},status,draw,statusError,drawError};
+    return {bootstrap:b||{},status,draw,draws,statusError,drawError};
   }
 
   function authModal(){
@@ -69,6 +70,8 @@
       const b=d.bootstrap||{};
       const authorized=Boolean(d.status?.authenticated||b.authorized);
       const draw=d.draw||{};
+      const draws=Array.isArray(d.draws)?d.draws:[];
+      const activeDraws=draws.filter(x=>x?.active!==false && x?.isDrawClosed!==true && x?.closed!==true);
       const drawOk=Boolean(draw?.drawId&&!draw?.isDrawClosed);
       let stateHtml='';
       if(authorized){
@@ -88,9 +91,7 @@
       card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2>'+
         '<p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p>'+
         stateHtml+
-        '<div class="priority" style="margin-top:10px"><strong>Sorteio</strong><span class="mut">'+esc(draw?.drawTitle||draw?.title||draw?.name||'Não consultado')+' • '+(draw?.drawId?'Disponível':'Indisponível')+'</span></div>'+
-        (draw?.pricePerTicket!=null?'<div class="priority"><strong>Valor oficial</strong><span class="mut">'+money(draw.pricePerTicket)+'</span></div>':'')+
-        (draw?.totalBooklets!=null?'<div class="priority"><strong>Disponibilidade</strong><span class="mut">'+esc(draw.totalBooklets)+'</span></div>':'')+
+        (activeDraws.length?'<div class="priority" style="margin-top:10px"><strong>Sorteios oficiais disponíveis</strong><span class="mut">'+activeDraws.length+' ativo(s)</span></div>'+activeDraws.map(x=>'<div class="priority"><strong>'+esc(x.title||x.drawTitle||x.name||'Sorteio sem título')+'</strong><span class="mut">'+esc(x.external_draw_id||x.drawId||x.id||'—')+(x.price_per_ticket!=null?' • '+money(x.price_per_ticket):'')+(x.available_booklets!=null?' • '+esc(x.available_booklets)+' bloco(s)':'')+'</span></div>').join(''):'<div class="priority" style="margin-top:10px"><strong>Sorteio oficial</strong><span class="mut">'+esc(draw?.drawTitle||draw?.title||draw?.name||'Nenhum sorteio disponível')+'</span></div>')+
         '<div class="row" style="margin-top:12px">'+action+'</div>'+
         (d.statusError&&!authorized?'<p class="mut" style="margin-top:8px">'+esc(d.statusError.message||d.statusError)+'</p>':'')+
         (d.drawError?'<p class="mut" style="margin-top:8px">'+esc(d.drawError.message||d.drawError)+'</p>':'')+
