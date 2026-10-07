@@ -26,7 +26,7 @@ const block=String.raw`
   // A tela oficial do APK usa /assets/logo.png. No servidor, usamos a cópia oficial enviada pela banca.
   // Logo oficial original da banca. Mantemos o PNG como arquivo do repositório para preservar a qualidade e evitar truncamento de base64.
   // Logo oficial incorporado a partir da versão estável que já renderizou corretamente no Chromium.
-  const logoPath=require('node:path').resolve(process.cwd(),'assets','rds-official-logo-clean.png');
+  const logoPath=require('node:path').resolve(process.cwd(),'assets','rds-official-logo-clean.webp');
   const logoB64=fs.existsSync(logoPath)?fs.readFileSync(logoPath).toString('base64'):'';
 
   let browserPromise=null;
