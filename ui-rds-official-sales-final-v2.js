@@ -140,6 +140,13 @@
     }catch(e){alert(e.message||'Falha na emissão oficial.');throw e;}
   };
 
+  if(!window.__rdsOfficialInventoryTimer){
+    window.__rdsOfficialInventoryTimer=setInterval(()=>{
+      const p=window.page||localStorage.getItem('rds_current_page')||'home';
+      if(p==='orders')renderOfficialCard(true);
+    },30000);
+  }
+
   window.rdsOfficialFinalMaybeRender=()=>{
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
     if(p==='orders'){renderOfficialCard();renderAutoStatus();}
