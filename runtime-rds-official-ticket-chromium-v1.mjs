@@ -95,7 +95,9 @@ const block=String.raw`
             '<div class="line-field"><b>Nome:</b><span>'+esc(name)+'</span></div>'+
             '<div class="line-field"><b>Telefone:</b><span>'+esc(phone)+'</span></div>'+
             '<div class="line-field"><b>Prêmio:</b><span>'+esc(prize)+'</span></div>'+
-            '<div class="contacts"><span class="ig">◎</span><span>@reinodasorteoficial</span><span class="wa">◉</span><span>(88) 9 9494-3632</span></div>'+
+            '<div class="contacts">
+<svg class="ig-icon" viewBox="0 0 24 24" aria-label="Instagram"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="#db2777" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="#db2777" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="#db2777"/></svg><span>@reinodasorteoficial</span>
+<svg class="wa-icon" viewBox="0 0 24 24" aria-label="WhatsApp"><path fill="#22c55e" d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.6 0 .3 5.3.3 11.8c0 2.1.6 4.1 1.6 5.9L.2 23.8l6.2-1.6a11.8 11.8 0 0 0 5.7 1.5h.1c6.5 0 11.8-5.3 11.8-11.8 0-3.2-1.3-6.2-3.5-8.4ZM12.1 21.5h-.1c-1.8 0-3.6-.5-5.1-1.4l-.4-.2-3.7 1 1-3.6-.2-.4a9.6 9.6 0 1 1 8.5 4.6Zm5.3-7.2c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.8.9-.9 1.1-.2.2-.3.2-.6.1-1.7-.8-2.8-1.5-3.9-3.3-.3-.5.3-.5.7-1.6.1-.2.1-.4 0-.6-.1-.2-.7-1.6-.9-2.1-.2-.5-.5-.4-.7-.4h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1 2.8 1.1 3c.1.2 2 3.1 4.9 4.4 1.8.8 2.5.9 3.4.8.5-.1 1.7-.7 2-1.3.2-.6.2-1.2.1-1.3Z"/></svg><span>(88) 9 9494-3632</span></div>'+
           '</div>'+
           '<div class="qrbox"><span>Acompanhar sorteio</span>'+(qr?'<img src="'+qr+'">':'<div class="qr-placeholder">QR Code</div>')+'<strong>'+label+'</strong></div>'+
         '</div>'+
@@ -115,12 +117,12 @@ const block=String.raw`
       '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
       '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
       '.main-blue{display:flex;justify-content:space-between;align-items:center;flex:1;margin-top:8px;position:relative;z-index:1}'+
-      '.logo-col{width:28%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-right:16px;text-align:center}.official-logo{display:block;width:100%;max-width:190px;mix-blend-mode:screen;max-height:170px;height:auto;object-fit:contain;object-position:center;image-rendering:auto}.logo-col>span{font-size:10px;font-weight:800;color:#1e3a8a;letter-spacing:.1em;margin-top:4px}.logo-fallback{font-size:28px;line-height:.85;color:#17458a;font-weight:800;text-align:center;text-shadow:0 2px 2px rgba(255,255,255,.5)}.logo-fallback strong{font-size:32px}'+
+      '.logo-col{width:28%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-right:16px;text-align:center}.official-logo{display:block;width:100%;max-width:190px;mix-blend-mode:normal;max-height:170px;height:auto;object-fit:contain;object-position:center;image-rendering:auto}.logo-col>span{font-size:10px;font-weight:800;color:#1e3a8a;letter-spacing:.1em;margin-top:4px}.logo-fallback{font-size:28px;line-height:.85;color:#17458a;font-weight:800;text-align:center;text-shadow:0 2px 2px rgba(255,255,255,.5)}.logo-fallback strong{font-size:32px}'+
       '.numbers-col{width:72%;display:flex;flex-direction:column}.numbers-title{display:flex;align-items:center;justify-content:center;margin-bottom:12px}.numbers-title i{flex-grow:1;height:2px;background:rgba(30,58,138,.2);border-radius:999px}.numbers-title span{margin:0 12px;font-size:14px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.1em;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
       '.numbers-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.num{background:rgba(255,255,255,.95);border-radius:6px;box-shadow:0 2px 6px rgba(30,58,138,.18);border:1px solid #93c5fd;text-align:center;padding:6px 0;font-weight:700;font-size:14px;letter-spacing:-.02em;color:#1f2937}'+
       '.deadline{width:100%;text-align:right;margin-top:12px;position:relative;z-index:1;font-size:11px;font-weight:700;line-height:1.3;text-transform:uppercase;color:#1e3a5f;text-shadow:0 1px 1px rgba(255,255,255,.9)}'+
       '.split-line{width:100%;height:0;border-top:2px dashed #9ca3af;position:absolute;top:58%;left:0;z-index:20}'+
-      '.ticket-gray{background:#f0f2f5;height:42%;width:100%;padding:32px 24px 24px;display:flex;justify-content:space-between;z-index:10}.info-col{width:72%;display:flex;flex-direction:column;justify-content:space-between;padding-right:16px}.seller{font-size:14px;margin-bottom:12px;color:#374151}.line-field{display:flex;align-items:flex-end;width:100%;margin-top:16px}.line-field b{font-weight:700;font-size:16px;margin-right:12px;color:#1f2937;padding-bottom:4px}.line-field span{flex-grow:1;border-bottom:1px dashed #6b7280;font-size:15px;font-weight:700;color:#111827;padding:0 0 4px 8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.contacts{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:14px;font-weight:600;color:#374151}.contacts .ig{color:#db2777;font-size:22px}.contacts .wa{color:#22c55e;font-size:18px;margin-left:16px}'+
+      '.ticket-gray{background:#f0f2f5;height:42%;width:100%;padding:32px 24px 24px;display:flex;justify-content:space-between;z-index:10}.info-col{width:72%;display:flex;flex-direction:column;justify-content:space-between;padding-right:16px}.seller{font-size:14px;margin-bottom:12px;color:#374151}.line-field{display:flex;align-items:flex-end;width:100%;margin-top:16px}.line-field b{font-weight:700;font-size:16px;margin-right:12px;color:#1f2937;padding-bottom:4px}.line-field span{flex-grow:1;border-bottom:1px dashed #6b7280;font-size:15px;font-weight:700;color:#111827;padding:0 0 4px 8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.contacts{display:flex;align-items:center;gap:7px;margin-top:auto;font-size:14px;font-weight:600;color:#374151}.contacts .ig-icon{width:17px;height:17px;flex:none}.contacts .wa-icon{width:17px;height:17px;flex:none;margin-left:16px}'+
       '.qrbox{width:26%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dotted #9ca3af;border-radius:8px;padding:8px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05)}.qrbox>span{font-size:12px;font-weight:700;letter-spacing:-.02em;color:#1f2937;margin-bottom:8px}.qrbox img{display:block;width:100px;height:100px}.qrbox strong{font-weight:700;font-size:18px;letter-spacing:.05em;color:#1e3a8a;margin-top:4px}.qr-placeholder{width:100px;height:100px;background:#e5e7eb;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af}'+
       '</style></head><body><div class="sheet">'+cards.join('')+'</div></body></html>';
   }
@@ -222,7 +224,15 @@ const block=String.raw`
     try{
       const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
-      const b=await renderPdf(o);await archive(o,b);
+      const forceFresh=String(req.query.fresh||'')==='1';
+      let b=null;
+      if(!forceFresh){
+        const cached=await one('rds10_ticket_documents','select=pdf_base64&order_id=eq.'+encodeURIComponent(o.id));
+        if(cached?.pdf_base64){
+          try{b=Buffer.from(String(cached.pdf_base64),'base64');}catch{}
+        }
+      }
+      if(!b||!b.length){b=await renderPdf(o);await archive(o,b);}
       res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="bilhetes-'+o.code+'.pdf"');
       res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.end(b);
     }catch(e){console.error('[RDS TICKET CHROMIUM] PDF:',e?.stack||e);res.status(500).json({ok:false,error:String(e?.message||e)});}
