@@ -876,7 +876,7 @@ app.get('/api/campaigns',async(req,res)=>{ try{ const cs=await list('rds10_campa
 app.post('/api/campaigns',async(req,res)=>{
   try{
     const b=req.body||{}; const code=await uniqueCampaignCode();
-    const rows=await insert('rds10_campaigns',{code,short_code:code,name:cleanText(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:Array.isArray(b.selected_contact_ids)?b.selected_contact_ids:[],cta_enabled:b.cta_enabled!==false,status:'RASCUNHO',created_at:nowISO(),updated_at:nowISO()});
+    const rows=await insert('rds10_campaigns',{code,short_code:code,name:cleanText(b.name),unit_price:Number(b.unit_price||3),start_at:b.start_at,target_mode:b.target_mode||'all',target_group:b.target_group||null,selected_contact_ids:Array.isArray(b.selected_contact_ids)?b.selected_contact_ids:[],cta_enabled:b.cta_enabled!==false,official_draw_id:cleanText(b.official_draw_id||'')||null,official_draw_title:cleanText(b.official_draw_title||'')||null,status:'RASCUNHO',created_at:nowISO(),updated_at:nowISO()});
     const c=rows[0]; const steps=Array.isArray(b.steps)?b.steps:[];
     for(let i=0;i<steps.length;i++) await insert('rds10_campaign_steps',{campaign_id:c.id,step_index:i+1,delay_minutes:i===0?0:Number(steps[i].delay_minutes||0),message:cleanText(steps[i].message),created_at:nowISO()},'minimal');
     res.json(c);
