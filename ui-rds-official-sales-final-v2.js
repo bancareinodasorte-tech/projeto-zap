@@ -54,6 +54,8 @@
 
   async function renderOfficialCard(force=false){
     const app=document.querySelector('#app');
+    if(window.__rdsOfficialFinalRenderBusy)return;
+    window.__rdsOfficialFinalRenderBusy=true;
     if(!app)return;
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
     if(p!=='orders')return;
@@ -115,6 +117,8 @@
       }else{
         console.warn('RDS integração oficial: atualização silenciosa falhou',e);
       }
+    }finally{
+      window.__rdsOfficialFinalRenderBusy=false;
     }
   }
 
