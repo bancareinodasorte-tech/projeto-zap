@@ -114,11 +114,32 @@ function rdsOfficialDrawMapV3(x,companyId){
   const av=Number(x?.availableBooklets??x?.bookletsAvailable??x?.availableTickets??x?.remainingBooklets??x?.remainingTickets??NaN);
   return {company_id:companyId,external_draw_id:externalDrawId,title:String(x?.drawTitle??x?.title??x?.name??'').trim()||null,status:status||null,active,draw_at:rawDate||null,price_per_ticket:Number.isFinite(n)?n:null,available_booklets:Number.isFinite(av)?av:null,public_url:String(x?.publicUrl??x?.publicURL??x?.url??'').trim()||null,raw_data:x,synced_at:nowISO(),updated_at:nowISO()};
 }
-async function rdsOfficialSyncDrawsV3(){
-  const raw=await rdsOfficialRequestV3('/draws/seller/all');
+function rdsOfficialDrawArrayV3(raw){
   const arr=Array.isArray(raw)?raw:(raw?.draws||raw?.items||raw?.data||[]);
+  return Array.isArray(arr)?arr:[];
+}
+async function rdsOfficialSyncDrawsV3(){
+  // O APK oficial consulta "available" e "all". Usamos as duas fontes e
+  // consolidamos por drawId para não perder um sorteio liberado ao vendedor.
+  const [availableResult,allResult]=await Promise.allSettled([
+    rdsOfficialRequestV3('/draws/seller/available'),
+    rdsOfficialRequestV3('/draws/seller/all')
+  ]);
+  const available=availableResult.status==='fulfilled'?rdsOfficialDrawArrayV3(availableResult.value):[];
+  const all=allResult.status==='fulfilled'?rdsOfficialDrawArrayV3(allResult.value):[];
+  const byId=new Map();
+  for(const draw of [...all,...available]){
+    const id=String(draw?.drawId??draw?.id??draw?.sorteioId??'').trim();
+    if(!id)continue;
+    const previous=byId.get(id);
+    byId.set(id,{...(previous||{}),...draw});
+  }
+  if(!byId.size){
+    const errors=[availableResult,allResult].filter(x=>x.status==='rejected').map(x=>String(x.reason?.message||x.reason||'')).filter(Boolean);
+    throw new Error(errors.join(' | ')||'A API oficial não retornou sorteios.');
+  }
   const companyId=await rdsOfficialCompanyIdV3();
-  const mapped=arr.map(x=>rdsOfficialDrawMapV3(x,companyId)).filter(Boolean);
+  const mapped=Array.from(byId.values()).map(x=>rdsOfficialDrawMapV3(x,companyId)).filter(Boolean);
   if(mapped.length){
     await sb('/rest/v1/rds10_official_draws?on_conflict=company_id,external_draw_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(mapped)});
   }
