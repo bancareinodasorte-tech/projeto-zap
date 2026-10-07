@@ -54,13 +54,13 @@
 
   async function renderOfficialCard(force=false){
     const app=document.querySelector('#app');
-    if(window.__rdsOfficialFinalRenderBusy)return;
-    window.__rdsOfficialFinalRenderBusy=true;
     if(!app)return;
     const p=window.page||localStorage.getItem('rds_current_page')||'home';
     if(p!=='orders')return;
     const old=document.getElementById('rdsOfficialIntegrationV2');
     if(old&&!force)return;
+    if(window.__rdsOfficialFinalRenderBusy)return;
+    window.__rdsOfficialFinalRenderBusy=true;
 
     const card=old||document.createElement('section');
     const isNewCard=!old;
