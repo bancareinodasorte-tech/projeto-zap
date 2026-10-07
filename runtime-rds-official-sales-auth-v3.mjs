@@ -115,7 +115,7 @@ function rdsOfficialDrawMapV3(x,companyId){
   return {company_id:companyId,external_draw_id:externalDrawId,title:String(x?.drawTitle??x?.title??x?.name??'').trim()||null,status:status||null,active,draw_at:rawDate||null,price_per_ticket:Number.isFinite(n)?n:null,available_booklets:Number.isFinite(av)?av:null,public_url:String(x?.publicUrl??x?.publicURL??x?.url??'').trim()||null,raw_data:x,synced_at:nowISO(),updated_at:nowISO()};
 }
 function rdsOfficialDrawArrayV3(raw){
-  const arr=Array.isArray(raw)?raw:(raw?.draws||raw?.items||raw?.data||[]);
+  const arr=Array.isArray(raw)?raw:(raw?.draws||raw?.items||raw?.booklets||raw?.availableBooklets||raw?.data||[]);
   return Array.isArray(arr)?arr:[];
 }
 async function rdsOfficialSyncDrawsV3(){
