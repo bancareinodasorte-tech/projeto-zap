@@ -150,8 +150,23 @@ async function rdsOfficialSyncDrawsV3(){
     const id=String(item?.drawId??item?.draw_id??item?.sorteioId??item?.draw?.drawId??item?.draw?.id??'').trim();
     if(!id)continue;
     const current=inventoryByDraw.get(id)||{count:0,explicit:null};
-    const explicit=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.quantityAvailable;
-    const rawCount=Array.isArray(explicit)?explicit.length:(explicit?.length!=null?Number(explicit.length):Number(explicit));
+    const explicit=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.quantityAvailable??item?.totalBooklets??item?.availableCount??item?.remaining??item?.quantity??item?.count;
+    const inventoryCountV3=(value,depth=0)=>{
+      if(depth>4||value===null||value===undefined||value==='')return null;
+      if(Array.isArray(value))return value.length;
+      if(typeof value==='number'&&Number.isFinite(value))return value;
+      if(typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value)))return Number(value);
+      if(typeof value==='object'){
+        for(const k of ['count','total','totalBooklets','availableBooklets','availableTickets','remainingBooklets','remainingTickets','available','quantity','quantityAvailable','availableCount','remaining','data','booklets','items']){
+          if(Object.prototype.hasOwnProperty.call(value,k)){
+            const n=inventoryCountV3(value[k],depth+1);
+            if(Number.isFinite(n))return n;
+          }
+        }
+      }
+      return null;
+    };
+    const rawCount=inventoryCountV3(explicit);
     if(Number.isFinite(rawCount)) current.explicit=rawCount;
     else current.count++;
     inventoryByDraw.set(id,current);
