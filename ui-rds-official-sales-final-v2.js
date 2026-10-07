@@ -61,11 +61,10 @@
     if(old&&!force)return;
 
     const card=old||document.createElement('section');
-    if(!old){
+    const isNewCard=!old;
+    if(isNewCard){
       card.id='rdsOfficialIntegrationV2';
       card.className='card rds-issuer-card';
-      card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p><div class="priority"><strong>Verificando integração oficial...</strong></div>';
-      app.prepend(card);
     }
 
     try{
@@ -105,10 +104,17 @@
         '<p class="mut" style="margin-top:8px">Dispositivo: '+esc(b.deviceId||'—')+'</p>';
 
       document.getElementById('rdsOfficialAuthorizeV2')?.addEventListener('click',authModal);
-      document.getElementById('rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
+      card.querySelector('#rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
+      if(isNewCard && !card.isConnected) app.prepend(card);
+
     }catch(e){
-      card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><div class="status bad">🔴 Falha ao consultar integração</div><p class="mut">'+esc(e.message)+'</p><div class="row" style="margin-top:12px"><button class="btn" type="button" id="rdsOfficialRefreshV2">Tentar novamente</button></div>';
-      document.getElementById('rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
+      if(isNewCard){
+        card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2><div class="status bad">🔴 Falha ao consultar integração</div><p class="mut">'+esc(e.message)+'</p><div class="row" style="margin-top:12px"><button class="btn" type="button" id="rdsOfficialRefreshV2">Tentar novamente</button></div>';
+        card.querySelector('#rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
+        if(!card.isConnected) app.prepend(card);
+      }else{
+        console.warn('RDS integração oficial: atualização silenciosa falhou',e);
+      }
     }
   }
 
