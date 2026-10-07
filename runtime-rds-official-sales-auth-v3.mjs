@@ -99,12 +99,50 @@ async function rdsOfficialRequestV3(endpoint,opt){
 app.get('/api/v1011/official-sales/bootstrap',async(req,res)=>{try{var row=await rdsOfficialEnsureDeviceV3();var deviceId=String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null;return res.json({configured:Boolean(RDS_OFFICIAL_EMAIL_V3&&RDS_OFFICIAL_PASSWORD_V3),emailConfigured:Boolean(RDS_OFFICIAL_EMAIL_V3),passwordConfigured:Boolean(RDS_OFFICIAL_PASSWORD_V3),deviceId,authorized:Boolean(row?.refresh_token_enc),lastAuthAt:row?.last_auth_at||null});}catch(e){return res.status(502).json({configured:false,emailConfigured:false,authorized:false,deviceId:null,message:String(e?.message||e)});}});
 app.post('/api/v1011/official-sales/authorize',async(req,res)=>{try{if(!RDS_OFFICIAL_EMAIL_V3||!RDS_OFFICIAL_PASSWORD_V3)throw new Error('Credenciais do vendedor oficial ainda não configuradas no Render.');var row=await rdsOfficialEnsureDeviceV3();var deviceId=String(row?.device_id||rdsOfficialDeviceStateV3||'').trim();if(!deviceId)throw new Error('Dispositivo oficial do servidor não identificado.');var code=String(req.body?.authorizationCode||'').trim();if(!code)throw new Error('Código de autorização não informado.');var r=await fetch(RDS_OFFICIAL_API_V3+'/devices/authorize',{method:'POST',headers:rdsOfficialHeadersV3(''),body:JSON.stringify({authorizationCode:code,deviceId:deviceId,email:RDS_OFFICIAL_EMAIL_V3})}),raw=await r.text(),d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'Código de autorização recusado.');await rdsOfficialLoginV3();return res.json({success:true,deviceId,message:'Servidor autorizado e sessão oficial persistida com segurança.'});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
 app.get('/api/v1011/official-sales/status',async(req,res)=>{try{var row=await rdsOfficialEnsureDeviceV3();var me=await rdsOfficialRequestV3('/auth/me');return res.json({configured:true,authenticated:true,seller:me||null,deviceId:String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null});}catch(e){var row=await rdsOfficialRowV3().catch(()=>null);return res.status(502).json({configured:Boolean(RDS_OFFICIAL_EMAIL_V3&&RDS_OFFICIAL_PASSWORD_V3),authenticated:false,authorized:Boolean(row?.refresh_token_enc),deviceId:String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null,message:String(e?.message||e)});}});
+async function rdsOfficialCompanyIdV3(){
+  const c=await one('rds10_companies','select=id&code=eq.RDS');
+  return c?.id||null;
+}
+function rdsOfficialDrawMapV3(x,companyId){
+  const externalDrawId=String(x?.drawId??x?.id??x?.sorteioId??'').trim();
+  if(!externalDrawId)return null;
+  const status=String(x?.status??x?.state??'').trim();
+  const closed=x?.isDrawClosed===true||x?.closed===true||['CLOSED','ENCERRADO','FECHADO'].includes(status.toUpperCase());
+  const active=x?.active===false||x?.isActive===false?false:!closed;
+  const rawDate=x?.drawDate??x?.drawAt??x?.date??x?.scheduledAt??null;
+  const n=Number(x?.pricePerTicket??x?.ticketPrice??x?.price??NaN);
+  const av=Number(x?.availableBooklets??x?.bookletsAvailable??x?.availableTickets??x?.remainingBooklets??x?.remainingTickets??NaN);
+  return {company_id:companyId,external_draw_id:externalDrawId,title:String(x?.drawTitle??x?.title??x?.name??'').trim()||null,status:status||null,active,draw_at:rawDate||null,price_per_ticket:Number.isFinite(n)?n:null,available_booklets:Number.isFinite(av)?av:null,public_url:String(x?.publicUrl??x?.publicURL??x?.url??'').trim()||null,raw_data:x,synced_at:nowISO(),updated_at:nowISO()};
+}
+async function rdsOfficialSyncDrawsV3(){
+  const raw=await rdsOfficialRequestV3('/draws/seller/all');
+  const arr=Array.isArray(raw)?raw:(raw?.draws||raw?.items||raw?.data||[]);
+  const companyId=await rdsOfficialCompanyIdV3();
+  const mapped=arr.map(x=>rdsOfficialDrawMapV3(x,companyId)).filter(Boolean);
+  if(mapped.length){
+    await sb('/rest/v1/rds10_official_draws?on_conflict=company_id,external_draw_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(mapped)});
+  }
+  return mapped;
+}
+app.post('/api/v1011/official-sales/sync-draws',async(req,res)=>{
+  try{
+    if(typeof rdsOpSession==='function'&&!await rdsOpSession(req))return res.status(401).json({success:false,message:'Sessão do vendedor inválida ou expirada.'});
+    const draws=await rdsOfficialSyncDrawsV3();
+    return res.json({success:true,count:draws.length,data:draws});
+  }catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}
+});
 app.get('/api/v1011/official-sales/draws',async(req,res)=>{
   try{
-    const raw=await rdsOfficialRequestV3('/draws/seller/all');
-    const draws=Array.isArray(raw)?raw:(raw?.draws||raw?.items||raw?.data||[]);
+    const draws=await rdsOfficialSyncDrawsV3();
     return res.json({success:true,data:draws,source:'official-api:/draws/seller/all'});
-  }catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}
+  }catch(e){
+    try{
+      const companyId=await rdsOfficialCompanyIdV3();
+      const cached=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,public_url,raw_data,synced_at&company_id=eq.'+encodeURIComponent(companyId||'')+'&order=active.desc,draw_at.asc.nullslast');
+      if(cached.length)return res.json({success:true,data:cached,source:'cache'});
+    }catch{}
+    return res.status(502).json({success:false,message:String(e?.message||e)});
+  }
 });
 app.get('/api/v1011/official-sales/draw-info',async(req,res)=>{try{return res.json({success:true,data:await rdsOfficialRequestV3('/seller/draw-info')});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
 function rdsOfficialAvailableBooklets(draw){const raw=draw?.availableBooklets ?? draw?.bookletsAvailable ?? draw?.availableTickets ?? draw?.remainingBooklets ?? draw?.remainingTickets ?? draw?.totalBooklets;return raw===null||raw===undefined||raw===''?null:Number(raw);}
