@@ -138,8 +138,32 @@ async function rdsOfficialSyncDrawsV3(){
     const errors=[availableResult,allResult].filter(x=>x.status==='rejected').map(x=>String(x.reason?.message||x.reason||'')).filter(Boolean);
     throw new Error(errors.join(' | ')||'A API oficial não retornou sorteios.');
   }
+  // A API oficial separa o catálogo de sorteios do estoque realmente disponível.
+  // /seller/booklet-sales/available é a fonte de inventário em tempo real.
+  let inventory=[];
+  try{
+    const invRaw=await rdsOfficialRequestV3('/seller/booklet-sales/available');
+    inventory=rdsOfficialDrawArrayV3(invRaw);
+  }catch{}
+  const inventoryByDraw=new Map();
+  for(const item of inventory){
+    const id=String(item?.drawId??item?.draw_id??item?.sorteioId??item?.draw?.drawId??item?.draw?.id??'').trim();
+    if(!id)continue;
+    const current=inventoryByDraw.get(id)||{count:0,explicit:null};
+    const explicit=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.quantityAvailable;
+    const n=Number(explicit);
+    if(Number.isFinite(n)) current.explicit=n;
+    else current.count++;
+    inventoryByDraw.set(id,current);
+  }
   const companyId=await rdsOfficialCompanyIdV3();
-  const mapped=Array.from(byId.values()).map(x=>rdsOfficialDrawMapV3(x,companyId)).filter(Boolean);
+  const mapped=Array.from(byId.entries()).map(([id,x])=>{
+    const row=rdsOfficialDrawMapV3(x,companyId);
+    if(!row)return null;
+    const inv=inventoryByDraw.get(id);
+    if(inv) row.available_booklets=Number.isFinite(inv.explicit)?inv.explicit:inv.count;
+    return row;
+  }).filter(Boolean);
   if(mapped.length){
     await sb('/rest/v1/rds10_official_draws?on_conflict=company_id,external_draw_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(mapped)});
   }
