@@ -151,11 +151,15 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');
     var session=await rdsOpSession(req);if(!session)throw new Error('Sessão do vendedor inválida ou expirada.');
     var b=req.body||{},orderId=String(b.orderId||'').trim();if(!orderId)throw new Error('Pedido do vendedor não informado.');
-    var order=await one('rds10_orders','select=id,seller_id,customer_name,phone,contact_phone,quantity,payment_method,status& id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
+    var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at& id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
     if(!order)throw new Error('Pedido não encontrado para este vendedor.');
     var customerName=String(order.customer_name||'').trim(),customerPhone=String(order.phone||order.contact_phone||'').trim(),quantityBooklets=Math.max(1,Math.floor(Number(order.quantity||0)));
     if(customerName.length<2)throw new Error('Nome do cliente inválido.');if(!customerPhone)throw new Error('Telefone do cliente não informado.');if(!quantityBooklets)throw new Error('Quantidade do pedido inválida.');
-    var requestedDrawId=String(b.drawId||'').trim(),draw=null;
+    var requestedDrawId=String(b.drawId||order.official_draw_id||'').trim(),draw=null;
+    if(!requestedDrawId&&order.campaign_id){
+      const camp=await one('rds10_campaigns','select=official_draw_id,official_draw_title& id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);
+      requestedDrawId=String(camp?.official_draw_id||'').trim();
+    }
     if(requestedDrawId){
       var all=await rdsOfficialRequestV3('/draws/seller/all'),arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
       draw=arr.find(x=>String(x?.drawId||x?.id||'')===requestedDrawId)||null;
@@ -165,6 +169,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     const availableBooklets=rdsOfficialAvailableBooklets(draw);
     if(Number.isFinite(availableBooklets)&&availableBooklets<quantityBooklets)throw new Error('Quantidade solicitada maior que a disponibilidade oficial.');
     var drawId=String(draw.drawId||draw.id||requestedDrawId||'').trim();if(!drawId)throw new Error('ID do sorteio oficial não identificado.');
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_draw_id:drawId,official_draw_title:String(draw.drawTitle||draw.title||draw.name||'').trim()||null,official_draw_at:draw.drawDate||draw.drawAt||draw.date||null,official_inventory_available:Number.isFinite(availableBooklets)?availableBooklets:null,official_inventory_checked_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
     var sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets,lotNumber:Math.max(1,Math.floor(Number(b.lotNumber||1))),paymentMethod:String(order.payment_method||'pix').trim().toLowerCase()})});
     return res.status(201).json({success:true,data:sale,orderId:order.id,sellerId:session.seller.id,drawId});
   }catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}
