@@ -24,10 +24,14 @@ function openLogin(message=''){
 }
 async function context(){try{return await json('/api/rds/unified/context',{headers:{...headers(),...adminHeaders()}});}catch{return {authenticated:false};}}
 async function sellerData(){
+ const fast=(u,o={})=>Promise.race([
+  json(u,o),
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),4500))
+ ]);
  const [me,settings,mp]=await Promise.allSettled([
-  json('/api/operator/me',{headers:headers()}),
-  json('/api/operator/settings',{headers:headers()}),
-  json('/api/operator/mercadopago/status',{headers:headers()})
+  fast('/api/operator/me',{headers:headers()}),
+  fast('/api/operator/settings',{headers:headers()}),
+  fast('/api/operator/mercadopago/status',{headers:headers()})
  ]);
  return {
   me:me.status==='fulfilled'?(me.value.seller||{}):{},
@@ -99,7 +103,7 @@ async function loadSellerAccountDetails(){
 
  mpConnect.onclick=async()=>{
   mpConnect.disabled=true;mpMsg.textContent='Abrindo Mercado Pago…';
-  try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});location.href=r.url;}
+  try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});if(!r?.url)throw new Error('Mercado Pago não retornou o endereço de autorização.');window.location.assign(r.url);}
   catch(e){mpMsg.textContent=e.message;mpConnect.disabled=false;}
  };
  mpDisconnect.onclick=async()=>{
@@ -142,7 +146,7 @@ async function loadSellerAccountDetails(){
   if(summaryEmail)summaryEmail.textContent=window.__rdsAccountSellerEmail||'Não informado';
   if(summaryPhone)summaryPhone.textContent=window.__rdsAccountSellerPhone||'Não informado';
   mpStatus.className='status '+(connected?'ok':'warn');
-  mpStatus.textContent=connected?'🟢 Mercado Pago conectado':'🟡 Mercado Pago não conectado';
+  mpStatus.textContent=connected?'🟢 Mercado Pago conectado'+(m.environment?' • '+String(m.environment).toUpperCase():''):'🟡 Mercado Pago não conectado';
   mpConnect.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
   mpDisconnect.style.display=connected?'':'none';
   const devices=d.devices||[];
