@@ -17,7 +17,7 @@
   }
   function rowDate(o){return String(o.created_at||o.sent_at||o.updated_at||'').slice(0,10);}
   function statusLabel(o){return o.sent_at?'✓ PDF arquivado':'PDF arquivado';}
-  function openPdf(id){window.open('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'?rds='+Date.now(),'_blank','noopener,noreferrer')}
+  function openPdf(id){window.location.assign('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'?fresh=1')}
   window.rdsOpenTicketPdf=openPdf;
   window.rdsResendTicketPdf=async id=>{
     try{
