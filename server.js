@@ -1073,7 +1073,7 @@ app.get('/api/diagnostic',async(req,res)=>{
 });
 
 // RDS AUTOMATIC OFFICIAL DELIVERY DIRECT V2
-(()=>{
+;(()=>{
   const API='https://api.reinodasorte.com.br';
   const locks=new Set();
   let access='';
