@@ -976,7 +976,7 @@ app.get('/api/production-summary',async(req,res)=>{
     });
   }catch(e){res.status(500).json({error:e.message});}
 });
-app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); if(typeof globalThis.rdsAutoOfficialIssueAndDeliver==='function') globalThis.rdsAutoOfficialIssueAndDeliver(o.id).catch(e=>console.error('[RDS AUTO TRIGGER]',e?.message||e)); res.json({ok:true,auto_issue_triggered:true}); }catch(e){res.status(400).json({error:e.message});} });
 app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
   const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`);
   const s=await getSettings();
