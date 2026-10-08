@@ -562,6 +562,10 @@ async function createOrder(phone, campaignCode=null){
   if(existing) return existing;
   const sellerId=await rdsWhatsappSellerId();
   if(!sellerId)throw new Error('Não foi possível identificar o vendedor responsável pelo WhatsApp. Configure um único vendedor ATIVO para este canal.');
+  const sellerCompany=await one('rds10_seller_companies',`select=company_id,role,active&seller_id=eq.${encodeURIComponent(sellerId)}&active=eq.true&order=created_at.asc`).catch(()=>null);
+  if(!sellerCompany?.company_id)throw new Error('O vendedor do WhatsApp não está vinculado a uma empresa ativa.');
+  const company=await one('rds10_companies',`select=id,seller_commission_pct,company_revenue_pct& id=eq.${encodeURIComponent(sellerCompany.company_id)}&active=eq.true`);
+  if(!company)throw new Error('A empresa do vendedor não está ativa.');
   const s = await getSettings();
 
   // Se a compra veio de uma campanha, o pedido herda obrigatoriamente
@@ -578,6 +582,8 @@ async function createOrder(phone, campaignCode=null){
   const rows = await insert('rds10_orders',{
     code:orderCode(),
     seller_id:sellerId,
+    company_id:company.id,
+    commission_rate_pct:Number(company.seller_commission_pct||30),
     phone,
     campaign_code:campaign?.code||normalizedCampaignCode||null,
     campaign_id:campaign?.id||null,
@@ -934,12 +940,57 @@ app.post('/api/process-now',async(req,res)=>{ try{await processQueue();res.json(
 
 app.get('/api/returns',async(req,res)=>{ try{res.json(await list('rds10_messages','select=*&direction=eq.IN&order=created_at.desc&limit=300'));}catch(e){res.status(500).json({error:e.message});} });
 app.get('/api/orders',async(req,res)=>{ try{res.json(await list('rds10_orders','select=*&order=updated_at.desc'));}catch(e){res.status(500).json({error:e.message});} });
+app.get('/api/production-summary',async(req,res)=>{
+  try{
+    const [orders,sellers]=await Promise.all([
+      list('rds10_orders','select=id,code,seller_id,company_id,official_draw_id,official_draw_title,quantity,total_amount,status,completed_at,commission_rate_pct,commission_seller_amount,commission_company_amount&status=eq.CONCLUIDO&order=completed_at.desc&limit=5000'),
+      list('rds10_sellers','select=id,name')
+    ]);
+    const sellerMap=new Map(sellers.map(x=>[x.id,x.name]));
+    const rows=orders.map(o=>{
+      const total=Number(o.total_amount||0);
+      const rate=Number(o.commission_rate_pct==null?30:o.commission_rate_pct);
+      const sellerAmount=o.commission_seller_amount==null?Number((total*rate/100).toFixed(2)):Number(o.commission_seller_amount);
+      const companyAmount=o.commission_company_amount==null?Number((total-sellerAmount).toFixed(2)):Number(o.commission_company_amount);
+      return {...o,total,seller_name:sellerMap.get(o.seller_id)||'—',commission_rate_pct:rate,seller_amount:sellerAmount,company_amount:companyAmount};
+    });
+    const byDraw=new Map(),bySeller=new Map();
+    for(const o of rows){
+      const dk=o.official_draw_id||o.official_draw_title||'SEM_SORTEIO';
+      const d=byDraw.get(dk)||{draw_id:o.official_draw_id||null,draw_title:o.official_draw_title||'Sem sorteio',sales:0,revenue:0,seller_commission:0,company_revenue:0,tickets:0};
+      d.sales++;d.revenue+=o.total;d.seller_commission+=o.seller_amount;d.company_revenue+=o.company_amount;d.tickets+=Number(o.quantity||0);byDraw.set(dk,d);
+      const sk=o.seller_id||'SEM_VENDEDOR';
+      const s=bySeller.get(sk)||{seller_id:o.seller_id||null,seller_name:o.seller_name,sales:0,revenue:0,seller_commission:0,company_revenue:0};
+      s.seller_name=o.seller_name;s.sales++;s.revenue+=o.total;s.seller_commission+=o.seller_amount;s.company_revenue+=o.company_amount;bySeller.set(sk,s);
+    }
+    const round=v=>Number(v.toFixed(2));
+    res.json({
+      totals:{
+        sales:rows.length,revenue:round(rows.reduce((a,o)=>a+o.total,0)),
+        seller_commission:round(rows.reduce((a,o)=>a+o.seller_amount,0)),
+        company_revenue:round(rows.reduce((a,o)=>a+o.company_amount,0)),
+        tickets:rows.reduce((a,o)=>a+Number(o.quantity||0),0)
+      },
+      byDraw:[...byDraw.values()].map(x=>({...x,revenue:round(x.revenue),seller_commission:round(x.seller_commission),company_revenue:round(x.company_revenue)})),
+      bySeller:[...bySeller.values()].map(x=>({...x,revenue:round(x.revenue),seller_commission:round(x.seller_commission),company_revenue:round(x.company_revenue)}))
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
 app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); res.json({ok:true}); }catch(e){res.status(400).json({error:e.message});} });
 app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
   const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`);
   const s=await getSettings();
   if(!o) throw new Error('Pedido não encontrado.');
-  await patch('rds10_orders',`id=eq.${o.id}`,{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO()});
+  let commissionPatch={};
+  if(o.commission_seller_amount==null||o.commission_company_amount==null){
+    const company=await one('rds10_companies',`select=seller_commission_pct,company_revenue_pct&id=eq.${encodeURIComponent(o.company_id||'')}`).catch(()=>null);
+    const rate=Number(o.commission_rate_pct==null?(company?.seller_commission_pct??30):o.commission_rate_pct);
+    const total=Number(o.total_amount||0);
+    const sellerAmount=Number((total*rate/100).toFixed(2));
+    const companyAmount=Number((total-sellerAmount).toFixed(2));
+    commissionPatch={commission_rate_pct:rate,commission_seller_amount:sellerAmount,commission_company_amount:companyAmount,commission_calculated_at:nowISO()};
+  }
+  await patch('rds10_orders',`id=eq.${o.id}`,{status:'CONCLUIDO',completed_at:nowISO(),updated_at:nowISO(),...commissionPatch});
   if(o.phone){
     const c=await findContact(o.phone);
     if(c) await patch('rds10_contacts',`id=eq.${c.id}`,{
