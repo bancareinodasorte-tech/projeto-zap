@@ -21,7 +21,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
     // O parâmetro de versão força o WebView a buscar o painel atualizado após uma nova versão do APK.
-    private static final String APP_URL = "https://projeto-zap-4tyg.onrender.com/?app_version=11.2.0";
+    private static final String APP_URL = "https://projeto-zap-4tyg.onrender.com/?app_version=11.3.0";
     private static final String APP_HOST = "projeto-zap-4tyg.onrender.com";
     private static final int FILE_CHOOSER = 1001;
     private WebView webView;
