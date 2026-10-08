@@ -211,8 +211,12 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');
     var session=await rdsOpSession(req);if(!session)throw new Error('Sessão do vendedor inválida ou expirada.');
     var b=req.body||{},orderId=String(b.orderId||'').trim();if(!orderId)throw new Error('Pedido do vendedor não informado.');
-    var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at& id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
+    var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url& id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
     if(!order)throw new Error('Pedido não encontrado para este vendedor.');
+    // Idempotência: uma venda oficial já concluída nunca deve ser emitida novamente.
+    if(String(order.official_issue_status||'').toUpperCase()==='CONCLUIDO' && order.official_sale_id){
+      return res.status(200).json({success:true,alreadyIssued:true,data:order.official_ticket_payload||null,orderId:order.id,sellerId:session.seller.id,drawId:order.official_draw_id||null,officialSaleId:String(order.official_sale_id)});
+    }
     var customerName=String(order.customer_name||'').trim(),customerPhone=String(order.phone||order.contact_phone||'').trim(),quantityBooklets=Math.max(1,Math.floor(Number(order.quantity||0)));
     if(customerName.length<2)throw new Error('Nome do cliente inválido.');if(!customerPhone)throw new Error('Telefone do cliente não informado.');if(!quantityBooklets)throw new Error('Quantidade do pedido inválida.');
     var requestedDrawId=String(b.drawId||order.official_draw_id||'').trim(),draw=null;
