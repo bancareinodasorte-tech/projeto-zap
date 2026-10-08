@@ -603,10 +603,25 @@ function isBuyRoute(text){ return /RDS[-_: ]?COMPRAR|QUERO\s*COMPRAR|COMPRE\s*AG
 function isOfficeRoute(text){ return /OUTRO\s*ASSUNTO|ATENDENTE|ESCRIT[ÓO]RIO/i.test(text); }
 function looksLikeForm(text){ return /quantidade\s*[:\-]/i.test(text) || (/nome\s*[:\-]/i.test(text) && /contato\s*[:\-]/i.test(text)); }
 function routerMessage(settings){ return `🍀 *CANAL DE VENDAS RDS*\n\n1️⃣ *Comprar bilhetes*\n2️⃣ *Consultar meu pedido*\n3️⃣ *Falar com atendente*\n4️⃣ *Ver este menu novamente*\n\nDigite apenas o número da opção.`; }
-async function beginOrder(identity, campaignCode=null){
+async function beginOrder(identity, campaignCode=null, pushName=''){
   if(!identity.phone){ await replyInbound(identity,'Não consegui identificar seu número de WhatsApp. Envie novamente.'); return; }
   const normalizedCampaignCode=cleanText(campaignCode||'').replace(/^RDS[-_:]?/i,'').trim()||null;
   const order=await createOrder(identity.phone,normalizedCampaignCode);
+
+  // A partir do início efetivo da compra, o cliente passa a existir no CRM.
+  // O vínculo da campanha/sorteio fica no pedido; o CRM guarda a identidade
+  // comercial sem misturar o histórico bruto do WhatsApp.
+  await saveOrMergeContact({
+    name:cleanText(pushName),
+    phone:identity.phone,
+    lid:identity.lid||null,
+    group_name:'INTERESSADOS',
+    origin:'PEDIDO',
+    status:'ATIVO',
+    validated:true,
+    last_seen_at:nowISO()
+  });
+
   // O contexto comercial fica gravado no próprio pedido. A partir daqui,
   // quantidade/nome/pagamento não dependem mais de o cliente repetir o código.
   await cancelFutureDeliveries(identity.phone,'INTERESSE');
@@ -710,7 +725,7 @@ async function handleInbound(m){
   const menuText=cleanText(text);
   if(["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings));
   if(!order){
-    if(menuText==="1") return beginOrder(identity,null);
+    if(menuText==="1") return beginOrder(identity,null,pushName);
     if(menuText==="3"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,"🏢 *ATENDIMENTO*\n"+(office||"ATENDIMENTO")); }
     if(menuText==="2") return replyInbound(identity,"🔎 *CONSULTAR PEDIDO*\n\nEnvie o código do pedido.");
   }
@@ -748,7 +763,7 @@ async function handleInbound(m){
   }
   if(isBuyRoute(text)){
     const code = (text.match(/RDS[-_:]?([A-Z0-9]{6,12})/i)||[])[1] || null;
-    return beginOrder(identity,code);
+    return beginOrder(identity,code,pushName);
   }
   return replyInbound(identity,routerMessage(settings));
 }
