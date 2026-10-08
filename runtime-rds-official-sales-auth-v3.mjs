@@ -224,7 +224,18 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
       var all=await rdsOfficialRequestV3('/draws/seller/all'),arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
       draw=arr.find(x=>String(x?.drawId||x?.id||'')===requestedDrawId)||null;
     }
-    if(!draw)draw=await rdsOfficialRequestV3('/seller/draw-info');
+    if(!draw){
+      const all=await rdsOfficialRequestV3('/draws/seller/all');
+      const arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
+      const active=arr.filter(x=>x?.isDrawClosed!==true&&x?.closed!==true&&x?.active!==false&&x?.isActive!==false);
+      if(active.length===1){
+        draw=active[0];
+      }else if(active.length>1){
+        throw new Error('O pedido não está vinculado a um sorteio oficial. Selecione o sorteio na campanha antes de emitir os bilhetes.');
+      }else{
+        draw=await rdsOfficialRequestV3('/seller/draw-info');
+      }
+    }
     if(!draw||draw.isDrawClosed===true||draw.closed===true)throw new Error('O sorteio oficial está encerrado ou indisponível.');
     const availableBooklets=rdsOfficialAvailableBooklets(draw);
     if(Number.isFinite(availableBooklets)&&availableBooklets<quantityBooklets)throw new Error('Quantidade solicitada maior que a disponibilidade oficial.');
