@@ -563,7 +563,31 @@ async function createOrder(phone, campaignCode=null){
   const sellerId=await rdsWhatsappSellerId();
   if(!sellerId)throw new Error('Não foi possível identificar o vendedor responsável pelo WhatsApp. Configure um único vendedor ATIVO para este canal.');
   const s = await getSettings();
-  const rows = await insert('rds10_orders',{code:orderCode(),seller_id:sellerId,phone,campaign_code:campaignCode,status:'COLETANDO_DADOS',unit_price:Number(s.unit_price||3),created_at:nowISO(),updated_at:nowISO()});
+
+  // Se a compra veio de uma campanha, o pedido herda obrigatoriamente
+  // o vínculo com o sorteio oficial escolhido nessa campanha.
+  let campaign=null;
+  const normalizedCampaignCode=cleanText(campaignCode||'').replace(/^RDS[-_:]?/i,'').trim();
+  if(normalizedCampaignCode){
+    campaign=await one('rds10_campaigns',`select=id,code,short_code,unit_price,official_draw_id,official_draw_title,status&or=(code.eq.${encodeURIComponent(normalizedCampaignCode)},short_code.eq.${encodeURIComponent(normalizedCampaignCode)})`).catch(()=>null);
+    if(!campaign) throw new Error('Campanha não encontrada ou inválida.');
+    if(!campaign.official_draw_id) throw new Error('A campanha não possui sorteio oficial vinculado.');
+    if(String(campaign.status||'').toUpperCase()==='RASCUNHO') throw new Error('A campanha ainda não está ativa.');
+  }
+
+  const rows = await insert('rds10_orders',{
+    code:orderCode(),
+    seller_id:sellerId,
+    phone,
+    campaign_code:campaign?.code||normalizedCampaignCode||null,
+    campaign_id:campaign?.id||null,
+    official_draw_id:campaign?.official_draw_id||null,
+    official_draw_title:campaign?.official_draw_title||null,
+    status:'COLETANDO_DADOS',
+    unit_price:Number(campaign?.unit_price||s.unit_price||3),
+    created_at:nowISO(),
+    updated_at:nowISO()
+  });
   return rows?.[0];
 }
 function parseOrderForm(text){
