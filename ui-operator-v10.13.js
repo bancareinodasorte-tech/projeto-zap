@@ -29,7 +29,7 @@
           ${action('Alertas operacionais',d.alerts,'execution','warn')}
           ${action('Próximos do limite',d.near,'execution','warn')}
           ${action('Conferir pagamento',d.review,'orders','warn')}
-          ${action('Enviar bilhetes',d.tickets,'orders','warn')}
+          ${action('Emissão automática em processamento',d.tickets,'orders','warn')}
         </div>`);
     }catch(e){toast(e.message)}
   };
@@ -52,7 +52,7 @@
     try{
       if(document.querySelector('#rds1013QuickActions'))return;
       const box=document.createElement('div');box.id='rds1013QuickActions';box.className='card';
-      box.innerHTML=`<span class="eyebrow">Operação assistida</span><h2>Ações rápidas</h2><p class="mut">Concentre falhas, pagamentos e entregas em uma única fila manual.</p><button class="btn primary" onclick="rds1013Operator()">Abrir central do operador</button>`;
+      box.innerHTML=`<span class="eyebrow">Operação assistida</span><h2>Ações rápidas</h2><p class="mut">Concentre falhas, pagamentos e emissões automáticas que precisem de recuperação.</p><button class="btn primary" onclick="rds1013Operator()">Abrir central do operador</button>`;
       const title=document.querySelector('#app .page-title');if(title)title.insertAdjacentElement('afterend',box);else app.prepend(box);
     }catch(e){console.error('V10.13 automation UI',e)}
   };
