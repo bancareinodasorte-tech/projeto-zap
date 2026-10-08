@@ -981,6 +981,9 @@ app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
   const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`);
   const s=await getSettings();
   if(!o) throw new Error('Pedido não encontrado.');
+  if(String(o.official_issue_status||'').toUpperCase()!=='CONCLUIDO' || !o.official_sale_id) throw new Error('Os bilhetes oficiais ainda não foram emitidos.');
+  const ticketDoc=await one('rds10_ticket_documents',`select=id&order_id=eq.${encodeURIComponent(o.id)}`).catch(()=>null);
+  if(!ticketDoc?.id) throw new Error('O PDF oficial dos bilhetes ainda não foi arquivado/enviado.');
   let commissionPatch={};
   if(o.commission_seller_amount==null||o.commission_company_amount==null){
     const company=await one('rds10_companies',`select=seller_commission_pct,company_revenue_pct&id=eq.${encodeURIComponent(o.company_id||'')}`).catch(()=>null);
