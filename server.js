@@ -1072,6 +1072,55 @@ app.get('/api/diagnostic',async(req,res)=>{
   res.json({version:'10.3',supabase:Boolean(SUPABASE_URL&&SUPABASE_KEY),whatsapp:{connected,number:connectedNumber,lastError,lastConnectionAt,lastInboundAt:lastInboundAt?new Date(lastInboundAt).toISOString():null,messageCache:messageCache.size,lidMappings:lidToPn.size},db});
 });
 
+// RDS AUTOMATIC OFFICIAL DELIVERY DIRECT V2
+(()=>{
+  const API='https://api.reinodasorte.com.br';
+  const locks=new Set();
+  let access='';
+  function key(){const raw=String(process.env.RDS_OFFICIAL_AUTH_ENCRYPTION_KEY||'').trim();const b=Buffer.from(raw,'base64');if(b.length!==32)throw new Error('Chave de proteção oficial inválida.');return b;}
+  function dec(v){const p=String(v||'').split('.');if(p.length!==3)throw new Error('Sessão oficial protegida inválida.');const c=crypto.createDecipheriv('aes-256-gcm',key(),Buffer.from(p[0],'base64'));c.setAuthTag(Buffer.from(p[1],'base64'));return Buffer.concat([c.update(Buffer.from(p[2],'base64')),c.final()]).toString('utf8');}
+  function enc(v){const iv=crypto.randomBytes(12);const c=crypto.createCipheriv('aes-256-gcm',key(),iv);const d=Buffer.concat([c.update(String(v),'utf8'),c.final()]);return iv.toString('base64')+'.'+c.getAuthTag().toString('base64')+'.'+d.toString('base64');}
+  async function officialRequest(endpoint,opt={}){
+    const email=String(process.env.RDS_OFFICIAL_EMAIL||'').trim();const password=String(process.env.RDS_OFFICIAL_PASSWORD||'').trim();if(!email||!password)throw new Error('Credenciais oficiais não configuradas.');
+    let row=await one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc&id=eq.main');
+    let device=String(row?.device_id||'').trim();
+    if(!device){device='rds_server_'+crypto.randomBytes(12).toString('hex');await sb('/rest/v1/rds10_official_sales_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:'main',device_id:device,email,updated_at:nowISO()})});row=await one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc&id=eq.main');}
+    if(!access&&row?.refresh_token_enc){try{const refresh=dec(row.refresh_token_enc);const rr=await fetch(API+'/auth/refresh',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','x-device-id':device},body:JSON.stringify({refreshToken:refresh,deviceId:device})});const raw=await rr.text();const d=raw?JSON.parse(raw):{};if(rr.ok&&d?.data?.accessToken){access=String(d.data.accessToken);if(d?.data?.refreshToken)await patch('rds10_official_sales_auth','id=eq.main',{refresh_token_enc:enc(d.data.refreshToken),last_auth_at:nowISO(),last_error:null,updated_at:nowISO()});}}catch{}}
+    if(!access){const lr=await fetch(API+'/auth/login',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','x-device-id':device},body:JSON.stringify({email,password,deviceId:device})});const raw=await lr.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!lr.ok||d?.success===false||!d?.data?.accessToken)throw new Error(d?.message||d?.error||raw||'Login oficial recusado.');access=String(d.data.accessToken);await patch('rds10_official_sales_auth','id=eq.main',{email,device_id:device,refresh_token_enc:enc(d.data.refreshToken||''),last_auth_at:nowISO(),last_error:null,updated_at:nowISO()});}
+    const r=await fetch(API+endpoint,{...opt,headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+access,'x-device-id':device,...(opt.headers||{})}});
+    const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}
+    if(r.status===401){access='';return officialRequest(endpoint,opt);}
+    if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'API oficial recusou a operação.');
+    return d?.data===undefined?d:d.data;
+  }
+  async function autoDeliver(id){
+    id=String(id||'').trim();if(!id||locks.has(id))return;locks.add(id);
+    try{
+      const order=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(id));
+      if(!order||String(order.status||'').toUpperCase()!=='PAGO_AGUARDANDO_BILHETES')return;
+      if(String(order.official_issue_status||'').toUpperCase()!=='CONCLUIDO'||!order.official_sale_id){
+        let drawId=String(order.official_draw_id||'').trim();
+        if(!drawId&&order.campaign_id){const camp=await one('rds10_campaigns','select=official_draw_id&id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);drawId=String(camp?.official_draw_id||'').trim();}
+        const all=await officialRequest('/draws/seller/all');const arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
+        let draw=drawId?arr.find(x=>String(x?.drawId||x?.id||'')===drawId)||null:null;
+        if(!draw){const active=arr.filter(x=>x?.isDrawClosed!==true&&x?.closed!==true&&x?.active!==false&&x?.isActive!==false);if(active.length!==1)throw new Error('Pedido pago sem sorteio oficial único definido.');draw=active[0];}
+        drawId=String(draw?.drawId||draw?.id||drawId||'').trim();if(!drawId)throw new Error('ID do sorteio oficial não identificado.');
+        const qty=Math.max(1,Math.floor(Number(order.quantity||0)));const rawAvail=draw?.availableBooklets??draw?.bookletsAvailable??draw?.availableTickets??draw?.remainingBooklets??draw?.remainingTickets??draw?.totalBooklets;const available=rawAvail===null||rawAvail===undefined||rawAvail===''?null:Number(rawAvail);if(Number.isFinite(available)&&available<qty)throw new Error('Disponibilidade oficial insuficiente.');
+        const customerName=String(order.customer_name||'').trim();const customerPhone=String(order.phone||order.contact_phone||'').trim();if(customerName.length<2||!customerPhone)throw new Error('Dados do cliente insuficientes.');
+        const sale=await officialRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets:qty,lotNumber:1,paymentMethod:String(order.payment_method||'pix').trim().toLowerCase()})});
+        const data=sale?.data||sale||{};const saleId=String(data?.saleId||data?.id||data?.sale?.saleId||data?.sale?.id||'').trim()||null;
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(id),{official_draw_id:drawId,official_draw_title:String(draw.drawTitle||draw.title||draw.name||'').trim()||null,official_draw_at:draw.drawDate||draw.drawAt||draw.date||null,official_sale_id:saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_issue_error:null,official_ticket_payload:data,official_ticket_url:data?.publicUrl||data?.ticketUrl||data?.url||null,status:'PAGO_AGUARDANDO_BILHETES',updated_at:nowISO()});
+        await logEvent('EMISSAO_OFICIAL_AUTOMATICA',{order:order.code,order_id:id,official_sale_id:saleId,draw_id:drawId});
+      }
+      const base=String(PUBLIC_URL||'http://127.0.0.1:'+PORT).replace(/\/+$/,'');const pdf=await fetch(base+'/api/rds/ticket-pdf/'+encodeURIComponent(id)+'/resend',{method:'POST'});if(!pdf.ok)throw new Error('Falha no envio automático do PDF oficial.');
+      const done=await fetch(base+'/api/orders/'+encodeURIComponent(id)+'/tickets-sent',{method:'POST'});if(!done.ok)throw new Error('Falha na conclusão automática da compra.');
+      await logEvent('COMPRA_CONCLUIDA_AUTOMATICAMENTE',{order:order.code,order_id:id});
+    }catch(e){const msg=String(e?.message||e);await patch('rds10_orders','id=eq.'+encodeURIComponent(id),{official_issue_error:msg.slice(0,1800),payment_last_error:msg.slice(0,1800),updated_at:nowISO()}).catch(()=>{});console.error('[RDS AUTO] '+id+':',msg);}
+    finally{locks.delete(id);}
+  }
+  setInterval(async()=>{try{const rows=await list('rds10_orders','select=id&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=20');for(const row of rows)autoDeliver(row.id).catch(()=>{});}catch(e){console.error('[RDS AUTO SCAN]',e?.message||e);}},15000);
+  console.log('[RDS] pós-pagamento automático oficial ativo');
+})();
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
 app.listen(PORT,async()=>{
   console.log(`CANAL DE VENDAS RDS V10 FINAL 10.3 — porta ${PORT}`);
