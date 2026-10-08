@@ -76,7 +76,6 @@ await import('./runtime-rds-whatsapp-crm-tenant-fix-v1.mjs');
 await import('./runtime-rds-sales-route-final-v3.mjs');
 await import('./runtime-rds-official-ticket-auto-v2.mjs');
 await import('./runtime-rds-official-ticket-chromium-v1.mjs');
-await import('./runtime-rds-auto-official-delivery-v1.mjs');
 // RDS ORDERS API OFFICIAL SALE FIELD V1
 {
   let s=fs.readFileSync('server.js','utf8');
