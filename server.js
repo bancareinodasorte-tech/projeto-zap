@@ -759,7 +759,7 @@ async function handleInbound(m){
       return replyInbound(identity,`Seu pedido *${order.code}* está aguardando pagamento de *R$ ${money(order.total_amount)}*. Após pagar, envie o comprovante aqui.`);
     }
     if(order.status === 'AGUARDANDO_CONFERENCIA') return replyInbound(identity,`Seu comprovante do pedido *${order.code}* já está aguardando conferência. Assim que confirmado, seguimos com a emissão dos bilhetes.`);
-    if(order.status === 'PAGO_AGUARDANDO_BILHETES') return replyInbound(identity,`Pagamento confirmado ✅\nPedido *${order.code}* aguardando envio dos bilhetes pelo operador.`);
+    if(order.status === 'PAGO_AGUARDANDO_BILHETES') return replyInbound(identity,`Pagamento confirmado ✅\nPedido *${order.code}*. A emissão dos bilhetes oficiais está sendo processada automaticamente.`);
   }
 
   if(isOfficeRoute(text)){
