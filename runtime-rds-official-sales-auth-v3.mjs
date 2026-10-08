@@ -242,7 +242,20 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     var drawId=String(draw.drawId||draw.id||requestedDrawId||'').trim();if(!drawId)throw new Error('ID do sorteio oficial não identificado.');
     await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_draw_id:drawId,official_draw_title:String(draw.drawTitle||draw.title||draw.name||'').trim()||null,official_draw_at:draw.drawDate||draw.drawAt||draw.date||null,official_inventory_available:Number.isFinite(availableBooklets)?availableBooklets:null,official_inventory_checked_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
     var sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets,lotNumber:Math.max(1,Math.floor(Number(b.lotNumber||1))),paymentMethod:String(order.payment_method||'pix').trim().toLowerCase()})});
-    return res.status(201).json({success:true,data:sale,orderId:order.id,sellerId:session.seller.id,drawId});
+    const saleData=sale?.data||sale||{};
+    const saleId=String(saleData?.saleId||saleData?.id||saleData?.sale?.saleId||saleData?.sale?.id||'').trim()||null;
+    const issuePayload=saleData;
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{
+      official_sale_id:saleId,
+      official_issue_status:'CONCLUIDO',
+      official_issue_at:nowISO(),
+      official_issue_error:null,
+      official_ticket_payload:issuePayload,
+      official_ticket_url:saleData?.publicUrl||saleData?.ticketUrl||saleData?.url||null,
+      status:'PAGO_AGUARDANDO_BILHETES',
+      updated_at:nowISO()
+    });
+    return res.status(201).json({success:true,data:sale,orderId:order.id,sellerId:session.seller.id,drawId,officialSaleId:saleId});
   }catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}
 });
 })();
