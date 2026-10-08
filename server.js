@@ -605,10 +605,13 @@ function looksLikeForm(text){ return /quantidade\s*[:\-]/i.test(text) || (/nome\
 function routerMessage(settings){ return `🍀 *CANAL DE VENDAS RDS*\n\n1️⃣ *Comprar bilhetes*\n2️⃣ *Consultar meu pedido*\n3️⃣ *Falar com atendente*\n4️⃣ *Ver este menu novamente*\n\nDigite apenas o número da opção.`; }
 async function beginOrder(identity, campaignCode=null){
   if(!identity.phone){ await replyInbound(identity,'Não consegui identificar seu número de WhatsApp. Envie novamente.'); return; }
-  const order=await createOrder(identity.phone,campaignCode);
+  const normalizedCampaignCode=cleanText(campaignCode||'').replace(/^RDS[-_:]?/i,'').trim()||null;
+  const order=await createOrder(identity.phone,normalizedCampaignCode);
+  // O contexto comercial fica gravado no próprio pedido. A partir daqui,
+  // quantidade/nome/pagamento não dependem mais de o cliente repetir o código.
   await cancelFutureDeliveries(identity.phone,'INTERESSE');
-  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode});
-  await replyInbound(identity,`🛒 *COMPRA DE BILHETES*\n\nPedido: *${order.code}*\n\nInforme apenas a *quantidade* de bilhetes.\nExemplo: *5*\n\nDigite *CANCELAR* para sair.`);
+  await logEvent('INTERESSE',{phone:identity.phone,order:order.code,campaignCode:normalizedCampaignCode,campaignId:order.campaign_id||null,officialDrawId:order.official_draw_id||null});
+  await replyInbound(identity,`🛒 *COMPRA DE BILHETES*\n\nPedido: *${order.code}*${order.official_draw_title ? `\n🎯 Sorteio: *${order.official_draw_title}*` : ''}\n\nInforme apenas a *quantidade* de bilhetes.\nExemplo: *5*\n\nDigite *CANCELAR* para sair.`);
 }
 async function handleOrderForm(identity, order, text){
   const t=cleanText(text);
