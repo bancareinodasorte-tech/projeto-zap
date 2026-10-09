@@ -25,7 +25,7 @@ async function rdsOpSession(req){
   const h=rdsOpTHash(t);
   const ss=await one('rds10_seller_sessions','select=id,seller_id,expires_at,device_id,platform&token_hash=eq.'+encodeURIComponent(h)+'&revoked_at=is.null');
   if(!ss||new Date(ss.expires_at).getTime()<=Date.now())return null;
-  const seller=await one('rds10_sellers','select=id,name,phone,email,status,role,verified_at,approved_at,blocked_at,last_login_at,created_at& id=eq.'+ss.seller_id);
+  const seller=await one('rds10_sellers','select=id,name,phone,email,status,role,verified_at,approved_at,blocked_at,last_login_at,created_at&id=eq.'+encodeURIComponent(ss.seller_id));
   if(!seller||seller.status!=='ATIVO')return null;
   if(ss.device_id){const device=await one('rds10_seller_devices','select=id,status,platform,device_id&seller_id=eq.'+encodeURIComponent(seller.id)+'&device_id=eq.'+encodeURIComponent(ss.device_id));if(!device||device.status!=='ATIVO')return null;}
   return {token:t,session:ss,seller};
