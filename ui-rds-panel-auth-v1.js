@@ -85,10 +85,9 @@
  function accountBar(ctx){
   const host=$('.top-actions');if(!host||$('#rdsAccount'))return;
   const admin=ctx.role==='ADMINISTRADOR',name=admin?(ctx.admin?.email||'Administrador'):(ctx.seller?.name||'Vendedor');
-  const d=document.createElement('div');d.id='rdsAccount';d.innerHTML='<span class="account-name" title="'+esc(name)+'">'+esc(name)+'</span>'+(admin?'<button type="button" id="rdsAdminOpen">Administração</button>':'')+'<button type="button" id="rdsAccountOpen">Conta</button><button type="button" id="rdsLogout">Sair</button>';
+  const d=document.createElement('div');d.id='rdsAccount';d.innerHTML='<span class="account-name" title="'+esc(name)+'">'+esc(name)+'</span>'+'<button type="button" id="rdsAccountOpen">Conta</button><button type="button" id="rdsLogout">Sair</button>';
   host.appendChild(d);
   $('#rdsAccountOpen').onclick=()=>window.go?.('account');
-  if($('#rdsAdminOpen'))$('#rdsAdminOpen').onclick=()=>{location.href='/admin-vendedores.html';};
   $('#rdsLogout').onclick=async()=>{if(!confirm('Deseja sair do CANAL DE VENDAS RDS?'))return;try{await api('/api/rds/unified/logout',{method:'POST'});}catch{}localStorage.removeItem(OP);localStorage.removeItem(AD);location.reload();};
  }
  async function boot(){
