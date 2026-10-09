@@ -26,7 +26,7 @@ app.post('/api/operator/forgot-password',async(req,res)=>{
     if(!key)throw new Error('Recuperação por e-mail ainda não configurada no servidor.');
     const token=crypto.randomBytes(32).toString('base64url');
     await insert('rds10_seller_reset_tokens',{seller_id:seller.id,token_hash:rdsAdminHash(token),expires_at:new Date(Date.now()+1800000).toISOString(),created_at:nowISO()});
-    const link=RDS_PUBLIC_BASE_URL_SELLER+'/operador?token='+encodeURIComponent(token);
+    const link=RDS_PUBLIC_BASE_URL_SELLER+'/?rds=reset-password&token='+encodeURIComponent(token);
     const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({from:RDS_SELLER_EMAIL_FROM,to:[seller.email],subject:'REINO DA SORTE - Recuperação de senha',text:'Foi solicitada a recuperação da sua senha de vendedor. Abra este link para criar uma nova senha: '+link+'\\n\\nO link expira em 30 minutos.'})});
     if(!rr.ok)throw new Error('Falha ao enviar e-mail de recuperação.');
     return res.json({success:true,message:rdsSellerResetPublicMessage()});
