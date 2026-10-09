@@ -102,6 +102,7 @@ else{
  async function issueOne(order){
   if(!order?.id||String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
   let issue=String(order.official_issue_status||'');
+  if((issue==='ERRO_RECONCILIAR'||issue==='CONCLUIDO')&&!order.official_sale_id)return;
   let age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
   if(issue==='EMITINDO'){
    if(Number.isFinite(age)&&age<60)return;
