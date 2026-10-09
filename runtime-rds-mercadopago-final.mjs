@@ -130,9 +130,15 @@ async function rdsMercadoPagoApplyResult(order,data,source){
   const patchData={pagbank_status:status,pagbank_charge_id:p?.id||order.pagbank_charge_id||null,payment_updated_at:nowISO(),updated_at:nowISO()};
   if(amount>0&&Math.abs(amount-expected)>0.009){patchData.payment_last_error='Valor do pagamento não corresponde ao pedido.';await patch('rds10_orders','id=eq.'+order.id,patchData);return false;}
   if(status==='PROCESSED'&&detail==='accredited'){
-    patchData.status='PAGO_AGUARDANDO_BILHETES';patchData.payment_confirmed_at=nowISO();patchData.payment_last_error=null;
-    await patch('rds10_orders','id=eq.'+order.id,patchData);
-    await logEvent('PAGAMENTO_CONFIRMADO',{phone:order.phone,order:order.code,provider:'MERCADO_PAGO',source,mercadopago_order_id:order.pagbank_order_id,mercadopago_payment_id:p?.id||null});
+    if(String(order.status||'').toUpperCase()==='CONCLUIDO'&&order.official_sale_id)return true;
+    const alreadyPaid=String(order.status||'').toUpperCase()==='PAGO_AGUARDANDO_BILHETES'&&Boolean(order.payment_confirmed_at);
+    if(alreadyPaid){
+      await patch('rds10_orders','id=eq.'+order.id,{pagbank_status:status,pagbank_charge_id:p?.id||order.pagbank_charge_id||null,payment_updated_at:nowISO()});
+    }else{
+      patchData.status='PAGO_AGUARDANDO_BILHETES';patchData.payment_confirmed_at=nowISO();patchData.payment_last_error=null;
+      await patch('rds10_orders','id=eq.'+order.id,patchData);
+      await logEvent('PAGAMENTO_CONFIRMADO',{phone:order.phone,order:order.code,provider:'MERCADO_PAGO',source,mercadopago_order_id:order.pagbank_order_id,mercadopago_payment_id:p?.id||null});
+    }
     if(typeof globalThis.rdsTriggerOfficialAutoIssue==='function')setTimeout(()=>Promise.resolve(globalThis.rdsTriggerOfficialAutoIssue()).catch(e=>console.error('[RDS AUTO] gatilho pós-pagamento:',e?.message||e)),0);
     return true;
   }
