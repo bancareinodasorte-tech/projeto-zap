@@ -59,7 +59,7 @@
           const order=(Array.isArray(os)?os:[]).find(x=>String(x.phone||'').replace(/\D/g,'')===r.phoneDigits&&!['CONCLUIDO','CANCELADO'].includes(x.status));
           const message=String(r.body||('Mensagem recebida ('+(r.message_type||'mídia')+')'));
           const wa=r.phoneDigits?'https://wa.me/'+r.phoneDigits+'?text='+encodeURIComponent('Olá! Recebemos seu contato no CANAL DE VENDAS REINO DA SORTE. Como podemos ajudar?'):'';
-          return '<article class="card" style="margin-bottom:12px"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2 style="margin:0">'+esc(r.phone||'Número não identificado')+'</h2><p class="mut">'+dt(r.created_at)+' • '+esc(r.message_type||'mensagem')+'</p></div>'+badge(order?order.status:'RETORNO SEM PEDIDO ATIVO')+'</div><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(message)+'</p><div class="row">'+(wa?'<a class="btn primary" target="_blank" rel="noopener noreferrer" href="'+esc(wa)+'">Responder no WhatsApp</a>':'')+(order?btn('Ver compras',"go('orders')"):'')+btn('Ver cliente',"go('contacts')")+'</div></article>';
+          return '<details class="card rds-return-item" style="margin-bottom:8px"><summary class="rds-return-summary"><span><strong>'+esc(r.phone||'Número não identificado')+'</strong><small>'+dt(r.created_at)+' • '+esc(r.message_type||'mensagem')+'</small><small class="rds-return-preview">'+esc(message.replace(/\\s+/g,' ').slice(0,105))+'</small></span><span class="rds-return-state">'+badge(order?order.status:'RETORNO SEM PEDIDO ATIVO')+'<span class="rds-return-chevron">＋</span></span></summary><div class="rds-return-detail"><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(message)+'</p><div class="row">'+(wa?'<a class="btn primary" target="_blank" rel="noopener noreferrer" href="'+esc(wa)+'">Responder no WhatsApp</a>':'')+(order?btn('Ver compras',"go('orders')"):'')+btn('Ver cliente',"go('contacts')")+'</div></div></details>';
         }).join('')||'<div class="card empty-state">Nenhum retorno corresponde à busca.</div>';
       };
       root.innerHTML='<div class="page-title"><div><span class="eyebrow">Atendimento comercial</span><h1>Retornos</h1><p class="mut">Mensagens recebidas organizadas para localizar o cliente e continuar o atendimento.</p></div>'+btn('Atualizar',"go('returns')")+'</div>'+
@@ -69,3 +69,61 @@
     }catch(e){root.innerHTML='<div class="card"><h2>Não foi possível carregar os retornos</h2><p>'+esc(e.message)+'</p>'+btn('Tentar novamente',"go('returns')",'btn primary')+'</div>';}
   };
 })();
+
+  // Reorganização visual sem remover configurações nem alterar suas APIs.
+  (()=>{
+    const css=\`
+      .rds-return-item{padding:0!important;overflow:hidden}
+      .rds-return-item>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:13px 14px}
+      .rds-return-item>summary::-webkit-details-marker{display:none}
+      .rds-return-summary>span:first-child{min-width:0;display:flex;flex-direction:column;gap:4px}
+      .rds-return-summary strong{font-size:14px;overflow-wrap:anywhere}
+      .rds-return-summary small{font-size:11px;color:var(--muted,#718096)}
+      .rds-return-preview{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .rds-return-state{display:flex;align-items:center;gap:7px;flex-shrink:0}
+      .rds-return-chevron{font-size:18px;color:#1759a7}
+      .rds-return-item[open] .rds-return-chevron{font-size:0}
+      .rds-return-item[open] .rds-return-chevron:after{content:'−';font-size:20px}
+      .rds-return-detail{border-top:1px solid #e5ebf4;padding:12px 14px}
+      .rds-settings-fold{margin:0 0 12px}
+      .rds-settings-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:750;color:#183b68;padding:2px 0}
+      .rds-settings-fold>summary::-webkit-details-marker{display:none}
+      .rds-settings-fold>summary:after{content:'＋';font-size:20px;color:#1762b7}
+      .rds-settings-fold[open]>summary:after{content:'−'}
+      .rds-settings-fold .rds-settings-fold-body{padding-top:12px}
+      .rds-settings-fold .rds-settings-fold-body> :first-child{margin-top:0}
+      @media(max-width:640px){.rds-return-summary{align-items:flex-start}.rds-return-preview{max-width:190px}.rds-return-state{gap:4px}.rds-return-state .badge{max-width:115px;white-space:normal;text-align:center}}
+    \`;
+    if(!document.getElementById('rdsOperationalCompactStyles')){const style=document.createElement('style');style.id='rdsOperationalCompactStyles';style.textContent=css;document.head.appendChild(style);}
+    function compactSettings(){
+      if((window.page||localStorage.getItem('rds_current_page')||'')!=='settings')return;
+      const root=document.getElementById('app');if(!root)return;
+      const headings=[...root.querySelectorAll('h2')];
+      for(const h of headings){
+        const title=(h.textContent||'').trim();
+        if(!/^(WhatsApp|Bot comercial|Regras de vendas e pagamento)$/.test(title))continue;
+        const card=h.closest('.card');if(!card||card.dataset.rdsCompactDone==='1')continue;
+        card.dataset.rdsCompactDone='1';
+        const details=document.createElement('details');details.className='rds-settings-fold';
+        const summary=document.createElement('summary');summary.textContent=title;
+        const body=document.createElement('div');body.className='rds-settings-fold-body';
+        const nodes=[...card.childNodes];
+        for(const node of nodes){if(node===h)continue;body.appendChild(node);}
+        details.appendChild(summary);details.appendChild(body);
+        h.replaceWith(details);
+        // Estado atual do WhatsApp fica visível no título, sem abrir a seção.
+        if(title==='WhatsApp'){
+          const status=card.querySelector('.badge,.status');
+          if(status&&status.textContent.trim())summary.textContent='WhatsApp — '+status.textContent.trim();
+        }
+        if(title==='Bot comercial'||title==='Regras de vendas e pagamento')details.open=false;
+      }
+    }
+    const app=document.getElementById('app');
+    if(app&&typeof MutationObserver!=='undefined'){
+      const observer=new MutationObserver(()=>compactSettings());
+      observer.observe(app,{childList:true,subtree:true});
+      compactSettings();
+    }
+    window.rdsCompactSettings=compactSettings;
+  })();
