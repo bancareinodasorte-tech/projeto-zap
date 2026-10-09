@@ -27,8 +27,10 @@ app.get('/api/rds/commission-payouts',async(req,res)=>{
 });
 app.post('/api/rds/commission-payouts',async(req,res)=>{
  try{
-  if(typeof rdsAdminRequire!=='function')return res.status(503).json({success:false,error:'Acesso administrativo indisponível.'});
-  const auth=await rdsAdminRequire(req,res);if(!auth)return;
+  if(typeof rdsUnifiedContext!=='function')return res.status(503).json({success:false,error:'Acesso administrativo indisponível.'});
+  const auth=await rdsUnifiedContext(req);
+  if(!auth?.authenticated)return res.status(401).json({success:false,error:'Entre na conta administrativa para continuar.'});
+  if(auth.role!=='ADMINISTRADOR')return res.status(403).json({success:false,error:'Somente administradores podem consultar ou registrar repasses.'}
   const b=req.body||{},sellerId=String(b.seller_id||''),companyId=String(b.company_id||''),month=String(b.period_month||'');
   const amount=Number(b.amount),method=String(b.payment_method||''),reference=String(b.reference||'').trim().slice(0,180),receipt=String(b.receipt_url||'').trim().slice(0,1000),notes=String(b.notes||'').trim().slice(0,2000);
   if(!/^[0-9a-f-]{36}$/i.test(sellerId)||!/^[0-9a-f-]{36}$/i.test(companyId))return res.status(400).json({success:false,error:'Selecione um vendedor e uma empresa válidos.'});
