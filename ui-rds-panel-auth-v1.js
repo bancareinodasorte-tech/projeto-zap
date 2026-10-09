@@ -47,7 +47,8 @@
     msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Abrindo painel…';location.reload();
    }catch(err){b.disabled=false;b.textContent='Entrar no painel';msg.className='auth-msg '+(err.code==='DEVICE_PENDING'?'warn':'bad');msg.textContent=err.message+(err.code==='DEVICE_PENDING'?' Após a liberação do administrador, tente entrar novamente.':'');}
   };
-  $('#rdsAuthRegister').onclick=()=>{location.href='/operador';};
+  $('#rdsAuthRegister').onclick=()=>showRegister();
+
   const recover=async(kind)=>{
    const email=prompt('Informe o e-mail cadastrado para recuperar a senha:');if(!email)return;
    if(!email.includes('@')){const msg=$('#rdsAuthMsg');msg.className='auth-msg bad';msg.textContent='A recuperação exige o e-mail cadastrado.';return;}
@@ -57,6 +58,16 @@
   };
   $('#rdsAuthForgotSeller').onclick=()=>recover('seller');
   $('#rdsAuthForgotAdmin').onclick=()=>recover('admin');
+ }
+ function showRegister(message=''){
+  style();let d=$('#rdsAuthGate');if(!d){d=document.createElement('div');d.id='rdsAuthGate';document.body.appendChild(d);}
+  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Cadastro de vendedor — acesso sujeito à aprovação administrativa</div><form id="rdsRegisterForm"><label for="rdsRegName">Nome completo</label><input id="rdsRegName" autocomplete="name" minlength="3" required><label for="rdsRegPhone">Telefone com DDD</label><input id="rdsRegPhone" autocomplete="tel" inputmode="tel" placeholder="(88) 99999-9999" required><label for="rdsRegEmail">E-mail para recuperação de senha</label><input id="rdsRegEmail" type="email" autocomplete="email" placeholder="seu@email.com"><label for="rdsRegPassword">Criar senha (mínimo 6 caracteres)</label><input id="rdsRegPassword" type="password" minlength="6" autocomplete="new-password" required><button type="submit" id="rdsRegSubmit">Enviar cadastro</button><button type="button" class="secondary" id="rdsAuthBack">Já tenho conta</button><div id="rdsRegMsg" class="auth-msg">'+esc(message)+'</div></form><div class="auth-foot">Após o envio, aguarde o administrador ativar a conta e autorizar o dispositivo.</div></div>';
+  $('#rdsRegisterForm').onsubmit=async e=>{
+   e.preventDefault();const b=$('#rdsRegSubmit'),msg=$('#rdsRegMsg');b.disabled=true;b.textContent='Enviando…';msg.className='auth-msg';msg.textContent='Registrando dados…';
+   try{const body={name:$('#rdsRegName').value.trim(),phone:$('#rdsRegPhone').value.trim(),email:$('#rdsRegEmail').value.trim().toLowerCase(),password:$('#rdsRegPassword').value};const d=await api('/api/operator/register',{method:'POST',body:JSON.stringify(body)});msg.className='auth-msg ok';msg.textContent=d.message||'Cadastro recebido. Aguarde a aprovação do administrador.';b.disabled=true;b.textContent='Cadastro enviado';$('#rdsAuthBack').textContent='Voltar ao login';}
+   catch(err){b.disabled=false;b.textContent='Enviar cadastro';msg.className='auth-msg bad';msg.textContent=err.message||'Não foi possível enviar o cadastro.';}
+  };
+  $('#rdsAuthBack').onclick=()=>showGate();
  }
  function accountBar(ctx){
   const host=$('.top-actions');if(!host||$('#rdsAccount'))return;
