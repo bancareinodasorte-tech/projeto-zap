@@ -71,8 +71,8 @@ else{
   // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
   const result=await sendToJid(target.jid,{document:{url:info.pdfUrl||'https://invalid.local/rds-ticket.pdf'},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});
   if(!result?.key?.id)throw new Error('WhatsApp não confirmou o envio do PDF.');
-  await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||order.official_sale_id||''),status:'ENVIADA',waId:result.key.id,raw:{automatic:true,order:order.code,saleId:info.saleId||order.official_sale_id||null}});
   await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+  await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||order.official_sale_id||''),status:'ENVIADA',waId:result.key.id,raw:{automatic:true,order:order.code,saleId:info.saleId||order.official_sale_id||null}});
   return result;
  }
  async function deliverExisting(order){
