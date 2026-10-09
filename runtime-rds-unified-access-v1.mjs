@@ -47,6 +47,8 @@ app.post('/api/rds/unified/login',async(req,res)=>{
     if(!s)throw new Error('Cadastro não encontrado.');
     if(s.status==='PENDENTE')throw new Error('Cadastro aguardando aprovação.');
     if(s.status==='BLOQUEADO')throw new Error('Conta bloqueada pelo administrador.');
+    if(s.status==='INATIVO')throw new Error('Conta desativada pelo administrador.');
+    if(s.status!=='ATIVO')throw new Error('Esta conta não está autorizada a entrar.');
     const h=rdsOpHash(password,s.password_salt),b=String(s.password_hash||'');
     if(h.length!==b.length||!crypto.timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(b,'hex')))throw new Error('Telefone ou senha inválidos.');
     const deviceId=cleanText(req.body?.deviceId||req.headers['x-rds-device-id']),platform=rdsOpPlatform(req,req.body?.platform);
