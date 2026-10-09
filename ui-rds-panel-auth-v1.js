@@ -35,7 +35,7 @@
  function showGate(message='',loading=false){
   style();let d=$('#rdsAuthGate');if(!d){d=document.createElement('div');d.id='rdsAuthGate';document.body.appendChild(d);}
   if(loading){d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Verificando acesso seguro…</div><p class="auth-msg">Aguarde a validação da sua sessão.</p></div>';return;}
-  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Entre para acessar o painel de vendas</div><form id="rdsAuthForm"><label for="rdsAuthIdentifier">Telefone do vendedor ou e-mail administrativo</label><input id="rdsAuthIdentifier" autocomplete="username" placeholder="DDD + telefone ou e-mail" required><label for="rdsAuthPassword">Senha</label><input id="rdsAuthPassword" type="password" autocomplete="current-password" required><button type="submit" id="rdsAuthSubmit">Entrar no painel</button><button type="button" class="secondary" id="rdsAuthRegister">Cadastrar vendedor</button><div id="rdsAuthMsg" class="auth-msg '+(message?'bad':'')+'">'+esc(message)+'</div></form><div class="auth-foot">Acesso individual • dispositivos controlados pelo administrador</div></div>';
+  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Entre para acessar o painel de vendas</div><form id="rdsAuthForm"><label for="rdsAuthIdentifier">Telefone do vendedor ou e-mail administrativo</label><input id="rdsAuthIdentifier" autocomplete="username" placeholder="DDD + telefone ou e-mail" required><label for="rdsAuthPassword">Senha</label><input id="rdsAuthPassword" type="password" autocomplete="current-password" required><button type="submit" id="rdsAuthSubmit">Entrar no painel</button><button type="button" class="secondary" id="rdsAuthRegister">Cadastrar vendedor</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" class="secondary" id="rdsAuthForgotSeller">Recuperar senha do vendedor</button><button type="button" class="secondary" id="rdsAuthForgotAdmin">Recuperar senha do administrador</button></div><div id="rdsAuthMsg" class="auth-msg '+(message?'bad':'')+'">'+esc(message)+'</div></form><div class="auth-foot">Acesso individual • dispositivos controlados pelo administrador</div></div>';
   $('#rdsAuthForm').onsubmit=async e=>{
    e.preventDefault();const b=$('#rdsAuthSubmit'),msg=$('#rdsAuthMsg');b.disabled=true;b.textContent='Validando…';msg.className='auth-msg';msg.textContent='Verificando credenciais e autorização do dispositivo…';
    const id=deviceId(),identifier=$('#rdsAuthIdentifier').value.trim(),password=$('#rdsAuthPassword').value;
@@ -48,6 +48,15 @@
    }catch(err){b.disabled=false;b.textContent='Entrar no painel';msg.className='auth-msg '+(err.code==='DEVICE_PENDING'?'warn':'bad');msg.textContent=err.message+(err.code==='DEVICE_PENDING'?' Após a liberação do administrador, tente entrar novamente.':'');}
   };
   $('#rdsAuthRegister').onclick=()=>{location.href='/operador';};
+  const recover=async(kind)=>{
+   const email=prompt('Informe o e-mail cadastrado para recuperar a senha:');if(!email)return;
+   if(!email.includes('@')){const msg=$('#rdsAuthMsg');msg.className='auth-msg bad';msg.textContent='A recuperação exige o e-mail cadastrado.';return;}
+   const msg=$('#rdsAuthMsg');msg.className='auth-msg';msg.textContent='Solicitando recuperação…';
+   try{const path=kind==='admin'?'/api/operator/admin/forgot-password':'/api/operator/forgot-password';const d=await api(path,{method:'POST',body:JSON.stringify({email:email.trim().toLowerCase()})});msg.className='auth-msg ok';msg.textContent=d.message||'Se o e-mail estiver cadastrado, enviaremos as instruções.';}
+   catch(e){msg.className='auth-msg bad';msg.textContent=e.message||'Não foi possível solicitar a recuperação.';}
+  };
+  $('#rdsAuthForgotSeller').onclick=()=>recover('seller');
+  $('#rdsAuthForgotAdmin').onclick=()=>recover('admin');
  }
  function accountBar(ctx){
   const host=$('.top-actions');if(!host||$('#rdsAccount'))return;
