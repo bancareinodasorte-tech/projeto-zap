@@ -211,7 +211,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');
     var session=await rdsOpSession(req);if(!session)throw new Error('Sessão do vendedor inválida ou expirada.');
     var b=req.body||{},orderId=String(b.orderId||'').trim();if(!orderId)throw new Error('Pedido do vendedor não informado.');
-    var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url& id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
+    var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url&id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
     if(!order)throw new Error('Pedido não encontrado para este vendedor.');
     // Idempotência: uma venda oficial já concluída nunca deve ser emitida novamente.
     if(String(order.official_issue_status||'').toUpperCase()==='CONCLUIDO' && order.official_sale_id){
@@ -221,7 +221,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     if(customerName.length<2)throw new Error('Nome do cliente inválido.');if(!customerPhone)throw new Error('Telefone do cliente não informado.');if(!quantityBooklets)throw new Error('Quantidade do pedido inválida.');
     var requestedDrawId=String(b.drawId||order.official_draw_id||'').trim(),draw=null;
     if(!requestedDrawId&&order.campaign_id){
-      const camp=await one('rds10_campaigns','select=official_draw_id,official_draw_title& id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);
+      const camp=await one('rds10_campaigns','select=official_draw_id,official_draw_title&id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);
       requestedDrawId=String(camp?.official_draw_id||'').trim();
     }
     if(requestedDrawId){
