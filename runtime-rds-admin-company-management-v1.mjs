@@ -44,6 +44,7 @@ app.post('/api/operator/admin/company/save',async(req,res)=>{
    }
   }
   if(!saved)throw new Error('Não foi possível salvar a empresa.');
+  await insert('rds10_security_audit',{actor_type:'ADMINISTRADOR',actor_id:admin.admin?.id||null,action:id?'COMPANY_UPDATED':'COMPANY_CREATED',target_type:'COMPANY',target_id:saved.id,metadata:{code:saved.code,active:saved.active},created_at:nowISO()},'minimal').catch(()=>{});
   return res.json({success:true,company:saved});
  }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
@@ -68,6 +69,7 @@ app.post('/api/operator/admin/company/assign',async(req,res)=>{
    const rows=await insert('rds10_seller_companies',{seller_id:sellerId,company_id:companyId,role,active,created_at:nowISO(),updated_at:nowISO()});
    saved=rows?.[0]||null;
   }
+  await insert('rds10_security_audit',{actor_type:'ADMINISTRADOR',actor_id:admin.admin?.id||null,action:active?'COMPANY_MEMBERSHIP_ACTIVATED':'COMPANY_MEMBERSHIP_PREPARED',target_type:'SELLER',target_id:sellerId,metadata:{companyId,role,active},created_at:nowISO()},'minimal').catch(()=>{});
   return res.json({success:true,membership:saved});
  }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
