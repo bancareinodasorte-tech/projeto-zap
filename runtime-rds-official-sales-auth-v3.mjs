@@ -214,6 +214,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url&id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
     if(!order)throw new Error('Pedido não encontrado para este vendedor.');
     // Idempotência: uma venda oficial já concluída nunca deve ser emitida novamente.
+    if(String(order.official_issue_status||'').toUpperCase()==='ERRO_RECONCILIAR'&&!order.official_sale_id)throw new Error('Resultado da tentativa oficial anterior é ambíguo. Confira a venda no sistema oficial antes de tentar emitir novamente.');
     if(order.official_sale_id){
       return res.status(200).json({success:true,alreadyIssued:true,data:order.official_ticket_payload||null,orderId:order.id,sellerId:session.seller.id,drawId:order.official_draw_id||null,officialSaleId:String(order.official_sale_id)});
     }
