@@ -78,7 +78,7 @@ else{
    return;
   }
   const issue=String(order.official_issue_status||''),age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
-  if(issue==='EMITINDO'&&Number.isFinite(age)&&age<60)return;
+  if((issue==='EMITINDO'&&Number.isFinite(age)&&age<60)||(issue==='EMITIDO_AGUARDANDO_ENVIO'&&Number.isFinite(age)&&age<15)||(issue==='ERRO'&&Number.isFinite(age)&&age<15))return;
   const filter='id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId)+(issue?'&official_issue_status=eq.'+encodeURIComponent(issue):'&official_issue_status=is.null');
   const claimed=await patch('rds10_orders',filter,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
   if(!claimed?.length)return;
@@ -92,7 +92,7 @@ else{
   }catch(e){
    const err=String(e?.message||e);
    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
-   await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
+   if(issue!=='EMITIDO_AGUARDANDO_ENVIO')await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
    console.error('[RDS AUTO] envio pendente '+String(order.code||order.id)+': '+err);
   }
  }
