@@ -85,3 +85,30 @@ Não repetir testes antigos já validados. Enquanto a produção do provedor de 
 
 ## REGRA DE NÃO DUPLICAÇÃO
 Cada função operacional deve ter uma área principal responsável. O WhatsApp orienta o cliente; o painel concentra a operação. Indicadores e atalhos apenas encaminham para a área responsável, sem criar uma segunda função equivalente.
+
+
+## BLOCO 7 — FINANCEIRO, MULTIEMPRESA E ACESSO UNIFICADO
+
+- [x] Aba **Comissões e resultados** criada no painel principal, com filtro por período, resumo por sorteio e detalhamento de compras concluídas.
+- [x] Endpoint financeiro dedicado exige sessão unificada; vendedor consulta apenas as próprias vendas e administrador consulta o consolidado.
+- [x] Painel administrativo recebeu navegação para Comissões e para o painel comercial.
+- [x] Gestão administrativa de bancas/empresas adicionada ao painel: cadastro/edição, preço padrão, fuso horário, divisão de comissão e vínculo/desvínculo de vendedores.
+- [x] Login unificado ajustado para não reativar automaticamente dispositivos bloqueados/revogados e para exigir autorização administrativa de novos dispositivos.
+- [x] Login unificado ajustado para impedir acesso de contas inativas.
+- [ ] Confirmar deploy final de todas as mudanças e revisar logs de inicialização.
+- [ ] Conferir no painel os valores de comissão usando dados reais já existentes, sem criar pedido nem pagamento.
+- [ ] Validar cadastro/edição de empresa e vínculo de vendedor com uma operação controlada que não altere a empresa padrão.
+- [ ] Validar acesso administrativo, bloqueio/desbloqueio, revogação de dispositivo e limite de dois dispositivos.
+- [ ] Validar isolamento multiempresa em pedidos, pagamentos, clientes, campanhas e emissão oficial.
+- [ ] Definir e implementar, se aprovado no fechamento financeiro, registro auditável de comissões pagas, estornos e comprovantes de repasse. A tela atual mostra comissão calculada e não presume pagamento.
+
+## BLOCO 8 — LOGIN OBRIGATÓRIO E FECHAMENTO DO APK
+
+- [x] Módulo de autenticação global incluído no painel principal, com login unificado de vendedor/administrador.
+- [ ] Validar entrada com vendedor ativo e dispositivo autorizado.
+- [ ] Validar rejeição de usuário inativo/bloqueado e dispositivo revogado.
+- [ ] Validar cadastro de novo dispositivo pendente e autorização no painel administrativo.
+- [ ] Validar sessão persistente, sair e entrar novamente, no navegador e no APK.
+- [ ] Revisão visual completa em celular e PC.
+- [ ] Validar Mercado Pago → pagamento aprovado → emissão oficial → PDF arquivado → envio WhatsApp, sem novo pagamento; preservar RDS-559D8F.
+- [ ] Somente após as etapas anteriores, gerar/instalar e aprovar o APK final de distribuição.
