@@ -32,8 +32,9 @@ app.post('/api/operator/admin/company/save',async(req,res)=>{
   const row={code,name,legal_name:cleanText(b.legalName)||null,slug,active:code==='RDS',timezone:cleanText(b.timezone)||'America/Fortaleza',default_unit_price:Number(price.toFixed(2)),seller_commission_pct:Number(sellerPct.toFixed(2)),company_revenue_pct:Number(companyPct.toFixed(2)),updated_at:nowISO()};
   let saved;
   if(id){
-   const current=await one('rds10_companies','select=id&id=eq.'+encodeURIComponent(id)).catch(()=>null);
+   const current=await one('rds10_companies','select=id,code&id=eq.'+encodeURIComponent(id)).catch(()=>null);
    if(!current)throw new Error('Empresa não encontrada.');
+   if(String(current.code||'').toUpperCase()==='RDS'&&code!=='RDS')throw new Error('O código da empresa padrão RDS não pode ser alterado.');
    saved=(await patch('rds10_companies','id=eq.'+encodeURIComponent(id),row))[0];
   }else{
    saved=(await insert('rds10_companies',{...row,created_at:nowISO()}))[0];
