@@ -54,15 +54,9 @@ else{
   return found||null;
  }
  async function alreadySent(order,info){
-  const phone=normalizeBR(order.phone||order.contact_phone||''),saleId=String(info?.saleId||order.official_sale_id||'').trim();
-  if(!phone||!saleId)return false;
   try{
    const docs=await list('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id));
-   if(docs.some(d=>Boolean(d.sent_at)))return true;
-  }catch{}
-  try{
-   const rows=await list('rds10_messages','select=body,message_type,created_at&phone=eq.'+encodeURIComponent(phone)+'&direction=eq.OUT&status=eq.ENVIADA&order=created_at.desc&limit=50');
-   return rows.some(m=>String(m?.message_type||'')==='document'&&String(m?.body||'').includes(String(order.code||''))&&String(m?.body||'').includes(saleId)&&String(m?.body||'').includes('PDF DOS BILHETES'));
+   return docs.some(d=>Boolean(d.sent_at));
   }catch{return false;}
  }
  async function sendProof(order,info){
@@ -80,58 +74,79 @@ else{
   info.saleId=info.saleId||String(order.official_sale_id||'');
   if(!info.saleId)throw new Error('O pedido está marcado como emitido, mas não possui ID oficial.');
   if(await alreadySent(order,info)){
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{status:'CONCLUIDO',completed_at:order.completed_at||nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'CONCLUIDO',completed_at:order.completed_at||nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
    return;
   }
+  const issue=String(order.official_issue_status||''),age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
+  if(issue==='EMITINDO'&&Number.isFinite(age)&&age<60)return;
+  const filter='id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId)+(issue?'&official_issue_status=eq.'+encodeURIComponent(issue):'&official_issue_status=is.null');
+  const claimed=await patch('rds10_orders',filter,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
+  if(!claimed?.length)return;
   try{
    await sendProof(order,info);
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{status:'CONCLUIDO',completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
-   await logEvent('BILHETES_ENVIADOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,phone:order.phone});
-   console.log('[RDS AUTO] PDF oficial enviado e pedido concluído '+String(order.code||order.id));
+   const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'CONCLUIDO',completed_at:nowISO(),official_issue_status:'CONCLUIDO',official_issue_error:null,updated_at:nowISO()});
+   if(saved?.length){
+    await logEvent('BILHETES_ENVIADOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,phone:order.phone});
+    console.log('[RDS AUTO] PDF oficial enviado e pedido concluído '+String(order.code||order.id));
+   }
   }catch(e){
    const err=String(e?.message||e);
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
    await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
    console.error('[RDS AUTO] envio pendente '+String(order.code||order.id)+': '+err);
   }
  }
  async function issueOne(order){
   if(!order?.id||String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
-  const issue=String(order.official_issue_status||''),age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
-  if(order.official_sale_id)return deliverExisting(order);
-  if(issue==='AGUARDANDO_AUTORIZACAO'){
-   try{await rdsFinalRequest('/auth/me');await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});order.official_issue_status=null;}
-   catch{return;}
-  }
+  let issue=String(order.official_issue_status||'');
+  let age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
   if(issue==='EMITINDO'){
-   if(order.official_sale_id)return deliverExisting(order);
-   if(!Number.isFinite(age)||age<300)return;
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
+   if(Number.isFinite(age)&&age<60)return;
+   const reset=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
+   if(!reset?.length)return;
+   issue='';order.official_issue_status=null;order.updated_at=nowISO();age=0;
+  }
+  if(order.official_sale_id)return deliverExisting({...order,official_issue_status:issue||null});
+  if(issue==='AGUARDANDO_AUTORIZACAO'){
+   try{
+    await rdsFinalRequest('/auth/me');
+    const reset=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.AGUARDANDO_AUTORIZACAO',{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
+    if(!reset?.length)return;
+    issue='';order.official_issue_status=null;order.updated_at=nowISO();
+   }catch{return;}
   }
   if(issue==='ERRO'&&Number.isFinite(age)&&age<30)return;
   if((issue==='AGUARDANDO_ESTOQUE'||issue==='AGUARDANDO_CAMPANHA')&&Number.isFinite(age)&&age<15)return;
+  const claimFilter='id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES'+(issue?'&official_issue_status=eq.'+encodeURIComponent(issue):'&official_issue_status=is.null');
+  const claim=await patch('rds10_orders',claimFilter,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
+  if(!claim?.length)return;
   const requestedDrawId=String(order.official_draw_id||'').trim();
   if(!requestedDrawId){
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O pedido não possui sorteio oficial vinculado; emissão automática bloqueada para evitar venda no sorteio errado.',updated_at:nowISO()});
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O pedido não possui sorteio oficial vinculado; emissão automática bloqueada para evitar venda no sorteio errado.',updated_at:nowISO()});
    return;
   }
-  const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-  if(sellerId&&String(order.seller_id||'')!==String(sellerId))return;
-  await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
+  let sellerId=null;try{if(typeof rdsWhatsappSellerId==='function')sellerId=await rdsWhatsappSellerId();}catch{}
+  if(sellerId&&String(order.seller_id||'')!==String(sellerId)){
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:issue||null,updated_at:nowISO()});
+   return;
+  }
   try{
    const draw=await selectedOfficialDraw(requestedDrawId);
-   if(!draw)throw new Error('O sorteio oficial vinculado ao pedido não foi encontrado.');
+   if(!draw){
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O sorteio oficial vinculado ao pedido não foi encontrado.',updated_at:nowISO()});
+    return;
+   }
    const status=String(draw.status||'').toUpperCase(),closed=draw.isDrawClosed===true||draw.isSalesClosed===true||draw.salesOpen===false||draw.active===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status);
    if(closed){
-    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O sorteio oficial vinculado está encerrado ou inativo.',updated_at:nowISO()});
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O sorteio oficial vinculado está encerrado ou inativo.',updated_at:nowISO()});
     return;
    }
    const quantity=Math.max(1,Math.floor(Number(order.quantity||0)));
    const rawStock=draw.availableBooklets??draw.bookletsAvailable??draw.availableTickets??draw.remainingBooklets??draw.remainingTickets;
    const available=rawStock===null||rawStock===undefined||rawStock===''?null:Number(rawStock);
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_inventory_available:Number.isFinite(available)?available:null,official_inventory_checked_at:nowISO(),official_inventory_error:null,updated_at:nowISO()}).catch(()=>{});
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_inventory_available:Number.isFinite(available)?available:null,official_inventory_checked_at:nowISO(),official_inventory_error:null,updated_at:nowISO()}).catch(()=>{});
    if(Number.isFinite(available)&&available<quantity){
-    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:'AGUARDANDO_ESTOQUE',official_issue_error:'Disponibilidade oficial insuficiente: '+available+' para '+quantity+' bloco(s).',updated_at:nowISO()});
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_ESTOQUE',official_issue_error:'Disponibilidade oficial insuficiente: '+available+' para '+quantity+' bloco(s).',updated_at:nowISO()});
     if(issue!=='AGUARDANDO_ESTOQUE')await addAlert('PEDIDO_PAGO_AGUARDANDO_ESTOQUE','Pedido pago aguardando disponibilidade oficial — '+order.code,{order:order.code,requested:quantity,available});
     return;
    }
@@ -141,13 +156,14 @@ else{
    const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
    const info=saleInfo(sale);
    if(!info.saleId)throw new Error('Sistema oficial não retornou o identificador da venda.');
-   const updated={...order,official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload};
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,official_issue_error:null,updated_at:nowISO()});
+   const updated={...order,official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,updated_at:nowISO()};
+   const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,official_issue_error:null,updated_at:nowISO()});
+   if(!saved?.length)return;
    await logEvent('BILHETES_EMITIDOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,provider:'REINO_DA_SORTE',draw_id:requestedDrawId});
    await deliverExisting(updated);
   }catch(e){
    const err=String(e?.message||e),unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized/i.test(err);
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:unauthorized?'AGUARDANDO_AUTORIZACAO':'ERRO',official_issue_error:err,updated_at:nowISO()}).catch(()=>{});
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:unauthorized?'AGUARDANDO_AUTORIZACAO':'ERRO',official_issue_error:err,updated_at:nowISO()}).catch(()=>{});
    if(unauthorized)await addAlert('EMISSAO_OFICIAL_AGUARDANDO_AUTORIZACAO','Autorização do dispositivo oficial necessária — '+order.code,{order:order.code,error:err});
    else if(issue!=='ERRO')await addAlert('EMISSAO_OFICIAL_FALHA','Falha na emissão oficial — '+order.code,{order:order.code,error:err});
    console.error('[RDS AUTO] falha na emissão '+String(order.code||order.id)+': '+err);
