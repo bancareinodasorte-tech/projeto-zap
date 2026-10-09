@@ -28,7 +28,7 @@
    #rdsAccount{display:flex;align-items:center;gap:8px;margin-left:8px}
    #rdsAccount .account-name{font-size:12px;font-weight:800;color:#17325c;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
    #rdsAccount button{border:1px solid #d2deef;background:#fff;color:#17325c;border-radius:9px;padding:6px 9px;font-weight:800;cursor:pointer;font-size:12px}
-   @media(max-width:700px){#rdsAccount .account-name{display:none}#rdsAccount button{padding:6px}}
+   @media(max-width:700px){#rdsAccount{display:none}#rdsAccount .account-name{display:none}#rdsAccount button{padding:6px}}
   `;document.head.appendChild(s);
  }
  function showGate(message='',loading=false){
