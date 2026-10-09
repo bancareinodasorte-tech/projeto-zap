@@ -1,5 +1,6 @@
 (()=>{
  const OP='rds_operator_token',AD='rds_admin_token',DEVICE='rds_operator_device_id';
+ try{if(new URLSearchParams(location.search).has('app_version'))localStorage.setItem('rds_client_platform','app');}catch{}
  const $=s=>document.querySelector(s);
  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
  const token=()=>localStorage.getItem(OP)||localStorage.getItem(AD)||'';
@@ -39,7 +40,7 @@
    e.preventDefault();const b=$('#rdsAuthSubmit'),msg=$('#rdsAuthMsg');b.disabled=true;b.textContent='Validando…';msg.className='auth-msg';msg.textContent='Verificando credenciais e autorização do dispositivo…';
    const id=deviceId(),identifier=$('#rdsAuthIdentifier').value.trim(),password=$('#rdsAuthPassword').value;
    try{
-    const d=await fetch('/api/rds/unified/login',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-rds-device-id':id},body:JSON.stringify({identifier,password,platform:(new URLSearchParams(location.search).has('app_version')?'app':'web'),deviceId:id})});
+    const d=await fetch('/api/rds/unified/login',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-rds-device-id':id},body:JSON.stringify({identifier,password,platform:((localStorage.getItem('rds_client_platform')==='app'||new URLSearchParams(location.search).has('app_version'))?'app':'web'),deviceId:id})});
     const out=await d.json().catch(()=>({}));
     if(!d.ok||!out.success)throw Object.assign(new Error(out.error||'Não foi possível entrar.'),{code:out.code,status:d.status});
     if(out.role==='ADMINISTRADOR'){localStorage.setItem(AD,out.token);localStorage.removeItem(OP);}else{localStorage.setItem(OP,out.token);localStorage.removeItem(AD);}
