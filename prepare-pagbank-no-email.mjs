@@ -64,6 +64,7 @@ await import('./runtime-rds-admin-auth-v5.mjs');
 await import('./runtime-rds-operator-pages-v1.mjs');
 await import('./runtime-rds-unified-access-v1.mjs');
 await import('./runtime-rds-commission-center-v1.mjs');
+await import('./runtime-rds-commission-payouts-v1.mjs');
 await import('./runtime-rds-company-settings-v1.mjs');
 await import('./runtime-rds-seller-recovery-v1.mjs');
 await import('./runtime-rds-security-devices-v1.mjs');
