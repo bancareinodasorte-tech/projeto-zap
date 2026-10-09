@@ -69,6 +69,19 @@
   };
   $('#rdsAuthBack').onclick=()=>showGate();
  }
+ function showResetForm(kind,resetToken){
+  style();let d=$('#rdsAuthGate');if(!d){d=document.createElement('div');d.id='rdsAuthGate';document.body.appendChild(d);}
+  const admin=kind==='admin-reset';
+  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">'+(admin?'Redefinir senha administrativa':'Redefinir senha do vendedor')+'</div><form id="rdsResetForm"><label for="rdsResetPassword">Nova senha (mínimo 8 caracteres)</label><input id="rdsResetPassword" type="password" minlength="8" autocomplete="new-password" required><label for="rdsResetConfirm">Confirmar nova senha</label><input id="rdsResetConfirm" type="password" minlength="8" autocomplete="new-password" required><button type="submit" id="rdsResetSubmit">Salvar nova senha</button><div id="rdsResetMsg" class="auth-msg"></div></form><div class="auth-foot">O link de recuperação é temporário e pode ser usado uma única vez.</div></div>';
+  $('#rdsResetForm').onsubmit=async e=>{
+   e.preventDefault();const p=$('#rdsResetPassword').value,q=$('#rdsResetConfirm').value,b=$('#rdsResetSubmit'),msg=$('#rdsResetMsg');
+   if(p.length<8){msg.className='auth-msg bad';msg.textContent='A senha deve ter pelo menos 8 caracteres.';return;}
+   if(p!==q){msg.className='auth-msg bad';msg.textContent='As senhas não conferem.';return;}
+   b.disabled=true;b.textContent='Salvando…';msg.className='auth-msg';msg.textContent='Atualizando senha…';
+   try{const endpoint=admin?'/api/operator/admin/reset-password':'/api/operator/reset-password';const result=await api(endpoint,{method:'POST',body:JSON.stringify({token:resetToken,password:p})});localStorage.removeItem(OP);localStorage.removeItem(AD);msg.className='auth-msg ok';msg.textContent=result.message||'Senha alterada. Entre novamente.';b.textContent='Senha alterada';b.disabled=true;const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Voltar ao login';back.onclick=()=>{location.href='/';};$('#rdsResetForm').appendChild(back);}
+   catch(err){b.disabled=false;b.textContent='Salvar nova senha';msg.className='auth-msg bad';msg.textContent=err.message||'Não foi possível alterar a senha.';}
+  };
+ }
  function accountBar(ctx){
   const host=$('.top-actions');if(!host||$('#rdsAccount'))return;
   const admin=ctx.role==='ADMINISTRADOR',name=admin?(ctx.admin?.email||'Administrador'):(ctx.seller?.name||'Vendedor');
@@ -79,6 +92,8 @@
   $('#rdsLogout').onclick=async()=>{if(!confirm('Deseja sair do CANAL DE VENDAS RDS?'))return;try{await api('/api/rds/unified/logout',{method:'POST'});}catch{}localStorage.removeItem(OP);localStorage.removeItem(AD);location.reload();};
  }
  async function boot(){
+  const params=new URLSearchParams(location.search),resetKind=params.get('rds'),resetToken=params.get('token');
+  if((resetKind==='reset-password'||resetKind==='admin-reset')&&resetToken){showResetForm(resetKind,resetToken);return;}
   style();showGate('',true);
   try{
    const ctx=await api('/api/rds/unified/context');
