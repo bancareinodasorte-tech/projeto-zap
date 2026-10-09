@@ -19,7 +19,7 @@ else{
  }
  function saleInfo(sale){
   const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
-  const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl']);
+  const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','publicUrl','url','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl','data.publicUrl','data.url','data.downloadUrl']);
   return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:sale||{}};
  }
  async function selectedOfficialDraw(id){
@@ -156,8 +156,8 @@ else{
    const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
    const info=saleInfo(sale);
    if(!info.saleId)throw new Error('Sistema oficial não retornou o identificador da venda.');
-   const updated={...order,official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,updated_at:nowISO()};
-   const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_sale_id:info.saleId,official_issue_status:'EMITIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,official_issue_error:null,updated_at:nowISO()});
+   const updated={...order,official_sale_id:info.saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,updated_at:nowISO()};
+   const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_sale_id:info.saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,official_issue_error:null,updated_at:nowISO(),official_draw_id:requestedDrawId,official_draw_title:String(draw.drawTitle||draw.title||draw.name||order.official_draw_title||'').trim()||null,official_draw_at:draw.drawDate||draw.drawAt||draw.date||order.official_draw_at||null});
    if(!saved?.length)return;
    await logEvent('BILHETES_EMITIDOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,provider:'REINO_DA_SORTE',draw_id:requestedDrawId});
    await deliverExisting(updated);
