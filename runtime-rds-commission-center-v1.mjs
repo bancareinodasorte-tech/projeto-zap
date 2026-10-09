@@ -19,8 +19,8 @@ app.get('/api/rds/commission-center',async(req,res)=>{
   if(!validDate(from)||!validDate(to))return res.status(400).json({success:false,error:'Período inválido.'});
   if(from&&to&&from>to)return res.status(400).json({success:false,error:'A data inicial deve ser anterior à data final.'});
   let query='select=id,code,seller_id,company_id,official_draw_id,official_draw_title,quantity,total_amount,status,completed_at,created_at,commission_rate_pct,commission_seller_amount,commission_company_amount&status=eq.CONCLUIDO&order=completed_at.desc&limit=5000';
-  if(from)query+='&completed_at=gte.'+encodeURIComponent(from+'T00:00:00.000Z');
-  if(to)query+='&completed_at=lte.'+encodeURIComponent(to+'T23:59:59.999Z');
+  if(from)query+='&completed_at=gte.'+encodeURIComponent(from+'T00:00:00-03:00');
+  if(to)query+='&completed_at=lte.'+encodeURIComponent(to+'T23:59:59.999-03:00');
   if(ctx.role==='VENDEDOR'){
    const sid=ctx.seller?.id;
    if(!sid)return res.status(403).json({success:false,error:'A conta de vendedor não foi identificada.'});
