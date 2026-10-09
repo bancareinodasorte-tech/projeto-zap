@@ -245,7 +245,7 @@ const block=String.raw`
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
       if(!phone)throw new Error('Telefone do cliente não informado.');
       const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp não localizado.');
-      const b=await renderPdf(o);await archive(o,b,nowISO());
+      const b=await renderPdf(o);await archive(o,b,null);
       const s=await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'});
       if(!s?.key?.id)throw new Error('WhatsApp não confirmou o envio.');
       await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:s.key.id,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});
