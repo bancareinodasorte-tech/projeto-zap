@@ -40,6 +40,7 @@ async function renderAccountNative(){
  else if(page==='execution')await automation();
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
+ else if(page==='commissions'){if(typeof window.rdsCommissionPage!=='function')throw new Error('Módulo de Comissões não carregou.');await window.rdsCommissionPage();}
  else if(page==='payments'){
    if(typeof window.rdsPaymentsRefined!=='function'){
      await new Promise((resolve,reject)=>{
@@ -133,4 +134,4 @@ async function settings(){state.settings=await api('/api/settings');const s=awai
 async function connectWA(){try{await post('/api/whatsapp/connect',{force:true});toast('Conexão por QR iniciada. Aguarde o QR aparecer.');settings()}catch(e){toast(e.message)}}async function logoutWA(){try{await post('/api/whatsapp/logout');toast('WhatsApp desconectado pelo painel.');settings()}catch(e){toast(e.message)}}async function testWA(){try{await post('/api/whatsapp/test',{phone:$('#testphone').value,text:'✅ Teste CANAL DE VENDAS RDS V10.3 PREMIUM'});toast('Teste enviado.')}catch(e){toast(e.message)}}async function saveSettings(){try{await put('/api/settings',{bot_enabled:$('#botEnabled').checked,office_whatsapp:$('#office').value,unit_price:Number($('#unitPrice').value||3),pix_key:$('#pixKey').value,pix_name:$('#pixName').value,final_message:$('#finalMsg').value});toast('Ajustes salvos.')}catch(e){toast(e.message)}}
 
 window.rdsCoreRender=render;
-window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='account'){page='account';localStorage.setItem('rds_current_page','account');}setNav();if(typeof window.rdsRenderCurrentPage==='function')window.rdsRenderCurrentPage();else window.rdsCoreRender();});
+window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('rds')==='account'){page='account';localStorage.setItem('rds_current_page','account');}else if(q.get('rds')==='commissions'){page='commissions';localStorage.setItem('rds_current_page','commissions');}setNav();if(typeof window.rdsRenderCurrentPage==='function')window.rdsRenderCurrentPage();else window.rdsCoreRender();});
