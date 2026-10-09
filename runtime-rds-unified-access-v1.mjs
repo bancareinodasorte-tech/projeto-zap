@@ -49,17 +49,32 @@ app.post('/api/rds/unified/login',async(req,res)=>{
     if(s.status==='BLOQUEADO')throw new Error('Conta bloqueada pelo administrador.');
     const h=rdsOpHash(password,s.password_salt),b=String(s.password_hash||'');
     if(h.length!==b.length||!crypto.timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(b,'hex')))throw new Error('Telefone ou senha inválidos.');
-    const t=rdsOpToken(),exp=new Date(Date.now()+RDS_OPERATOR_SESSION_DAYS*86400000).toISOString();
     const deviceId=cleanText(req.body?.deviceId||req.headers['x-rds-device-id']),platform=rdsOpPlatform(req,req.body?.platform);
-    await insert('rds10_seller_sessions',{seller_id:s.id,token_hash:rdsOpTHash(t),platform,device_id:deviceId||null,created_at:nowISO(),last_seen_at:nowISO(),expires_at:exp});
-    if(deviceId){
-      const d=await one('rds10_seller_devices','select=id&seller_id=eq.'+s.id+'&device_id=eq.'+encodeURIComponent(deviceId));
-      if(d)await patch('rds10_seller_devices','id=eq.'+d.id,{status:'ATIVO',platform,last_seen_at:nowISO(),updated_at:nowISO()});
-      else await insert('rds10_seller_devices',{seller_id:s.id,device_id:deviceId,platform,status:'ATIVO',first_seen_at:nowISO(),last_seen_at:nowISO(),authorized_at:nowISO(),created_at:nowISO(),updated_at:nowISO()});
+    if(!deviceId)throw new Error('Dispositivo não identificado. Atualize o aplicativo ou navegador e tente novamente.');
+    let device=await one('rds10_seller_devices','select=id,device_id,platform,status,authorized_at,blocked_at&seller_id=eq.'+encodeURIComponent(s.id)+'&device_id=eq.'+encodeURIComponent(deviceId));
+    if(device?.status==='BLOQUEADO'||device?.status==='REVOGADO')throw new Error('Este dispositivo foi bloqueado ou revogado pelo administrador.');
+    if(device?.status==='PENDENTE')return res.status(403).json({success:false,code:'DEVICE_PENDING',error:'Este dispositivo aguarda autorização do administrador.'});
+    if(!device){
+      const activeCount=typeof rdsOpActiveDeviceCount==='function'?await rdsOpActiveDeviceCount(s.id):(await list('rds10_seller_devices','select=id&seller_id=eq.'+encodeURIComponent(s.id)+'&status=eq.ATIVO')).length;
+      if(activeCount>=2){if(typeof rdsOpAudit==='function')await rdsOpAudit('DEVICE_REJECTED_LIMIT','SELLER',s.id,'SELLER',s.id,deviceId,{platform,activeCount});throw new Error('Limite de 2 dispositivos atingido. O administrador precisa revogar um dispositivo antes de autorizar outro.');}
+      try{
+        const rows=await insert('rds10_seller_devices',{seller_id:s.id,device_id:deviceId,platform,status:'PENDENTE',first_seen_at:nowISO(),last_seen_at:nowISO(),created_at:nowISO(),updated_at:nowISO()});
+        device=rows?.[0]||null;
+      }catch(e){
+        if(String(e?.message||e).includes('LIMITE_DISPOSITIVOS_ATINGIDO'))throw new Error('Limite de 2 dispositivos atingido. O administrador precisa revogar um dispositivo antes de autorizar outro.');
+        throw e;
+      }
+      if(typeof rdsOpAudit==='function')await rdsOpAudit('DEVICE_PENDING','SELLER',s.id,'SELLER',s.id,deviceId,{platform});
+      return res.status(403).json({success:false,code:'DEVICE_PENDING',error:'Este dispositivo foi registrado e aguarda autorização do administrador.'});
     }
-    await patch('rds10_sellers','id=eq.'+s.id,{last_login_at:nowISO(),updated_at:nowISO()});
+    if(device.status!=='ATIVO')throw new Error('Este dispositivo não está autorizado. Solicite a liberação ao administrador.');
+    const t=rdsOpToken(),exp=new Date(Date.now()+RDS_OPERATOR_SESSION_DAYS*86400000).toISOString();
+    await insert('rds10_seller_sessions',{seller_id:s.id,token_hash:rdsOpTHash(t),platform,device_id:deviceId,created_at:nowISO(),last_seen_at:nowISO(),expires_at:exp});
+    await patch('rds10_seller_devices','id=eq.'+encodeURIComponent(device.id),{platform,last_seen_at:nowISO(),updated_at:nowISO()});
+    await patch('rds10_sellers','id=eq.'+encodeURIComponent(s.id),{last_login_at:nowISO(),updated_at:nowISO()});
+    if(typeof rdsOpAudit==='function')await rdsOpAudit('LOGIN_SUCCESS','SELLER',s.id,'SELLER',s.id,deviceId,{platform});
     rdsOpSetCookie(res,t);
-    return res.json({success:true,role:'VENDEDOR',token:t,seller:rdsOpPublic(s),session:{expiresAt:exp,platform,deviceId:deviceId||null}});
+    return res.json({success:true,role:'VENDEDOR',token:t,seller:rdsOpPublic(s),session:{expiresAt:exp,platform,deviceId}});
   }catch(e){return res.status(401).json({success:false,error:String(e?.message||e)});}
 });
 app.post('/api/rds/unified/logout',async(req,res)=>{
