@@ -15,6 +15,8 @@ create table if not exists public.rds10_commission_payouts (
   created_by uuid,
   created_at timestamptz not null default now()
 );
+create unique index if not exists rds10_commission_payouts_reference_unique_idx
+  on public.rds10_commission_payouts (company_id, reference) where reference is not null;
 create index if not exists rds10_commission_payouts_seller_month_idx
   on public.rds10_commission_payouts (seller_id, period_month, paid_at desc);
 create index if not exists rds10_commission_payouts_company_month_idx
@@ -56,6 +58,9 @@ begin
 
   if exists(select 1 from public.rds10_commission_payouts where idempotency_key=p_idempotency_key) then
     raise exception 'Este repasse já foi registrado; não duplique a operação.';
+  end if;
+  if nullif(trim(p_reference),'') is not null and exists(select 1 from public.rds10_commission_payouts where company_id=p_company_id and reference=trim(p_reference)) then
+    raise exception 'Esta referência de transação já foi registrada.';
   end if;
 
   select coalesce(sum(coalesce(commission_seller_amount,
