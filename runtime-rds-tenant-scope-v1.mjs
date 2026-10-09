@@ -19,9 +19,7 @@ const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não lo
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
-const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};
-  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};
-  if(RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null){const rowSeller=String(row.seller_id||sellerId||'');let resolved=companyId;if(!resolved&&rowSeller){const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&order=updated_at.desc').catch(()=>null);resolved=membership?.company_id||null;}if(!resolved){const fallback=await one('rds10_companies','select=id&code=eq.RDS').catch(()=>null);resolved=fallback?.id||null;}if(resolved)row={...row,company_id:resolved};}\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
+const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};\n  if(RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null){const rowSeller=String(row.seller_id||sellerId||'');let resolved=companyId;if(!resolved&&rowSeller){const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&order=updated_at.desc').catch(()=>null);resolved=membership?.company_id||null;}if(!resolved){const fallback=await one('rds10_companies','select=id&code=eq.RDS').catch(()=>null);resolved=fallback?.id||null;}if(resolved)row={...row,company_id:resolved};}\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
@@ -58,10 +56,10 @@ const middleware = [
   "  try{",
   "    if(typeof rdsOpSession==='function'){",
   "      const s=await rdsOpSession(req).catch(()=>null);",
-  "      if(s?.seller?.id){
-        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc').catch(()=>null);
-        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());
-      }",
+  "      if(s?.seller?.id){",
+  "        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc').catch(()=>null);",
+  "        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());",
+  "      }",
   "    }",
   "  }catch{}",
   "  return next();",
