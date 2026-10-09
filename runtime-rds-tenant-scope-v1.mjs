@@ -10,19 +10,22 @@ const helper = [
   "// RDS TENANT SCOPE V1",
   "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders','rds10_whatsapp_chat_state']);",
   "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
+  "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
-  "function rdsTenantFilter(q,sellerId){const base=String(q||'');if(!sellerId||rdsHasSellerFilter(base))return base;return base?base+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);}"
+  "function rdsHasCompanyFilter(q){return /(?:^|&)company_id=/.test(String(q||''));}",
+  "function rdsTenantFilter(table,q,sellerId,companyId){let out=String(q||'');if(sellerId&&RDS_TENANT_TABLES.has(table)&&!rdsHasSellerFilter(out))out=out?out+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);if(companyId&&RDS_TENANT_TABLES.has(table)&&!rdsHasCompanyFilter(out))out=out?out+'&company_id=eq.'+encodeURIComponent(companyId):'company_id=eq.'+encodeURIComponent(companyId);return out;}"
 ].join('\n');
 const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não localizada.');
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
-const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
+const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};
+  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
 const oldPatch = "async function patch(table, filter, row){\n  return sb(\`/rest/v1/\${table}?\${filter}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
-const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(filter,sellerId):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
+const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,rdsTenantCompanyScope()):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldPatch))throw new Error('função patch não localizada para substituição.');
 server=server.replace(oldPatch,newPatch);
 
@@ -32,7 +35,7 @@ if(!server.includes(oldDel))throw new Error('função del não localizada para s
 server=server.replace(oldDel,newDel);
 
 const oldOne = "async function one(table, query){\n  const rows = await sb(\`/rest/v1/\${table}?\${query}&limit=1\`);\n  return Array.isArray(rows) ? rows[0] || null : null;\n}";
-const newOne = "async function one(table, query){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(query,sellerId):query;\n  const rows = await sb(\`/rest/v1/\${table}?\${scoped}&limit=1\`);\n  return Array.isArray(rows) ? rows[0] || null : null;\n}";
+const newOne = "async function one(table, query){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,query,sellerId,rdsTenantCompanyScope()):query;\n  const rows = await sb(\`/rest/v1/\${table}?\${scoped}&limit=1\`);\n  return Array.isArray(rows) ? rows[0] || null : null;\n}";
 if(!server.includes(oldOne))throw new Error('função one não localizada para substituição.');
 server=server.replace(oldOne,newOne);
 
@@ -54,7 +57,10 @@ const middleware = [
   "  try{",
   "    if(typeof rdsOpSession==='function'){",
   "      const s=await rdsOpSession(req).catch(()=>null);",
-  "      if(s?.seller?.id)return rdsRequestScope.run({sellerId:s.seller.id},()=>next());",
+  "      if(s?.seller?.id){
+        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc').catch(()=>null);
+        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());
+      }",
   "    }",
   "  }catch{}",
   "  return next();",
