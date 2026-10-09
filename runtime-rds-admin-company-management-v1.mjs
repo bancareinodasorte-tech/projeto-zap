@@ -54,9 +54,10 @@ app.post('/api/operator/admin/company/assign',async(req,res)=>{
   if(!['VENDEDOR','GERENTE','ADMINISTRADOR'].includes(role))throw new Error('Perfil de empresa inválido.');
   const [seller,company]=await Promise.all([
    one('rds10_sellers','select=id,name,status&id=eq.'+encodeURIComponent(sellerId)),
-   one('rds10_companies','select=id,name,active&id=eq.'+encodeURIComponent(companyId))
+   one('rds10_companies','select=id,name,code,active&id=eq.'+encodeURIComponent(companyId))
   ]);
   if(!seller||!company)throw new Error('Vendedor ou empresa não encontrado.');
+  if(active&&(!company.active||String(company.code||'').toUpperCase()!=='RDS'))throw new Error('Vínculo ativo bloqueado: somente a empresa RDS pode operar até concluir a validação multiempresa.');
   const existing=await one('rds10_seller_companies','select=seller_id,company_id&seller_id=eq.'+encodeURIComponent(sellerId)+'&company_id=eq.'+encodeURIComponent(companyId));
   let saved;
   if(existing){
