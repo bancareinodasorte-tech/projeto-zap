@@ -36,6 +36,11 @@ app.post('/api/rds/unified/login',async(req,res)=>{
       if(!a)throw new Error('E-mail ou senha inválidos.');
       const h=rdsOpHash(password,a.password_salt),b=String(a.password_hash||'');
       if(h.length!==b.length||!crypto.timingSafeEqual(Buffer.from(h,'hex'),Buffer.from(b,'hex')))throw new Error('E-mail ou senha inválidos.');
+      // Contas administrativas vinculadas a um vendedor só podem operar se esse vínculo continuar autorizado.
+      if(a.seller_id){
+        const linked=await one('rds10_sellers','select=id,status,role&id=eq.'+encodeURIComponent(a.seller_id));
+        if(!linked||linked.status!=='ATIVO'||linked.role!=='ADMINISTRADOR')throw new Error('Acesso administrativo desativado. Solicite ao administrador principal a reativação da conta.');
+      }
       const t=rdsAdminToken(),exp=new Date(Date.now()+RDS_ADMIN_SESSION_DAYS*86400000).toISOString();
       await insert('rds10_admin_sessions',{admin_id:a.id,token_hash:rdsAdminHash(t),device_id:cleanText(req.headers['x-rds-device-id'])||null,created_at:nowISO(),last_seen_at:nowISO(),expires_at:exp});
       rdsAdminSetCookie(res,t);
