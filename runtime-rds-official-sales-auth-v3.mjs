@@ -266,6 +266,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
     var sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets,lotNumber:Math.max(1,Math.floor(Number(b.lotNumber||1))),paymentMethod:String(order.payment_method||'pix').trim().toLowerCase()})});
     const saleData=sale?.data||sale||{};
     const saleId=String(saleData?.saleId||saleData?.id||saleData?.sale?.saleId||saleData?.sale?.id||'').trim()||null;
+    if(!saleId)throw new Error('Sistema oficial não retornou o identificador da venda. Confira a venda no sistema oficial antes de tentar novamente.');
     const issuePayload=saleData;
     const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&seller_id=eq.'+encodeURIComponent(session.seller.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{
       official_sale_id:saleId,
