@@ -65,7 +65,8 @@ else{
   // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
   const result=await sendToJid(target.jid,{document:{url:info.pdfUrl||'https://invalid.local/rds-ticket.pdf'},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});
   if(!result?.key?.id)throw new Error('WhatsApp não confirmou o envio do PDF.');
-  await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()}).catch(()=>{});
+  const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()});
+  if(!archived?.length){const error=new Error('O WhatsApp aceitou o PDF, mas o arquivo não pôde ser confirmado no histórico. Não reenviar automaticamente.');error.code='ARCHIVE_FAILED_AFTER_SEND';throw error;}
   await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||order.official_sale_id||''),status:'ENVIADA',waId:result.key.id,raw:{automatic:true,order:order.code,saleId:info.saleId||order.official_sale_id||null}});
   return result;
  }
@@ -78,6 +79,7 @@ else{
    return;
   }
   const issue=String(order.official_issue_status||''),age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
+  if(issue==='ERRO_RECONCILIAR')return;
   if((issue==='EMITINDO'&&Number.isFinite(age)&&age<60)||(issue==='EMITIDO_AGUARDANDO_ENVIO'&&Number.isFinite(age)&&age<15)||(issue==='ERRO'&&Number.isFinite(age)&&age<15))return;
   const filter='id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId)+(issue?'&official_issue_status=eq.'+encodeURIComponent(issue):'&official_issue_status=is.null');
   const claimed=await patch('rds10_orders',filter,{official_issue_status:'EMITINDO',official_issue_error:null,updated_at:nowISO()});
@@ -90,9 +92,10 @@ else{
     console.log('[RDS AUTO] PDF oficial enviado e pedido concluído '+String(order.code||order.id));
    }
   }catch(e){
-   const err=String(e?.message||e);
-   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
-   if(issue!=='EMITIDO_AGUARDANDO_ENVIO')await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
+   const err=String(e?.message||e),ambiguous=e?.code==='ARCHIVE_FAILED_AFTER_SEND';
+   await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:ambiguous?'ERRO_RECONCILIAR':'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
+   if(ambiguous)await addAlert('PDF_ARQUIVO_FALHA_APOS_ENVIO','PDF enviado mas arquivo não confirmado — '+order.code,{order:order.code,saleId:info.saleId,error:err,warning:'Não reenviar automaticamente; conferir histórico.'});
+   else if(issue!=='EMITIDO_AGUARDANDO_ENVIO')await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
    console.error('[RDS AUTO] envio pendente '+String(order.code||order.id)+': '+err);
   }
  }
