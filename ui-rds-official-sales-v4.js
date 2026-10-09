@@ -35,7 +35,38 @@ async function card(){
           if(act)act.innerHTML='<button class="btn primary" onclick="rdsOfficialAuthorizeDevice()">Reautorizar este dispositivo</button>';
         }
       }
-      try{const d=await json('/api/v1011/official-sales/draw-info');const x=d.data||{};const dr=document.getElementById('r4draw');if(dr)dr.innerHTML='<strong>🟢 Sorteio oficial disponível</strong><p class="mut">'+esc(x.drawTitle||x.title||x.name||'Sorteio ativo')+' • ID '+esc(x.drawId||'—')+' • '+money(x.pricePerTicket)+' • '+esc(x.totalBooklets??x.availableBooklets??'—')+' bloco(s) disponíveis</p>';}catch(e){const dr=document.getElementById('r4draw');if(dr)dr.innerHTML='<strong>🟠 Sorteio ainda não consultado</strong><p class="mut">'+esc(e.message)+'</p>';}
+      try{
+        const dr=document.getElementById('r4draw');
+        let draws=[];
+        let listError=null;
+        try{
+          const result=await json('/api/v1011/official-sales/draws');
+          draws=Array.isArray(result?.data)?result.data:[];
+        }catch(e){listError=e;}
+        const norm=x=>{
+          const raw=x?.raw_data&&typeof x.raw_data==='object'?x.raw_data:{};
+          const id=String(x?.external_draw_id??x?.drawId??x?.id??x?.sorteioId??raw?.drawId??raw?.id??'').trim();
+          const title=String(x?.title??x?.drawTitle??x?.name??raw?.drawTitle??raw?.title??raw?.name??'Sorteio oficial').trim();
+          const closed=x?.isDrawClosed===true||x?.closed===true||raw?.isDrawClosed===true||raw?.closed===true||/CLOSED|ENCERRADO|FECHADO|INATIVO/i.test(String(x?.status??raw?.status??''));
+          const active=x?.active===false||x?.isActive===false||raw?.active===false||raw?.isActive===false||closed?false:true;
+          const price=x?.price_per_ticket??x?.pricePerTicket??x?.ticketPrice??x?.price??raw?.pricePerTicket??raw?.ticketPrice??raw?.price;
+          const stock=x?.available_booklets??x?.availableBooklets??x?.bookletsAvailable??x?.availableTickets??x?.remainingBooklets??x?.remainingTickets??x?.totalBooklets??raw?.availableBooklets??raw?.bookletsAvailable??raw?.availableTickets??raw?.remainingBooklets??raw?.remainingTickets??raw?.totalBooklets;
+          const date=x?.draw_at??x?.drawDate??x?.drawAt??x?.date??raw?.drawDate??raw?.drawAt??raw?.date;
+          return {id,title,active,price,stock,date,status:x?.status??raw?.status};
+        };
+        let normalized=draws.map(norm).filter(x=>x.id);
+        if(!normalized.length){
+          const result=await json('/api/v1011/official-sales/draw-info');
+          const x=result?.data||{};
+          const one=norm(x);
+          if(one.id||one.title)normalized=[one];
+          else throw listError||new Error('A API oficial não retornou sorteios.');
+        }
+        normalized.sort((a,b)=>Number(b.active)-Number(a.active)||a.title.localeCompare(b.title,'pt-BR'));
+        const active=normalized.filter(x=>x.active);
+        const renderDraw=x=>'<div class="priority" style="display:block;margin:8px 0"><div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap"><strong>'+ (x.active?'🟢 ':'⚪ ')+esc(x.title)+'</strong><span class="badge '+(x.active?'ok':'')+'">'+esc(x.active?'ATIVO':(x.status||'INATIVO'))+'</span></div><p class="mut" style="margin:6px 0 0">ID '+esc(x.id)+' • '+money(x.price)+' • '+esc(x.stock??'—')+' bloco(s) disponíveis'+(x.date?' • '+esc(new Date(x.date).toLocaleDateString('pt-BR')):'')+'</p></div>';
+        if(dr)dr.innerHTML='<strong>🎟️ Sorteios oficiais ('+active.length+' ativo(s))</strong>'+(active.length?active.map(renderDraw).join(''):'<p class="mut">Nenhum sorteio ativo retornado pela API oficial.</p>')+(normalized.some(x=>!x.active)?'<details style="margin-top:8px"><summary>Sorteios inativos/encerrados ('+normalized.filter(x=>!x.active).length+')</summary>'+normalized.filter(x=>!x.active).map(renderDraw).join('')+'</details>':'');
+      }catch(e){const dr=document.getElementById('r4draw');if(dr)dr.innerHTML='<strong>🟠 Sorteios ainda não consultados</strong><p class="mut">'+esc(e.message)+'</p>';}
     }catch(e){const s=document.getElementById('r4state');if(s)s.innerHTML='<strong>🔴 Falha na integração</strong><p class="mut">'+esc(e.message)+'</p>';}
   }finally{rendering=false;}
 }
