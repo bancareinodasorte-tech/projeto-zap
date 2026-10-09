@@ -34,7 +34,7 @@
         '<div class="action-center" style="margin-top:16px"><div class="card"><h2>Falhas que precisam de recuperação</h2>'+
         (failed.length?failed.slice(0,12).map(x=>'<div class="priority"><div><strong>'+esc(x.phone||'Contato sem número')+'</strong><small>'+esc(x.error_text||'Falha de envio')+' • '+dt(x.updated_at||x.created_at)+'</small></div>'+btn('Reenviar', "retryDelivery('"+esc(x.id)+"')",'btn warn')+'</div>').join(''):'<div class="empty-state">Nenhuma falha de envio registrada.</div>')+
         '</div><div class="card"><h2>Pedidos em acompanhamento</h2>'+
-        (orders.length?orders.slice(0,10).map(o=>'<div class="priority"><div><strong>'+esc(o.code||'Pedido')+'</strong><small>'+esc(o.customer_name||o.phone||'Cliente')+' • '+money(o.total_amount)+'</small></div>'+badge(o.status)+'</div>').join(''):'<div class="empty-state">Nenhum pedido pendente na fila de intervenção.</div>')+
+        (orders.length?orders.slice(0,10).map(o=>'<div class="priority"><div><strong>'+esc(o.code||'Pedido')+'</strong><small>'+esc(o.customer_name||o.phone||'Cliente')+' • '+money(o.total_amount)+(o.official_issue_status?' • Emissão: '+esc(o.official_issue_status):'')+'</small>'+(o.official_issue_status==='ERRO_RECONCILIAR'?'<small class="warn">⚠ Conferência manual no sistema oficial necessária; não reemitir sem verificar.</small>':'')+'</div>'+badge(o.status)+'</div>').join(''):'<div class="empty-state">Nenhum pedido pendente na fila de intervenção.</div>')+
         btn('Ver todos os pedidos',"go('orders')")+'</div></div>';
     }catch(e){root.innerHTML='<div class="card"><h2>Automação temporariamente indisponível</h2><p>'+esc(e.message)+'</p>'+btn('Tentar novamente',"go('execution')",'btn primary')+'</div>';}
   };
