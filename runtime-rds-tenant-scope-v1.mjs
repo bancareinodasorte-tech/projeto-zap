@@ -30,7 +30,7 @@ if(!server.includes(oldPatch))throw new Error('função patch não localizada pa
 server=server.replace(oldPatch,newPatch);
 
 const oldDel = "async function del(table, filter){\n  return sb(\`/rest/v1/\${table}?\${filter}\`, { method:'DELETE', headers:{Prefer:'return=minimal'} });\n}";
-const newDel = "async function del(table, filter){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(filter,sellerId):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'DELETE', headers:{Prefer:'return=minimal'} });\n}";
+const newDel = "async function del(table, filter){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,rdsTenantCompanyScope()):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'DELETE', headers:{Prefer:'return=minimal'} });\n}";
 if(!server.includes(oldDel))throw new Error('função del não localizada para substituição.');
 server=server.replace(oldDel,newDel);
 
@@ -40,7 +40,7 @@ if(!server.includes(oldOne))throw new Error('função one não localizada para s
 server=server.replace(oldOne,newOne);
 
 const oldList = "async function list(table, query='select=*'){\n  const rows = await sb(\`/rest/v1/\${table}?\${query}\`);\n  return Array.isArray(rows) ? rows : [];\n}";
-const newList = "async function list(table, query='select=*'){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(query,sellerId):query;\n  const rows = await sb(\`/rest/v1/\${table}?\${scoped}\`);\n  return Array.isArray(rows) ? rows : [];\n}";
+const newList = "async function list(table, query='select=*'){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,query,sellerId,rdsTenantCompanyScope()):query;\n  const rows = await sb(\`/rest/v1/\${table}?\${scoped}\`);\n  return Array.isArray(rows) ? rows : [];\n}";
 if(!server.includes(oldList))throw new Error('função list não localizada para substituição.');
 server=server.replace(oldList,newList);
 
