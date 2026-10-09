@@ -60,6 +60,7 @@ await import('./runtime-rds-mercadopago-reconcile-auto.mjs');
 await import('./runtime-rds-orders-api-lean.mjs');
 await import('./runtime-rds-admin-delete-v1.mjs');
 await import('./runtime-rds-operator-auth-v2.mjs');
+await import('./runtime-rds-admin-auth-v5.mjs');
 await import('./runtime-rds-operator-pages-v1.mjs');
 await import('./runtime-rds-unified-access-v1.mjs');
 await import('./runtime-rds-commission-center-v1.mjs');
