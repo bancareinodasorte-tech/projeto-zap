@@ -8,7 +8,7 @@ if(server.includes(marker)){console.log('[RDS] escopo multi-vendedor V1 já apli
 const insertFn="async function insert(table, row, returning='representation'){";
 const helper = [
   "// RDS TENANT SCOPE V1",
-  "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders','rds10_whatsapp_chat_state']);",
+  "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders','rds10_whatsapp_chat_state','rds10_seller_settings','rds10_ticket_documents']);",
   "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
   "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
@@ -20,7 +20,8 @@ server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
 const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};
-  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
+  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};
+  if(RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null){const rowSeller=String(row.seller_id||sellerId||'');let resolved=companyId;if(!resolved&&rowSeller){const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&order=updated_at.desc').catch(()=>null);resolved=membership?.company_id||null;}if(!resolved){const fallback=await one('rds10_companies','select=id&code=eq.RDS').catch(()=>null);resolved=fallback?.id||null;}if(resolved)row={...row,company_id:resolved};}\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
