@@ -42,7 +42,7 @@ app.post('/api/rds/commission-payouts',async(req,res)=>{
  }catch(e){console.error('[RDS COMMISSION PAYOUT CREATE]',e?.message||e);return res.status(400).json({success:false,error:String(e?.message||'Não foi possível registrar o repasse.')});}
 });
 `;
- server=server.slice(0,pos)+block+'\\n'+server.slice(pos);
+ server=server.slice(0,pos)+block+'\n'+server.slice(pos);
  fs.writeFileSync(path,server,'utf8');
  console.log('[RDS] livro de repasses V1 instalado');
 }
