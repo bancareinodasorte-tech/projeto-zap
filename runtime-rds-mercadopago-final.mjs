@@ -133,6 +133,7 @@ async function rdsMercadoPagoApplyResult(order,data,source){
     patchData.status='PAGO_AGUARDANDO_BILHETES';patchData.payment_confirmed_at=nowISO();patchData.payment_last_error=null;
     await patch('rds10_orders','id=eq.'+order.id,patchData);
     await logEvent('PAGAMENTO_CONFIRMADO',{phone:order.phone,order:order.code,provider:'MERCADO_PAGO',source,mercadopago_order_id:order.pagbank_order_id,mercadopago_payment_id:p?.id||null});
+    if(typeof globalThis.rdsTriggerOfficialAutoIssue==='function')setTimeout(()=>Promise.resolve(globalThis.rdsTriggerOfficialAutoIssue()).catch(e=>console.error('[RDS AUTO] gatilho pós-pagamento:',e?.message||e)),0);
     return true;
   }
   if(['CANCELED','EXPIRED','FAILED'].includes(status))patchData.payment_last_error='Mercado Pago status '+status+(detail?' / '+detail:'');
