@@ -10,7 +10,7 @@ else{
  const block=String.raw`// RDS OFFICIAL ISSUE WORKER V1
 (()=>{
  let running=false;
- const arr=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.draws)?raw.draws:Array.isArray(raw?.items)?raw.items:Array.isArray(raw?.data)?raw.data:[]);
+ const arr=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.draws)?raw.draws:Array.isArray(raw?.items)?raw.items:Array.isArray(raw?.data)?raw.data:Array.isArray(raw?.data?.draws)?raw.data.draws:Array.isArray(raw?.result?.draws)?raw.result.draws:[]);
  const drawIdOf=d=>String(d?.drawId??d?.external_draw_id??d?.draw_id??d?.id??d?.sorteioId??'').trim();
  const round=n=>Number((Number(n)||0).toFixed(2));
  function saleInfo(sale){
@@ -43,7 +43,7 @@ else{
   try{
    const company=await one('rds10_companies','select=id&code=eq.RDS');
    if(company?.id){
-    const rows=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,raw_data&company_id=eq.'+encodeURIComponent(company.id)+'&external_draw_id=eq.'+encodeURIComponent(String(id))+'&limit=1');
+    const rows=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,raw_data&company_id=eq.'+encodeURIComponent(company.id)+'&external_draw_id=eq.'+encodeURIComponent(String(id)));
     const d=rows?.[0];if(d){const raw=d.raw_data&&typeof d.raw_data==='object'?d.raw_data:{};found={...raw,...d,drawId:String(d.external_draw_id),availableBooklets:d.available_booklets??raw.availableBooklets??raw.bookletsAvailable};}
    }
   }catch{}
@@ -52,6 +52,10 @@ else{
  async function alreadySent(order,info){
   const phone=normalizeBR(order.phone||order.contact_phone||''),saleId=String(info?.saleId||order.official_sale_id||'').trim();
   if(!phone||!saleId)return false;
+  try{
+   const docs=await list('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id));
+   if(docs.some(d=>Boolean(d.sent_at)))return true;
+  }catch{}
   try{
    const rows=await list('rds10_messages','select=body,message_type,created_at&phone=eq.'+encodeURIComponent(phone)+'&direction=eq.OUT&status=eq.ENVIADA&order=created_at.desc&limit=50');
    return rows.some(m=>String(m?.message_type||'')==='document'&&String(m?.body||'').includes(String(order.code||''))&&String(m?.body||'').includes(saleId)&&String(m?.body||'').includes('PDF DOS BILHETES'));
@@ -90,7 +94,7 @@ else{
  async function issueOne(order){
   if(!order?.id||String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
   const issue=String(order.official_issue_status||''),age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
-  if(order.official_sale_id&&(issue==='EMITIDO'||issue==='EMITIDO_AGUARDANDO_ENVIO'||issue==='CONCLUIDO'))return deliverExisting(order);
+  if(order.official_sale_id)return deliverExisting(order);
   if(issue==='AGUARDANDO_AUTORIZACAO'){
    try{await rdsFinalRequest('/auth/me');await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});order.official_issue_status=null;}
    catch{return;}
