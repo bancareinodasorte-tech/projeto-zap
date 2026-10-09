@@ -29,7 +29,7 @@ app.post('/api/operator/admin/company/save',async(req,res)=>{
   if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))throw new Error('Identificador inválido. Use letras minúsculas e hífens.');
   if(!Number.isFinite(price)||price<=0||price>9999)throw new Error('Preço padrão inválido.');
   if(!Number.isFinite(sellerPct)||!Number.isFinite(companyPct)||sellerPct<0||companyPct<0||Math.abs(sellerPct+companyPct-100)>0.001)throw new Error('As comissões precisam somar exatamente 100%.');
-  const row={code,name,legal_name:cleanText(b.legalName)||null,slug,active:b.active!==false,timezone:cleanText(b.timezone)||'America/Fortaleza',default_unit_price:Number(price.toFixed(2)),seller_commission_pct:Number(sellerPct.toFixed(2)),company_revenue_pct:Number(companyPct.toFixed(2)),updated_at:nowISO()};
+  const row={code,name,legal_name:cleanText(b.legalName)||null,slug,active:code==='RDS',timezone:cleanText(b.timezone)||'America/Fortaleza',default_unit_price:Number(price.toFixed(2)),seller_commission_pct:Number(sellerPct.toFixed(2)),company_revenue_pct:Number(companyPct.toFixed(2)),updated_at:nowISO()};
   let saved;
   if(id){
    const current=await one('rds10_companies','select=id&id=eq.'+encodeURIComponent(id)).catch(()=>null);
