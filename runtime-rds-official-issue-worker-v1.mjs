@@ -138,7 +138,8 @@ else{
   }
   let saleRequestStarted=false;
   try{
-   await rdsFinalRequest('/auth/me');
+   const officialAuth=await rdsFinalRequest('/auth/me');
+   if(officialAuth?.authenticated===false||officialAuth?.authorized===false||officialAuth?.success===false)throw new Error('Dispositivo oficial não está autorizado.');
    const draw=await selectedOfficialDraw(requestedDrawId);
    if(!draw){
     await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O sorteio oficial vinculado ao pedido não foi encontrado.',updated_at:nowISO()});
