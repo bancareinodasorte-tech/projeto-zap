@@ -138,6 +138,7 @@ else{
   }
   let saleRequestStarted=false;
   try{
+   await rdsFinalRequest('/auth/me');
    const draw=await selectedOfficialDraw(requestedDrawId);
    if(!draw){
     await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'AGUARDANDO_CAMPANHA',official_issue_error:'O sorteio oficial vinculado ao pedido não foi encontrado.',updated_at:nowISO()});
