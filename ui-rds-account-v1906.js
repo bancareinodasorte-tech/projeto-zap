@@ -159,7 +159,7 @@ async function loadSellerAccountDetails(){
   document.getElementById('rdsAccountDevices').innerHTML='<span class="mut">Dados adicionais indisponíveis no momento.</span>';
  }
 }
-async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;openLogin('Sessão encerrada.');}
+async function logout(){try{await json('/api/rds/unified/logout',{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}localStorage.removeItem('rds_operator_token');localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;location.reload();}
 (()=>{if(!document.getElementById('rdsAccountRefinedStyles')){const s=document.createElement('style');s.id='rdsAccountRefinedStyles';s.textContent='.rds-account-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.rds-account-summary>div{border:1px solid rgba(30,70,120,.12);border-radius:13px;background:#f8fbff;padding:11px 12px;min-width:0}.rds-account-summary small{display:block;color:#71809a;font-weight:800;font-size:11px;margin-bottom:5px}.rds-account-summary b{display:block;color:#17355d;font-size:14px;line-height:1.25;overflow-wrap:anywhere}@media(max-width:560px){.rds-account-summary{grid-template-columns:1fr}}';document.head.appendChild(s);}})();window.rdsUnifiedAccountPage=account;
 window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
 window.rdsUnifiedOpenLogin=openLogin;
