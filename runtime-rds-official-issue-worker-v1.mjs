@@ -111,6 +111,7 @@ else{
    issue='';order.official_issue_status=null;order.updated_at=nowISO();age=0;
   }
   if(order.official_sale_id)return deliverExisting({...order,official_issue_status:issue||null});
+  if(issue==='AGUARDANDO_AUTORIZACAO'&&Number.isFinite(age)&&age<15)return;
   if(issue==='AGUARDANDO_AUTORIZACAO'){
    try{
     await rdsFinalRequest('/auth/me');
