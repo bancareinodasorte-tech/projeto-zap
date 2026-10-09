@@ -13,10 +13,14 @@ else{
  const arr=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.draws)?raw.draws:Array.isArray(raw?.items)?raw.items:Array.isArray(raw?.data)?raw.data:Array.isArray(raw?.data?.draws)?raw.data.draws:Array.isArray(raw?.result?.draws)?raw.result.draws:[]);
  const drawIdOf=d=>String(d?.drawId??d?.external_draw_id??d?.draw_id??d?.id??d?.sorteioId??'').trim();
  const round=n=>Number((Number(n)||0).toFixed(2));
+ function firstValue(root,keys){
+  for(const key of keys){let value=root;for(const part of key.split('.'))value=value?.[part];if(value!==undefined&&value!==null&&String(value).trim()!=='')return value;}
+  return null;
+ }
  function saleInfo(sale){
-  const root=sale?.data||sale||{},saleId=root?.saleId||root?.id||root?.sale?.saleId||root?.sale?.id;
-  const pdfUrl=root?.pdfUrl||root?.ticketUrl||root?.downloadUrl||root?.publicUrl||root?.url||root?.sale?.pdfUrl||null;
-  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:root};
+  const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
+  const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl']);
+  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:sale||{}};
  }
  async function selectedOfficialDraw(id){
   const [availableResult,allResult]=await Promise.allSettled([
