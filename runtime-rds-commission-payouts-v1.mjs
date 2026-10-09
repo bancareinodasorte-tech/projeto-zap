@@ -13,7 +13,7 @@ app.get('/api/rds/commission-payouts',async(req,res)=>{
   if(typeof rdsUnifiedContext!=='function')return res.status(503).json({success:false,error:'Acesso administrativo indisponível.'});
   const auth=await rdsUnifiedContext(req);
   if(!auth?.authenticated)return res.status(401).json({success:false,error:'Entre na conta administrativa para continuar.'});
-  if(auth.role!=='ADMINISTRADOR')return res.status(403).json({success:false,error:'Somente administradores podem consultar ou registrar repasses.'}););
+  if(auth.role!=='ADMINISTRADOR')return res.status(403).json({success:false,error:'Somente administradores podem consultar ou registrar repasses.'});
   const from=String(req.query.from||'').trim(),to=String(req.query.to||'').trim(),sellerId=String(req.query.sellerId||'').trim();
   if((from&&!/^\d{4}-\d{2}-\d{2}$/.test(from))||(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)))return res.status(400).json({success:false,error:'Período inválido.'});
   let q='select=id,company_id,seller_id,period_month,amount,paid_at,payment_method,reference,receipt_url,notes,created_by,created_at&order=period_month.desc,paid_at.desc&limit=500';
