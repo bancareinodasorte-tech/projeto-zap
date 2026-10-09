@@ -13,7 +13,7 @@ app.get('/api/rds/commission-payouts',async(req,res)=>{
   if(typeof rdsAdminRequire!=='function')return res.status(503).json({success:false,error:'Acesso administrativo indisponível.'});
   const auth=await rdsAdminRequire(req,res);if(!auth)return;
   const from=String(req.query.from||'').trim(),to=String(req.query.to||'').trim(),sellerId=String(req.query.sellerId||'').trim();
-  if((from&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(from))||(to&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(to)))return res.status(400).json({success:false,error:'Período inválido.'});
+  if((from&&!/^\d{4}-\d{2}-\d{2}$/.test(from))||(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)))return res.status(400).json({success:false,error:'Período inválido.'});
   let q='select=id,company_id,seller_id,period_month,amount,paid_at,payment_method,reference,receipt_url,notes,created_by,created_at&order=period_month.desc,paid_at.desc&limit=500';
   if(from)q+='&period_month=gte.'+encodeURIComponent(from);
   if(to)q+='&period_month=lte.'+encodeURIComponent(to);
@@ -30,10 +30,10 @@ app.post('/api/rds/commission-payouts',async(req,res)=>{
   const b=req.body||{},sellerId=String(b.seller_id||''),companyId=String(b.company_id||''),month=String(b.period_month||'');
   const amount=Number(b.amount),method=String(b.payment_method||''),reference=String(b.reference||'').trim().slice(0,180),receipt=String(b.receipt_url||'').trim().slice(0,1000),notes=String(b.notes||'').trim().slice(0,2000);
   if(!/^[0-9a-f-]{36}$/i.test(sellerId)||!/^[0-9a-f-]{36}$/i.test(companyId))return res.status(400).json({success:false,error:'Selecione um vendedor e uma empresa válidos.'});
-  if(!/^\\d{4}-\\d{2}-01$/.test(month))return res.status(400).json({success:false,error:'Selecione o primeiro dia do mês de apuração.'});
+  if(!/^\d{4}-\d{2}-01$/.test(month))return res.status(400).json({success:false,error:'Selecione o primeiro dia do mês de apuração.'});
   if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100)return res.status(400).json({success:false,error:'Informe um valor positivo com até duas casas decimais.'});
   if(!['PIX','DINHEIRO','TRANSFERENCIA','OUTRO'].includes(method))return res.status(400).json({success:false,error:'Forma de pagamento inválida.'});
-  if(receipt&&!/^https:\\/\\//i.test(receipt))return res.status(400).json({success:false,error:'O comprovante deve ser um link HTTPS válido.'});
+  if(receipt&&!/^https:\/\//i.test(receipt))return res.status(400).json({success:false,error:'O comprovante deve ser um link HTTPS válido.'});
   const seller=await one('rds10_sellers','select=id,company_id,name,status&id=eq.'+encodeURIComponent(sellerId));
   if(!seller||seller.company_id!==companyId||seller.status!=='ATIVO')return res.status(400).json({success:false,error:'O vendedor não está ativo ou não pertence à empresa selecionada.'});
   const idempotencyKey=crypto.randomUUID();
