@@ -67,6 +67,7 @@ await import('./runtime-rds-company-settings-v1.mjs');
 await import('./runtime-rds-seller-recovery-v1.mjs');
 await import('./runtime-rds-security-devices-v1.mjs');
 await import('./runtime-rds-admin-users-v1.mjs');
+await import('./runtime-rds-admin-company-management-v1.mjs');
 await import('./runtime-rds-tenant-sales-v1.mjs');
 await import('./runtime-rds-tenant-scope-v1.mjs');
 await import('./runtime-rds-whatsapp-meta-cloud-v1.mjs');
