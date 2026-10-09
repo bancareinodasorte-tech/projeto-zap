@@ -4,7 +4,11 @@ const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'B
 const clean=v=>String(v??'').trim();
 const json=async(u,o={})=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),8000);try{const r=await fetch(u,{cache:'no-store',...o,signal:ac.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||d.error||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('O sistema oficial demorou para responder.');throw e;}finally{clearTimeout(tm);}};
 let rendering=false;
-function isOfficialPage(){return !!document.querySelector('#nav button.active[data-page="settings"],#mobileNav button.active[data-page="settings"],#nav button.active[data-page="account"],#mobileNav button.active[data-page="account"]');}
+function isOfficialPage(){
+  // A integração oficial é da operação comercial; a administração tem painel próprio.
+  try{if(localStorage.getItem('rds_admin_token')&&!localStorage.getItem('rds_operator_token'))return false;}catch{}
+  return !!document.querySelector('#nav button.active[data-page="settings"],#mobileNav button.active[data-page="settings"],#nav button.active[data-page="account"],#mobileNav button.active[data-page="account"]');
+}
 async function card(){
   const app=document.querySelector('#app');
   if(!app||!isOfficialPage())return;

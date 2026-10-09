@@ -57,6 +57,10 @@ async function account(){
  if(!initialRole && !hasSeller && !hasAdmin){openLogin(initialContext?.timeout?'A validação da sessão demorou mais que o esperado.':'Entre para acessar sua conta.');return;}
 
  if(initialRole==='ADMINISTRADOR' || (hasAdmin&&!hasSeller)){
+  // Administradores usam exclusivamente o painel administrativo separado.
+  // Não renderizar cartão administrativo nem integração oficial dentro da Conta comercial.
+  window.location.replace('/admin-vendedores.html');
+  return;
   root.innerHTML='<div class="page-title"><div><span class="eyebrow">Conta</span><h1>Conta administrativa</h1><p class="mut">Acesso administrativo do CANAL DE VENDAS RDS.</p></div></div><div class="card"><h2>Administrador</h2><p id="rdsAdminEmail" class="mut">Validando sessão…</p><div class="row"><button class="btn primary" id="rdsOpenAdminPanel">Abrir painel administrativo</button><button class="btn danger" id="rdsUnifiedLogout">Sair</button></div></div>';
   document.getElementById('rdsOpenAdminPanel').onclick=()=>{window.location.href='/admin-vendedores.html';};
   document.getElementById('rdsUnifiedLogout').onclick=()=>{if(confirm('Deseja realmente sair da conta?'))logout();};
