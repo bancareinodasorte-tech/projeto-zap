@@ -123,9 +123,6 @@ async function loadSellerAccountDetails(){
   window.__rdsAccountSellerEmail=(d.me||{}).email||'';
   window.__rdsAccountSellerPhone=(d.me||{}).phone||'';
   window.__rdsAccountSettings=st;
-  document.getElementById('rdsAccountPix').value=st.pix_key||'';
-  document.getElementById('rdsAccountPixName').value=st.pix_name||'';
-  document.getElementById('rdsAccountEmail').value=st.official_email||'';
   const summaryName=document.getElementById('rdsAccountSummaryName');
   const summaryPixName=document.getElementById('rdsAccountSummaryPixName');
   const summaryPix=document.getElementById('rdsAccountSummaryPix');
