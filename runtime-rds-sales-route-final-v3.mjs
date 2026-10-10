@@ -219,6 +219,11 @@ const block=`
 
   const previousHandleInbound=handleInbound;
   handleInbound=async function(m){
+    if(String(process.env.RDS_SALES_PAUSED||'').trim().toLowerCase()==='true'){
+      const pausedIdentity=resolveInboundIdentity(m);
+      if(pausedIdentity.phone) return replyInbound(pausedIdentity,'⚠️ *CANAL DE VENDAS TEMPORARIAMENTE PAUSADO*\n\nEstamos finalizando uma atualização para garantir a segurança dos pedidos e dos bilhetes oficiais. No momento não inicie nem efetue pagamentos de novos pedidos. Se você já possui um pedido ou pagamento realizado, ele será tratado separadamente. Agradecemos a compreensão. 🍀');
+      return;
+    }
     const identity=resolveInboundIdentity(m);
     const inbound=extractInbound(m);
     const text=cleanText(inbound?.text);
