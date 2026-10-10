@@ -29,7 +29,7 @@ async function renderAccountNative(){
   if(typeof window.rdsUnifiedAccountPage==='function') return window.rdsUnifiedAccountPage();
   const root=document.getElementById('app'); if(!root)return;
   root.innerHTML='<div class="card"><span class="mut">Carregando conta...</span></div>';
-}async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando operação...</span></div>';try{
+}async function render(){const currentNavSeq=navSeq;app.innerHTML='<div class="card"><span class=mut>Carregando painel...</span></div>';try{
  if(page==='home'){if(typeof window.home==='function')await window.home();else await home();}
  else if(page==='contacts'){if(typeof window.rdsCrmPage==='function')await window.rdsCrmPage();else await contacts();}
  else if(page==='whatsapp'){
@@ -40,22 +40,22 @@ async function renderAccountNative(){
  else if(page==='execution'){await automation();await renderBotSettingsPanel();}
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
- else if(page==='commissions'){if(typeof window.rdsCommissionPage!=='function')throw new Error('Módulo de Comissões não carregou.');await window.rdsCommissionPage();}
+ else if(page==='commissions'){if(typeof window.rdsCommissionPage!=='function')throw new Error('Não foi possível abrir Comissões. Tente novamente.');await window.rdsCommissionPage();}
  else if(page==='payments'){
    if(typeof window.rdsPaymentsRefined!=='function'){
      await new Promise((resolve,reject)=>{
        const id='rdsPaymentsRefinedRuntime';
        const old=document.getElementById(id);
-       if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(new Error('Não foi possível carregar o módulo de Pagamentos.')),{once:true});return;}
+       if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(new Error('Não foi possível abrir Pagamentos. Tente novamente.')),{once:true});return;}
        const s=document.createElement('script');
        s.id=id;
        s.src='ui-rds-dashboard-orders-payments-fix.js?v=2004&rds='+Date.now();
        s.onload=resolve;
-       s.onerror=()=>reject(new Error('Não foi possível carregar o módulo de Pagamentos.'));
+       s.onerror=()=>reject(new Error('Não foi possível abrir Pagamentos. Tente novamente.'));
        document.body.appendChild(s);
      });
    }
-   if(typeof window.rdsPaymentsRefined!=='function')throw new Error('Renderer refinado de Pagamentos não foi carregado.');
+   if(typeof window.rdsPaymentsRefined!=='function')throw new Error('A área de Pagamentos não ficou disponível. Tente novamente.');
    await window.rdsPaymentsRefined();await renderPaymentSettingsPanel();
  }
  else if(page==='account'){
