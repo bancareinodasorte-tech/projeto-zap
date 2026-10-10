@@ -18,12 +18,12 @@ async function card(){
   try{
     const old=document.getElementById('rdsIssuerCard');if(old)old.style.display='none';
     const c=document.createElement('div');c.id='rdsOfficialSalesCard';c.className='card rds-issuer-card';
-    c.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL V4</span><h2>Sistema de vendas REINO DA SORTE</h2><p class="mut">Conexão direta com o sistema oficial. Sessão própria do servidor.</p><div id="r4state" class="priority"><strong>Verificando conexão...</strong></div><div id="r4dev" class="priority"><strong>Dispositivo do servidor</strong></div><div id="r4draw" class="priority"><strong>Sorteio oficial</strong></div><div id="r4act" class="row"></div>';
+    c.innerHTML='<span class="eyebrow">Conexão oficial</span><h2>Sistema de vendas REINO DA SORTE</h2><p class="mut">Conexão com o sistema de vendas REINO DA SORTE.</p><div id="r4state" class="priority"><strong>Verificando conexão...</strong></div><div id="r4dev" class="priority"><strong>Dispositivo autorizado</strong></div><div id="r4draw" class="priority"><strong>Sorteio oficial</strong></div><div id="r4act" class="row"></div>';
     app.appendChild(c);
     try{
       const b=await json('/api/v1011/official-sales/bootstrap');
       const dev=document.getElementById('r4dev');if(!dev)return;
-      dev.innerHTML='<strong>🖥️ Dispositivo do servidor</strong><p class="mut" style="word-break:break-all">'+esc(b.deviceId||'—')+'</p><p class="mut">Identificador exclusivo do CANAL DE VENDAS.</p>';
+      dev.innerHTML='<strong>🖥️ Dispositivo autorizado</strong><p class="mut" style="word-break:break-all">'+esc(b.deviceId||'—')+'</p><p class="mut">Acesso vinculado ao CANAL DE VENDAS.</p>';
       const s=document.getElementById('r4state');
       if(b.emailConfigured&&!b.authorized)s.innerHTML='<strong>🟠 Servidor aguardando autorização</strong><p class="mut">O servidor já possui as credenciais. Autorize este dispositivo no sistema administrativo do REINO DA SORTE.</p>';
       else if(b.authorized)s.innerHTML='<strong>🟢 Dispositivo oficial autorizado</strong><p class="mut">Sessão persistida com proteção no servidor.</p>';
