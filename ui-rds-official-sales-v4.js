@@ -18,23 +18,23 @@ async function card(){
   try{
     const old=document.getElementById('rdsIssuerCard');if(old)old.style.display='none';
     const c=document.createElement('div');c.id='rdsOfficialSalesCard';c.className='card rds-issuer-card';
-    c.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL V4</span><h2>Sistema de vendas REINO DA SORTE</h2><p class="mut">Conexão direta com o sistema oficial. Sessão própria do servidor.</p><div id="r4state" class="priority"><strong>Verificando conexão...</strong></div><div id="r4dev" class="priority"><strong>Dispositivo do servidor</strong></div><div id="r4draw" class="priority"><strong>Sorteio oficial</strong></div><div id="r4act" class="row"></div>';
+    c.innerHTML='<span class="eyebrow">Conexão oficial</span><h2>Sistema de vendas REINO DA SORTE</h2><p class="mut">Conexão com o sistema de vendas REINO DA SORTE.</p><div id="r4state" class="priority"><strong>Verificando conexão...</strong></div><div id="r4dev" class="priority"><strong>Dispositivo autorizado</strong></div><div id="r4draw" class="priority"><strong>Sorteio oficial</strong></div><div id="r4act" class="row"></div>';
     app.appendChild(c);
     try{
       const b=await json('/api/v1011/official-sales/bootstrap');
       const dev=document.getElementById('r4dev');if(!dev)return;
-      dev.innerHTML='<strong>🖥️ Dispositivo do servidor</strong><p class="mut" style="word-break:break-all">'+esc(b.deviceId||'—')+'</p><p class="mut">Identificador exclusivo do CANAL DE VENDAS.</p>';
+      dev.innerHTML='<strong>🖥️ Conexão oficial</strong><p class="mut">Acesso vinculado ao CANAL DE VENDAS.</p>';
       const s=document.getElementById('r4state');
-      if(b.emailConfigured&&!b.authorized)s.innerHTML='<strong>🟠 Servidor aguardando autorização</strong><p class="mut">O servidor já possui as credenciais. Autorize este dispositivo no sistema administrativo do REINO DA SORTE.</p>';
-      else if(b.authorized)s.innerHTML='<strong>🟢 Dispositivo oficial autorizado</strong><p class="mut">Sessão persistida com proteção no servidor.</p>';
-      else s.innerHTML='<strong>🔴 Credenciais não disponíveis no runtime</strong><p class="mut">O servidor não está recebendo as credenciais oficiais neste endpoint.</p>';
+      if(b.emailConfigured&&!b.authorized)s.innerHTML='<strong>🟠 Aguardando autorização do sistema oficial</strong><p class="mut">Autorize o acesso no sistema administrativo do REINO DA SORTE.</p>';
+      else if(b.authorized)s.innerHTML='<strong>🟢 Dispositivo oficial autorizado</strong><p class="mut">Conexão autorizada e salva.</p>';
+      else s.innerHTML='<strong>🔴 Conexão oficial não configurada</strong><p class="mut">Confira os dados de acesso ao sistema oficial.</p>';
       document.getElementById('r4act').innerHTML=b.emailConfigured&&!b.authorized?'<button class="btn primary" onclick="rdsOfficialAuthorizeDevice()">Autorizar este dispositivo</button>':'<button class="btn primary" onclick="rdsOfficialRefreshSettings()">Atualizar conexão</button>';
       if(b.authorized){
         try{
           const st=await json('/api/v1011/official-sales/status');
           if(s)s.innerHTML='<strong>🟢 Vendedor oficial conectado</strong><p class="mut">'+esc(st.seller?.name||st.seller?.email||'CANAL DE VENDAS RDS')+'</p>';
         }catch(e){
-          if(s)s.innerHTML='<strong>🔴 Dispositivo não autorizado no sistema oficial</strong><p class="mut">'+esc(e.message)+'</p>';
+          if(s)s.innerHTML='<strong>🔴 Acesso não autorizado no sistema oficial</strong><p class="mut">'+esc(e.message)+'</p>';
           const act=document.getElementById('r4act');
           if(act)act.innerHTML='<button class="btn primary" onclick="rdsOfficialAuthorizeDevice()">Reautorizar este dispositivo</button>';
         }
