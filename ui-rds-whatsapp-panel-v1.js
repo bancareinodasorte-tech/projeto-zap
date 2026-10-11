@@ -12,7 +12,7 @@ function fmtPhone(v){
 function fmtSince(v){
  if(!v)return '—';
  const d=new Date(v); if(Number.isNaN(d.getTime()))return '—';
- return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 function countdown(v){
  const t=new Date(v||0).getTime()-Date.now();
@@ -117,7 +117,7 @@ async function refreshOpenConversation(phone){
   const html=messages.length?messages.map(m=>{
     const type=String(m.message_type||'text').toLowerCase();
     const body=m.body || ({image:'📷 Foto',audio:'🎤 Áudio',video:'🎥 Vídeo',document:'📄 Documento',sticker:'🧩 Figurinha',poll:'📊 Enquete',reaction:'❤️ Reação'}[type] || 'Mensagem sem conteúdo disponível');
-    return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(body)+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
+    return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'"><div>'+E(body)+'</div><small>'+new Date(m.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
   }).join(''):'<div class="rds-wa-full-no-message">Nenhuma mensagem registrada nesta conversa.</div>';
   const wasBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<80;
   box.innerHTML=html;
@@ -156,7 +156,7 @@ window.rdsWaOpen=async phone=>{
       }else if(m.wa_message_id && type==='document'){
         mediaHtml='<button type="button" class="rds-wa-media-document" onclick="rdsWaOpenMedia(\''+E(mediaUrl)+'\',\'document\')">📄 Abrir documento / PDF</button>';
       }
-      return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'">'+mediaHtml+(body?'<div>'+E(body)+'</div>':'')+'<small>'+new Date(m.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
+      return '<div class="rds-wa-full-bubble '+(m.direction==='OUT'?'out':'in')+'">'+mediaHtml+(body?'<div>'+E(body)+'</div>':'')+'<small>'+new Date(m.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+' '+E(m.status||'')+'</small></div>';
     }).join('')
    : '<div class="rds-wa-full-no-message">Nenhuma mensagem registrada nesta conversa.</div>';
   app.innerHTML='<section class="rds-wa-conversation-screen"><header class="rds-wa-conversation-top"><div class="rds-wa-full-head-left"><button class="rds-wa-full-back" onclick="rdsWaBack()">‹ <span>WhatsApp</span></button><span class="rds-wa-avatar">'+E((contactName||phone).slice(0,1).toUpperCase())+'</span><div class="rds-wa-full-title"><b>'+E(contactName)+'</b><small>'+E(fmtPhone(c?.phone||phone)||phone)+' • '+(d.connected?'Conectado':'Desconectado')+'</small></div></div><div class="rds-wa-full-actions">'+contactAction+'<button class="rds-wa-full-action danger" onclick="rdsWaDeleteConversation(\''+E(phone)+'\')">Excluir</button></div></header><main id="rdsWaMessages" class="rds-wa-full-messages">'+messageHtml+'</main><form id="rdsWaSend" class="rds-wa-full-compose"><textarea id="rdsWaText" rows="1" placeholder="'+(d.connected?'Digite uma mensagem...':'WhatsApp desconectado')+'" '+(d.connected?'':'disabled')+'></textarea><button class="rds-wa-full-send" type="submit" '+(d.connected?'':'disabled')+'>➤</button></form></section>';
