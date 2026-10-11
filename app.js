@@ -5,7 +5,8 @@ let navSeq=0;
 const api=async(url,opt={})=>{const requestNavSeq=navSeq;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(url,{...opt,signal:controller.signal,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Falha na operação');if(requestNavSeq!==navSeq){const e=new Error('NAV_STALE');e.code='NAV_STALE';throw e;}return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
 const post=(u,b={})=>api(u,{method:'POST',body:JSON.stringify(b)}),put=(u,b={})=>api(u,{method:'PUT',body:JSON.stringify(b)}),del=u=>api(u,{method:'DELETE'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const dt=v=>v?new Date(v).toLocaleString('pt-BR'):'—',money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const RDS_TZ='America/Sao_Paulo';
+const dt=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleString('pt-BR',{timeZone:RDS_TZ,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});},money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 function toast(t){const x=$('#toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',3300)}
 function btn(t,onclick,cls='btn'){return `<button class="${cls}" onclick="${onclick}">${t}</button>`}
 function badge(s){const x=String(s||'').toUpperCase(),c=/CONCLUIDO|ENVIADA|ATIVO|VALIDADO/.test(x)?'ok':/FALHA|CANCELADO/.test(x)?'bad':/AGUARDANDO|COLETANDO|AGENDADA|RASCUNHO/.test(x)?'warn':'';return `<span class="badge ${c}">${esc(x||'—')}</span>`}
@@ -13,7 +14,7 @@ function modal(html){const m=document.createElement('div');m.className='modal';m
 function setNav(){[...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
 function go(p){page=p;localStorage.setItem('rds_current_page',page);navSeq++;setNav();if(p==='account'){renderAccountNative();}else{render()}scrollTo(0,0)}
 [...$$('#nav button'),...$$('#mobileNav button')].forEach(b=>b.onclick=()=>go(b.dataset.page));
-setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR')},1000);
+setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR',{timeZone:RDS_TZ,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})},1000);
 
 async function refreshCurrentPage(){
  const target=page||localStorage.getItem('rds_current_page')||'home';
