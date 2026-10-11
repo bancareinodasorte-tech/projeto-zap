@@ -1,21 +1,22 @@
 (()=>{
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  const dtR=v=>typeof dt==='function'?dt(v):new Date(v).toLocaleString('pt-BR');
+  const TZ='America/Sao_Paulo';
+  const dtR=v=>typeof dt==='function'?dt(v):new Date(v).toLocaleString('pt-BR',{timeZone:TZ,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const dateKey=v=>{const d=new Date(v||0);if(!v||Number.isNaN(d.getTime()))return '';const p=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);const o=Object.fromEntries(p.map(x=>[x.type,x.value]));return `${o.year}-${o.month}-${o.day}`;};
   const q=s=>document.querySelector(s);
   let archiveRows=[];
   let archiveOpen=false;
-  const pad=n=>String(n).padStart(2,'0');
-  const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  const shiftKey=(key,days)=>{const [y,m,d]=key.split('-').map(Number);const x=new Date(Date.UTC(y,m-1,d+days));return `${x.getUTCFullYear()}-${String(x.getUTCMonth()+1).padStart(2,'0')}-${String(x.getUTCDate()).padStart(2,'0')}`;};
   function periodRange(value){
-    const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-    if(value==='today')return [ymd(today),ymd(today)];
-    if(value==='yesterday'){const d=new Date(today);d.setDate(d.getDate()-1);return [ymd(d),ymd(d)];}
-    if(value==='7d'){const d=new Date(today);d.setDate(d.getDate()-6);return [ymd(d),ymd(today)];}
-    if(value==='30d'){const d=new Date(today);d.setDate(d.getDate()-29);return [ymd(d),ymd(today)];}
-    if(value==='month')return [ymd(new Date(today.getFullYear(),today.getMonth(),1)),ymd(today)];
+    const today=dateKey(new Date().toISOString());
+    if(value==='today')return [today,today];
+    if(value==='yesterday'){const d=shiftKey(today,-1);return [d,d];}
+    if(value==='7d')return [shiftKey(today,-6),today];
+    if(value==='30d')return [shiftKey(today,-29),today];
+    if(value==='month')return [today.slice(0,7)+'-01',today];
     return ['',''];
   }
-  function rowDate(o){return String(o.created_at||o.sent_at||o.updated_at||'').slice(0,10);}
+  function rowDate(o){return dateKey(o.created_at||o.sent_at||o.updated_at||'');}
   function statusLabel(o){return o.sent_at?'✓ Enviado pelo WhatsApp':'PDF arquivado — envio não confirmado';}
   function openPdf(id){window.location.assign('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'?fresh=1')}
   window.rdsOpenTicketPdf=openPdf;
