@@ -12,11 +12,16 @@ async function devices(s){
   try{
     const d=await api('/api/operator/admin/seller/devices?sellerId='+encodeURIComponent(s.id));
     const rows=d.devices||[];
-    box.innerHTML=(rows.length?rows.map(x=>{
+    const renderDevice=x=>{
       const status=String(x.status||'');
       const action=status==='PENDENTE'?'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Autorizar este dispositivo</button>':status==='ATIVO'?'<button class="btn danger" data-d="block" data-id="'+esc(x.id)+'">Bloquear</button>':'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Autorizar novamente</button>';
       return '<div class="card" style="margin:10px 0"><b>'+esc(platformText(x.platform))+'</b><div style="margin:6px 0">Situação da autorização: <strong>'+esc(status==='ATIVO'?'Autorizado':status==='PENDENTE'?'Aguardando autorização':status==='BLOQUEADO'?'Bloqueado':'Revogado')+'</strong></div><div class="muted" style="word-break:break-all;margin:5px 0">Identificador: '+esc(x.device_id||'não informado')+'</div><div class="muted">Primeiro registro: '+esc(dateBR(x.first_seen_at))+'</div><div class="muted">Autorizado em: '+esc(dateBR(x.authorized_at))+'</div><div class="muted">Último acesso registrado: '+esc(dateBR(x.last_seen_at))+'</div><div class="row" style="margin-top:8px">'+action+(status==='ATIVO'?'<button class="btn dangerOutline" data-d="revoke" data-id="'+esc(x.id)+'">Revogar</button>':'')+'</div></div>';
-    }).join(''):'<div class="empty">Nenhum dispositivo registrado.</div>')+'<p class="muted">Dispositivos ativos autorizados: <b>'+esc(d.activeDeviceCount||0)+'</b>/2. Para liberar um novo acesso, procure o dispositivo com situação “Aguardando autorização” e toque em “Autorizar este dispositivo”.</p>';
+    };
+    const current=rows.filter(x=>['ATIVO','PENDENTE'].includes(String(x.status||'')));
+    const archived=rows.filter(x=>!['ATIVO','PENDENTE'].includes(String(x.status||'')));
+    box.innerHTML=(current.length?'<h3>Acessos atuais e solicitações</h3>'+current.map(renderDevice).join(''):'<div class="empty">Nenhuma solicitação pendente nem dispositivo autorizado.</div>')+
+      (archived.length?'<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;padding:12px;border:1px solid #dbe5f5;border-radius:12px">Histórico de dispositivos revogados/bloqueados ('+archived.length+')</summary><p class="muted">Histórico preservado para auditoria. Abra somente se precisar reautorizar um acesso antigo.</p>'+archived.map(renderDevice).join('')+'</details>':'')+
+      '<p class="muted">Dispositivos ativos autorizados: <b>'+esc(d.activeDeviceCount||0)+'</b>/2. Para liberar um novo acesso, use “Autorizar este dispositivo” na solicitação pendente.</p>';
     box.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{
       try{
         const id=b.dataset.id,a=b.dataset.d;
