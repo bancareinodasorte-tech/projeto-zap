@@ -3,7 +3,7 @@
  try{if(new URLSearchParams(location.search).has('app_version'))localStorage.setItem('rds_client_platform','app');}catch{}
  const $=s=>document.querySelector(s);
  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
- const token=()=>localStorage.getItem(OP)||localStorage.getItem(AD)||'';
+ const token=()=>localStorage.getItem(OP)||'';
  function deviceId(){let v='';try{v=localStorage.getItem(DEVICE)||'';}catch{}if(!v){let id='';try{if(crypto?.randomUUID)id=crypto.randomUUID();}catch{}if(!id)id=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);v='web_'+id;try{localStorage.setItem(DEVICE,v);}catch{}}return v;}
  async function api(url,opts={}){
   const headers={'Content-Type':'application/json',...(opts.headers||{})},t=token();if(t)headers.Authorization='Bearer '+t;
@@ -35,15 +35,16 @@
  function showGate(message='',loading=false){
   style();let d=$('#rdsAuthGate');if(!d){d=document.createElement('div');d.id='rdsAuthGate';document.body.appendChild(d);}
   if(loading){d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Verificando acesso seguro…</div><p class="auth-msg">Aguarde a validação da sua sessão.</p></div>';return;}
-  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Entre para acessar o painel de vendas</div><form id="rdsAuthForm"><label for="rdsAuthIdentifier">Telefone do vendedor ou e-mail administrativo</label><input id="rdsAuthIdentifier" autocomplete="username" placeholder="DDD + telefone ou e-mail" required><label for="rdsAuthPassword">Senha</label><input id="rdsAuthPassword" type="password" autocomplete="current-password" required><button type="submit" id="rdsAuthSubmit">Entrar no painel</button><button type="button" class="secondary" id="rdsAuthRegister">Cadastrar vendedor</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" class="secondary" id="rdsAuthForgotSeller">Recuperar senha do vendedor</button><button type="button" class="secondary" id="rdsAuthForgotAdmin">Recuperar senha do administrador</button></div><div id="rdsAuthMsg" class="auth-msg '+(message?'bad':'')+'">'+esc(message)+'</div><div style="margin-top:12px;text-align:center;font-size:13px"><a href="/admin-vendedores.html" style="color:#0b3f86;font-weight:800;text-decoration:none">Acesso administrativo · gerenciar contas e dispositivos</a></div></form><div class="auth-foot">Acesso individual • dispositivos controlados pelo administrador</div></div>';
+  d.innerHTML='<div class="auth-box"><div class="auth-brand">CANAL DE VENDAS RDS</div><div class="auth-sub">Entre para acessar o painel de vendas</div><form id="rdsAuthForm"><label for="rdsAuthIdentifier">E-mail ou telefone do vendedor</label><input id="rdsAuthIdentifier" autocomplete="username" placeholder="E-mail ou DDD + telefone" required><label for="rdsAuthPassword">Senha</label><input id="rdsAuthPassword" type="password" autocomplete="current-password" required><button type="submit" id="rdsAuthSubmit">Entrar no painel</button><button type="button" class="secondary" id="rdsAuthRegister">Cadastrar vendedor</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" class="secondary" id="rdsAuthForgotSeller" style="grid-column:1/-1">Recuperar senha do vendedor</button></div><div id="rdsAuthMsg" class="auth-msg '+(message?'bad':'')+'">'+esc(message)+'</div></form><div class="auth-foot">Acesso individual • dispositivos controlados pelo administrador</div></div>';
   $('#rdsAuthForm').onsubmit=async e=>{
    e.preventDefault();const b=$('#rdsAuthSubmit'),msg=$('#rdsAuthMsg');b.disabled=true;b.textContent='Validando…';msg.className='auth-msg';msg.textContent='Verificando credenciais e autorização do dispositivo…';
    const id=deviceId(),identifier=$('#rdsAuthIdentifier').value.trim(),password=$('#rdsAuthPassword').value;
    try{
-    const d=await fetch('/api/rds/unified/login',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-rds-device-id':id},body:JSON.stringify({identifier,password,platform:((localStorage.getItem('rds_client_platform')==='app'||new URLSearchParams(location.search).has('app_version'))?'app':'web'),deviceId:id})});
+    const d=await fetch('/api/rds/unified/login',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-rds-device-id':id},body:JSON.stringify({identifier,password,audience:'seller',platform:((localStorage.getItem('rds_client_platform')==='app'||new URLSearchParams(location.search).has('app_version'))?'app':'web'),deviceId:id})});
     const out=await d.json().catch(()=>({}));
     if(!d.ok||!out.success)throw Object.assign(new Error(out.error||'Não foi possível entrar.'),{code:out.code,status:d.status});
-    if(out.role==='ADMINISTRADOR'){localStorage.setItem(AD,out.token);localStorage.removeItem(OP);}else{localStorage.setItem(OP,out.token);localStorage.removeItem(AD);}
+    if(out.role!=='VENDEDOR')throw new Error('O aplicativo comercial aceita somente contas de vendedor. O painel administrativo possui acesso separado.');
+    localStorage.setItem(OP,out.token);
     msg.className='auth-msg ok';msg.textContent='Acesso autorizado. Abrindo painel…';location.reload();
    }catch(err){b.disabled=false;b.textContent='Entrar no painel';msg.className='auth-msg '+(err.code==='DEVICE_PENDING'?'warn':'bad');msg.textContent=err.message+(err.code==='DEVICE_PENDING'?' Após a liberação do administrador, tente entrar novamente.':'');}
   };
@@ -57,7 +58,7 @@
    catch(e){msg.className='auth-msg bad';msg.textContent=e.message||'Não foi possível solicitar a recuperação.';}
   };
   $('#rdsAuthForgotSeller').onclick=()=>recover('seller');
-  $('#rdsAuthForgotAdmin').onclick=()=>recover('admin');
+  
  }
  function showRegister(message=''){
   style();let d=$('#rdsAuthGate');if(!d){d=document.createElement('div');d.id='rdsAuthGate';document.body.appendChild(d);}
@@ -95,11 +96,11 @@
   if((resetKind==='reset-password'||resetKind==='admin-reset')&&resetToken){showResetForm(resetKind,resetToken);return;}
   style();showGate('',true);
   try{
-   const ctx=await api('/api/rds/unified/context');
-   if(ctx?.authenticated&&(ctx.role==='VENDEDOR'||ctx.role==='ADMINISTRADOR')){
+   const ctx=await api('/api/rds/unified/context?audience=seller');
+   if(ctx?.authenticated&&ctx.role==='VENDEDOR'){
     $('#rdsAuthGate')?.remove();accountBar(ctx);window.rdsAuthenticatedContext=ctx;return;
    }
-   localStorage.removeItem(OP);localStorage.removeItem(AD);showGate();
+   localStorage.removeItem(OP);showGate();
   }catch(e){showGate('Não foi possível validar a sessão. Confira a conexão e tente entrar novamente.');}
  }
  window.rdsPanelAuthBoot=boot;
