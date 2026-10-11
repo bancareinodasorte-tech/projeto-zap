@@ -179,7 +179,7 @@ const block=`
       return true;
     }
     const total=Number((quantity*Number(fresh.unit_price||3)).toFixed(2));
-    await patch('rds10_orders','id=eq.'+fresh.id,{
+    const claimed=await patch('rds10_orders','id=eq.'+encodeURIComponent(fresh.id)+'&status=eq.COLETANDO_DADOS&guided_step=eq.CONFIRMAR',{
       customer_name:name,
       customer_tax_id:cpf||null,
       contact_phone:identity.phone||fresh.phone||null,
@@ -190,6 +190,10 @@ const block=`
       guided_step:null,
       updated_at:nowISO()
     });
+    if(!Array.isArray(claimed)||claimed.length===0){
+      await replyInbound(identity,'ℹ️ Este pedido já está sendo processado. Não gerei uma nova cobrança. Aguarde a atualização do pedido no painel.');
+      return true;
+    }
     const ready=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(fresh.id));
     await saveOrderContact(identity,ready||fresh);
     let pix=null;
