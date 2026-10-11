@@ -60,19 +60,87 @@ const block=`
     }catch(e){console.warn('[RDS] CRM do pedido:',e?.message||e);}
   }
 
+  async function rdsAvailableOfficialDraws(){
+    const raw=await rdsFinalRequest('/draws/seller/available');
+    const items=Array.isArray(raw)?raw:Array.isArray(raw?.draws)?raw.draws:Array.isArray(raw?.items)?raw.items:Array.isArray(raw?.data)?raw.data:Array.isArray(raw?.data?.draws)?raw.data.draws:Array.isArray(raw?.result?.draws)?raw.result.draws:[];
+    const byId=new Map();
+    for(const d of items){
+      const id=String(d?.drawId??d?.external_draw_id??d?.draw_id??d?.id??d?.sorteioId??'').trim();
+      if(!id)continue;
+      const status=String(d?.status||'').toUpperCase();
+      if(d?.isDrawClosed===true||d?.isSalesClosed===true||d?.salesOpen===false||d?.active===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
+      const prior=byId.get(id)||{};
+      byId.set(id,{...prior,...d,drawId:id,drawTitle:String(d?.drawTitle||d?.title||d?.name||d?.description||('Sorteio '+id))});
+    }
+    return [...byId.values()];
+  }
+  function rdsDrawSelectionMessage(draws){
+    const lines=['🎟️ *ESCOLHA O SORTEIO*',''];
+    for(const d of draws){
+      const id=String(d.drawId);
+      const date=d.drawDate||d.drawAt||d.date;
+      const when=date?new Date(date).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'}):'';
+      lines.push('• *'+cleanText(d.drawTitle||('Sorteio '+id))+'* — código *'+id+'*'+(when?' — '+when:''));
+    }
+    lines.push('','Digite o *código do sorteio* desejado para continuar.');
+    return lines.join(NL);
+  }
+  async function rdsApplyDrawSelection(identity,order,draws){
+    if(!draws.length){
+      await replyInbound(identity,'⚠️ *NENHUM SORTEIO DISPONÍVEL*'+NL+NL+'Não registrei uma nova compra porque não encontrei sorteio oficial aberto para venda. Tente novamente quando o sorteio estiver liberado.');
+      return true;
+    }
+    if(draws.length===1){
+      const d=draws[0];
+      const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.COLETANDO_DADOS',{
+        official_draw_id:String(d.drawId),
+        official_draw_title:cleanText(d.drawTitle||('Sorteio '+d.drawId)),
+        guided_step:'QUANTIDADE',
+        status:'COLETANDO_DADOS',
+        updated_at:nowISO()
+      });
+      if(!saved?.length){
+        await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.COLETANDO_DADOS',{status:'CANCELADO',cancel_reason:'SORTEIO_NAO_VINCULADO',cancelled_at:nowISO(),guided_step:null,updated_at:nowISO()}).catch(()=>{});
+        await replyInbound(identity,'⚠️ Não consegui vincular o pedido ao sorteio oficial. Nenhum pagamento foi solicitado. Tente novamente mais tarde.');
+        return true;
+      }
+      await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
+      await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'⚠️ *ATENÇÃO* ⚠️'+NL+NL+'✅ *Nome* deve ter mínimo 4 caracteres.');
+      await replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
+      return true;
+    }
+    const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.COLETANDO_DADOS',{guided_step:'SORTEIO',updated_at:nowISO()});
+    if(!saved?.length){await replyInbound(identity,'⚠️ Não consegui preparar a seleção do sorteio. Nenhum pagamento será solicitado. Tente novamente.');return true;}
+    await replyInbound(identity,rdsDrawSelectionMessage(draws));
+    return true;
+  }
   async function startFinalPurchase(identity){
     const phone=normalizeBR(identity?.phone||'');
     if(!phone)return false;
     let order=await activeOrder(phone);
-    if(order)return rdsFinalHandleInbound(identity,order,'');
+    if(order){
+      if(order.status==='COLETANDO_DADOS'&&!order.official_draw_id&&!order.campaign_id){
+        let draws=[];
+        try{draws=await rdsAvailableOfficialDraws();}catch(e){await replyInbound(identity,'⚠️ Não consegui consultar os sorteios oficiais agora. Nenhum pagamento será solicitado. Tente novamente em instantes.');return true;}
+        return rdsApplyDrawSelection(identity,order,draws);
+      }
+      return rdsFinalHandleInbound(identity,order,'');
+    }
+    let draws=[];
+    try{draws=await rdsAvailableOfficialDraws();}catch(e){
+      await replyInbound(identity,'⚠️ Não consegui consultar os sorteios oficiais agora. Nenhum pedido novo foi registrado e nenhum pagamento será solicitado. Tente novamente em instantes.');
+      return true;
+    }
+    if(!draws.length){
+      await replyInbound(identity,'⚠️ *NENHUM SORTEIO DISPONÍVEL*'+NL+NL+'No momento não encontrei sorteio oficial aberto para venda. Não registrei pedido nem gerei cobrança.');
+      return true;
+    }
     order=await createOrder(phone,null);
     if(!order)throw new Error('Não foi possível criar o pedido.');
-    await patch('rds10_orders','id=eq.'+order.id,{guided_step:'QUANTIDADE',status:'COLETANDO_DADOS',updated_at:nowISO()});
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{status:'COLETANDO_DADOS',updated_at:nowISO()});
     await logMessage({phone,direction:'IN',type:'text',body:'COMPRAR',status:'RECEBIDA',created_at:nowISO()});
     await logEvent('PEDIDO_INICIADO',{phone,order:order.code,stage:'COMPRA_GUIADA_V3'});
-    await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
-    await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'⚠️ *ATENÇÃO* ⚠️'+NL+NL+'✅ *Nome* deve ter mínimo 4 caracteres.');
-    await replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
+    await rdsApplyDrawSelection(identity,order,draws);
     return true;
   }
 
@@ -129,6 +197,26 @@ const block=`
       await cancelFutureDeliveries(order.phone,'CANCELAMENTO_CLIENTE');
       await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason:'CANCELAMENTO_CLIENTE'});
       await replyInbound(identity,'✅ *SEU PEDIDO FOI CANCELADO*');
+      return true;
+    }
+
+    if(step==='SORTEIO'){
+      let draws=[];
+      try{draws=await rdsAvailableOfficialDraws();}catch(e){await replyInbound(identity,'⚠️ Não consegui atualizar os sorteios oficiais. Nenhum pagamento será solicitado. Tente novamente em instantes.');return true;}
+      const chosen=draws.find(d=>String(d.drawId)===t);
+      if(!chosen){
+        if(!draws.length){await replyInbound(identity,'⚠️ Não há sorteio oficial aberto para venda no momento. Nenhum pagamento será solicitado.');return true;}
+        await replyInbound(identity,'❌ Código de sorteio inválido ou indisponível.'+NL+NL+rdsDrawSelectionMessage(draws));
+        return true;
+      }
+      const saved=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.COLETANDO_DADOS',{
+        official_draw_id:String(chosen.drawId),
+        official_draw_title:cleanText(chosen.drawTitle||('Sorteio '+chosen.drawId)),
+        guided_step:'QUANTIDADE',
+        updated_at:nowISO()
+      });
+      if(!saved?.length){await replyInbound(identity,'⚠️ Não consegui vincular o sorteio ao pedido. Nenhum pagamento foi solicitado.');return true;}
+      await replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
       return true;
     }
 
