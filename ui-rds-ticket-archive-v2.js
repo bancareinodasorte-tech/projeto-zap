@@ -22,18 +22,24 @@
   window.rdsOpenTicketPdf=openPdf;
   window.rdsResendTicketPdf=async(id,button)=>{
     if(button?.disabled)return;
+    let holdButton=false;
     if(button){button.disabled=true;button.dataset.oldText=button.textContent;button.textContent='Enviando…';}
     try{
       const r=await fetch('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'/resend',{method:'POST',headers:{'Content-Type':'application/json'}});
       const d=await r.json().catch(()=>({}));
       if(!r.ok||!d.ok){
-        if(d.ambiguous||d.sent){toast(d.error||'Resultado incerto. Confira antes de tentar novamente.');return;}
+        if(d.ambiguous||d.sent){holdButton=true;toast(d.error||'Resultado incerto. Confira antes de tentar novamente.');return;}
         throw new Error(d.error||'Falha ao reenviar o PDF.');
       }
       toast('PDF reenviado pelo WhatsApp.');
       await loadArchive();renderArchiveTable();
     }catch(e){toast(e.message||'Falha ao reenviar o PDF.')}
-    finally{if(button){button.disabled=false;button.textContent=button.dataset.oldText||'WhatsApp';delete button.dataset.oldText;}}
+    finally{
+      if(button){
+        if(holdButton){button.disabled=true;button.textContent='Conferir envio';button.title='Resultado incerto. Atualize o histórico apenas depois de conferir a conversa do WhatsApp.';}
+        else{button.disabled=false;button.textContent=button.dataset.oldText||'WhatsApp';delete button.dataset.oldText;}
+      }
+    }
   };
   async function loadArchive(){
     try{const r=await fetch('/api/rds/ticket-archive?rds='+Date.now(),{cache:'no-store'});const d=await r.json();archiveRows=Array.isArray(d.rows)?d.rows:[];}
