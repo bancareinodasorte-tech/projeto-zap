@@ -20,9 +20,16 @@ app.get('/api/rds/commission-payouts',async(req,res)=>{
   if(from)q+='&period_month=gte.'+encodeURIComponent(from);
   if(to)q+='&period_month=lte.'+encodeURIComponent(to);
   if(sellerId)q+='&seller_id=eq.'+encodeURIComponent(sellerId);
-  const [payouts,sellers]=await Promise.all([list('rds10_commission_payouts',q),list('rds10_sellers','select=id,name,company_id&order=name.asc')]);
+  const [payouts,sellers,memberships,companies]=await Promise.all([
+   list('rds10_commission_payouts',q),
+   list('rds10_sellers','select=id,name,status&order=name.asc'),
+   list('rds10_seller_companies','select=seller_id,company_id,active&active=eq.true'),
+   list('rds10_companies','select=id,name,active&active=eq.true')
+  ]);
   const sm=new Map(sellers.map(s=>[s.id,s]));
-  return res.json({success:true,payouts:payouts.map(p=>({...p,seller_name:sm.get(p.seller_id)?.name||'Vendedor',company_id:p.company_id})) ,sellers});
+  const cm=new Map(companies.map(c=>[c.id,c.name]));
+  const payoutSellers=memberships.map(m=>{const s=sm.get(m.seller_id),companyName=cm.get(m.company_id);if(!s||s.status!=='ATIVO'||!companyName)return null;return {id:s.id,name:s.name+' — '+companyName,status:s.status,company_id:m.company_id};}).filter(Boolean);
+  return res.json({success:true,payouts:payouts.map(p=>({...p,seller_name:sm.get(p.seller_id)?.name||'Vendedor',company_id:p.company_id})),sellers:payoutSellers});
  }catch(e){console.error('[RDS COMMISSION PAYOUTS]',e?.message||e);return res.status(503).json({success:false,error:String(e?.message||'Livro de repasses indisponível. Aplicar a migração SQL do livro financeiro.')});}
 });
 app.post('/api/rds/commission-payouts',async(req,res)=>{
@@ -38,8 +45,12 @@ app.post('/api/rds/commission-payouts',async(req,res)=>{
   if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100)return res.status(400).json({success:false,error:'Informe um valor positivo com até duas casas decimais.'});
   if(!['PIX','DINHEIRO','TRANSFERENCIA','OUTRO'].includes(method))return res.status(400).json({success:false,error:'Forma de pagamento inválida.'});
   if(receipt&&!/^https:\/\//i.test(receipt))return res.status(400).json({success:false,error:'O comprovante deve ser um link HTTPS válido.'});
-  const seller=await one('rds10_sellers','select=id,company_id,name,status&id=eq.'+encodeURIComponent(sellerId));
-  if(!seller||seller.company_id!==companyId||seller.status!=='ATIVO')return res.status(400).json({success:false,error:'O vendedor não está ativo ou não pertence à empresa selecionada.'});
+  const [seller,membership,company]=await Promise.all([
+   one('rds10_sellers','select=id,name,status&id=eq.'+encodeURIComponent(sellerId)),
+   one('rds10_seller_companies','select=seller_id,company_id,active&seller_id=eq.'+encodeURIComponent(sellerId)+'&company_id=eq.'+encodeURIComponent(companyId)+'&active=eq.true'),
+   one('rds10_companies','select=id,active&id=eq.'+encodeURIComponent(companyId))
+  ]);
+  if(!seller||seller.status!=='ATIVO'||!membership||!company?.active)return res.status(400).json({success:false,error:'O vendedor não está ativo ou não pertence à empresa selecionada.'});
   const idempotencyKey=crypto.randomUUID();
   const result=await sb('/rest/v1/rpc/rds10_register_commission_payout',{method:'POST',body:JSON.stringify({p_company_id:companyId,p_seller_id:sellerId,p_period_month:month,p_amount:amount,p_payment_method:method,p_reference:reference||null,p_receipt_url:receipt||null,p_notes:notes||null,p_idempotency_key:idempotencyKey,p_created_by:auth.admin.id})});
   return res.status(201).json({success:true,result});
