@@ -98,6 +98,8 @@
     function compactSettings(){
       // Compactar apenas os cartões com títulos de configuração conhecidos, em qualquer rota que os renderize.
       const root=document.getElementById('app');if(!root)return;
+      const pageTitle=root.querySelector('.page-title h1');
+      if(!pageTitle||(pageTitle.textContent||'').trim()!=='Ajustes')return;
       const headings=[...root.querySelectorAll('h2')];
       for(const h of headings){
         const title=(h.textContent||'').trim();
