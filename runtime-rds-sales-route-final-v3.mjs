@@ -179,7 +179,7 @@ const block=`
       return true;
     }
     const total=Number((quantity*Number(fresh.unit_price||3)).toFixed(2));
-    const claimed=await patch('rds10_orders','id=eq.'+encodeURIComponent(fresh.id)+'&status=eq.COLETANDO_DADOS&guided_step=eq.CONFIRMAR',{
+    const claimed=await patch('rds10_orders','id=eq.'+encodeURIComponent(fresh.id)+'&status=eq.COLETANDO_DADOS&guided_step=eq.PROCESSANDO',{
       customer_name:name,
       customer_tax_id:cpf||null,
       contact_phone:identity.phone||fresh.phone||null,
