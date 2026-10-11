@@ -113,7 +113,7 @@ async function rdsMercadoPagoCreatePix(order){
   const cfg=await rdsMercadoPagoTenantConfig(order);
   if(!cfg.payerEmail||!/@/.test(cfg.payerEmail))throw new Error('E-mail operacional do Mercado Pago inválido.');
   const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration(order)}]},payer:{email:cfg.payerEmail,...(cfg.environment==='sandbox'?{first_name:'APRO'}:{})}};
-  const idempotencyKey=crypto.createHash('sha256').update('rds-pix:'+String(order.id)).digest('hex');
+  const idempotencyKey=crypto.createHash('sha256').update('rds-pix:'+String(order.id)+':'+String(order.pagbank_order_id||'initial')).digest('hex');
   const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':idempotencyKey},body:JSON.stringify(payload)},cfg.token);
   const qr=rdsMercadoPagoQR(data);if(!qr?.text)throw new Error('Mercado Pago não retornou o PIX copia e cola.');
   const createdAt=data?.created_date?new Date(data.created_date).getTime():Date.now();
