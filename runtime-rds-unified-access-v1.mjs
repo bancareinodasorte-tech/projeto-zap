@@ -12,7 +12,7 @@ const block=String.raw`
 async function rdsUnifiedContext(req){
   let seller=null,admin=null;
   const sellerToken=rdsOpBearer(req)||rdsOpCookie(req);
-  const adminToken=rdsAdminBearer(req)||rdsAdminCookie(req);
+  const adminToken=String(req.query?.audience||'')==='seller'?'':(rdsAdminBearer(req)||rdsAdminCookie(req));
   if(sellerToken){try{seller=await rdsOpSession(req);}catch{}}
   if(seller)return {authenticated:true,role:'VENDEDOR',seller:rdsOpPublic(seller.seller),admin:null};
   if(adminToken){try{admin=await rdsAdminSession(req);}catch{}}
@@ -25,11 +25,12 @@ app.get('/api/rds/unified/context',async(req,res)=>{
 });
 app.post('/api/rds/unified/login',async(req,res)=>{
   try{
+    const sellerAudience=String(req.body?.audience||req.query?.audience||'')==='seller';
     const identifier=cleanText(req.body?.identifier||''),password=String(req.body?.password||'');
     if(!identifier||!password)throw new Error('Informe telefone/e-mail e senha.');
     try{const t=rdsOpBearer(req)||rdsOpCookie(req);if(t)await patch('rds10_seller_sessions','token_hash=eq.'+encodeURIComponent(rdsOpTHash(t)),{revoked_at:nowISO()}).catch(()=>{});}catch{}
-    try{const t=rdsAdminBearer(req)||rdsAdminCookie(req);if(t)await patch('rds10_admin_sessions','token_hash=eq.'+encodeURIComponent(rdsAdminHash(t)),{revoked_at:nowISO()}).catch(()=>{});}catch{}
-    if(identifier.includes('@')){
+    if(!sellerAudience){try{const t=rdsAdminBearer(req)||rdsAdminCookie(req);if(t)await patch('rds10_admin_sessions','token_hash=eq.'+encodeURIComponent(rdsAdminHash(t)),{revoked_at:nowISO()}).catch(()=>{});}catch{}}
+    if(identifier.includes('@')&&!sellerAudience){
       const email=identifier.toLowerCase();
       let a=await rdsAdminFind(email);
       if(!a&&email===RDS_ADMIN_EMAIL)a=await rdsAdminEnsure();
@@ -46,9 +47,10 @@ app.post('/api/rds/unified/login',async(req,res)=>{
       rdsAdminSetCookie(res,t);
       return res.json({success:true,role:'ADMINISTRADOR',token:t,admin:rdsAdminPublic(a),session:{expiresAt:exp}});
     }
-    const phone=normalizeBR(identifier);
-    if(!validBRPhone(phone))throw new Error('Informe um telefone válido ou um e-mail administrativo.');
-    const s=await one('rds10_sellers','select=*&phone=eq.'+encodeURIComponent(phone));
+    const sellerEmail=sellerAudience&&identifier.includes('@');
+    const phone=sellerEmail?'':normalizeBR(identifier);
+    if(!sellerEmail&&!validBRPhone(phone))throw new Error('Informe o telefone ou e-mail cadastrado do vendedor.');
+    const s=sellerEmail?await one('rds10_sellers','select=*&email=eq.'+encodeURIComponent(identifier.toLowerCase())):await one('rds10_sellers','select=*&phone=eq.'+encodeURIComponent(phone));
     if(!s)throw new Error('Cadastro não encontrado.');
     if(s.status==='PENDENTE')throw new Error('Cadastro aguardando aprovação.');
     if(s.status==='BLOQUEADO')throw new Error('Conta bloqueada pelo administrador.');
