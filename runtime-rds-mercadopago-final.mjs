@@ -113,7 +113,8 @@ async function rdsMercadoPagoCreatePix(order){
   const cfg=await rdsMercadoPagoTenantConfig(order);
   if(!cfg.payerEmail||!/@/.test(cfg.payerEmail))throw new Error('E-mail operacional do Mercado Pago inválido.');
   const payload={type:'online',total_amount:total.toFixed(2),external_reference:String(order.code),processing_mode:'automatic',transactions:{payments:[{amount:total.toFixed(2),payment_method:{id:'pix',type:'bank_transfer'},expiration_time:rdsMercadoPagoExpiration(order)}]},payer:{email:cfg.payerEmail,...(cfg.environment==='sandbox'?{first_name:'APRO'}:{})}};
-  const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(payload)},cfg.token);
+  const idempotencyKey=crypto.createHash('sha256').update('rds-pix:'+String(order.id)).digest('hex');
+  const data=await rdsMercadoPagoRequest('/v1/orders',{method:'POST',headers:{'X-Idempotency-Key':idempotencyKey},body:JSON.stringify(payload)},cfg.token);
   const qr=rdsMercadoPagoQR(data);if(!qr?.text)throw new Error('Mercado Pago não retornou o PIX copia e cola.');
   const createdAt=data?.created_date?new Date(data.created_date).getTime():Date.now();
   const requestedOrderExpiry=Date.parse(order?.order_expires_at||'');
@@ -125,10 +126,10 @@ async function rdsMercadoPagoCreatePix(order){
 }
 async function rdsMercadoPagoApplyResult(order,data,source){
   if(!order)throw new Error('Pedido não encontrado.');
-  const ref=String(data?.external_reference||'');if(ref&&ref!==String(order.code))throw new Error('Referência Mercado Pago não corresponde ao pedido RDS.');
+  const ref=String(data?.external_reference||'').trim();if(!ref||ref!==String(order.code||'').trim())throw new Error('Referência Mercado Pago ausente ou não corresponde ao pedido RDS.');
   const status=rdsMercadoPagoStatus(data);const detail=String(data?.status_detail||rdsMercadoPagoPayment(data)?.status_detail||'').toLowerCase();const amount=rdsMercadoPagoAmount(data);const expected=Number(order.total_amount||0);const p=rdsMercadoPagoPayment(data);
   const patchData={pagbank_status:status,pagbank_charge_id:p?.id||order.pagbank_charge_id||null,payment_updated_at:nowISO(),updated_at:nowISO()};
-  if(amount>0&&Math.abs(amount-expected)>0.009){patchData.payment_last_error='Valor do pagamento não corresponde ao pedido.';await patch('rds10_orders','id=eq.'+order.id,patchData);return false;}
+  if(!Number.isFinite(amount)||amount<=0||!Number.isFinite(expected)||expected<=0||Math.abs(amount-expected)>0.009){patchData.payment_last_error='Valor do pagamento ausente ou não corresponde ao pedido.';await patch('rds10_orders','id=eq.'+order.id,patchData);await addAlert('MERCADO_PAGO_VALOR_INVALIDO','Pagamento Mercado Pago sem valor válido ou com valor divergente',{order:order.code,order_id:order.id,received_amount:amount,expected_amount:expected,source}).catch(()=>{});return false;}
   if(status==='PROCESSED'&&detail==='accredited'){
     if(String(order.status||'').toUpperCase()==='CONCLUIDO'&&order.official_sale_id)return true;
     const alreadyPaid=String(order.status||'').toUpperCase()==='PAGO_AGUARDANDO_BILHETES'&&Boolean(order.payment_confirmed_at);
