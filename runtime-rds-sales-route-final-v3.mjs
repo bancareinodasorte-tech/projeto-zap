@@ -68,7 +68,7 @@ const block=`
       const id=String(d?.drawId??d?.external_draw_id??d?.draw_id??d?.id??d?.sorteioId??'').trim();
       if(!id)continue;
       const status=String(d?.status||'').toUpperCase();
-      if(d?.isDrawClosed===true||d?.isSalesClosed===true||d?.salesOpen===false||d?.active===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
+      const drawStatus=String(d?.drawStatus||d?.draw_status||'').toUpperCase();if(d?.isDrawClosed===true||d?.isSalesClosed===true||d?.salesOpen===false||d?.active===false||d?.isActive===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status)||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(drawStatus))continue;
       const prior=byId.get(id)||{};
       byId.set(id,{...prior,...d,drawId:id,drawTitle:String(d?.drawTitle||d?.title||d?.name||d?.description||('Sorteio '+id))});
     }
@@ -153,6 +153,30 @@ const block=`
     if(!quantity||quantity<1||name.length<4){
       await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});
       return replyInbound(identity,'⚠️ Os dados do pedido estão incompletos. Escolha *2 — EDITAR* para corrigir.');
+    }
+    if(!String(fresh.official_draw_id||'').trim()){
+      const draws=await rdsAvailableOfficialDraws().catch(()=>[]);
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',updated_at:nowISO()});
+      return rdsApplyDrawSelection(identity,fresh,draws);
+    }
+    let availableDraws=[];
+    try{availableDraws=await rdsAvailableOfficialDraws();}catch(e){
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});
+      await replyInbound(identity,'⚠️ Não consegui validar o sorteio e o estoque oficiais agora. Nenhuma cobrança foi gerada. Tente confirmar novamente em instantes.');
+      return true;
+    }
+    const selectedDraw=availableDraws.find(d=>String(d.drawId)===String(fresh.official_draw_id));
+    if(!selectedDraw){
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',updated_at:nowISO()});
+      await replyInbound(identity,'⚠️ O sorteio escolhido não está mais disponível para venda. Escolha um sorteio aberto para continuar.');
+      return rdsApplyDrawSelection(identity,fresh,availableDraws);
+    }
+    const rawStock=selectedDraw.availableBooklets??selectedDraw.bookletsAvailable??selectedDraw.availableTickets??selectedDraw.remainingBooklets??selectedDraw.remainingTickets??selectedDraw.available??selectedDraw.count;
+    const available=rawStock===null||rawStock===undefined||rawStock===''?null:Number(rawStock);
+    if(Number.isFinite(available)&&available<quantity){
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'QUANTIDADE',updated_at:nowISO()});
+      await replyInbound(identity,'⚠️ O estoque oficial disponível é de *'+available+'* bloco(s), mas você selecionou *'+quantity+'*. Nenhuma cobrança foi gerada.'+NL+NL+'🎟️ Digite uma quantidade menor ou igual a *'+available+'*.');
+      return true;
     }
     const total=Number((quantity*Number(fresh.unit_price||3)).toFixed(2));
     await patch('rds10_orders','id=eq.'+fresh.id,{
