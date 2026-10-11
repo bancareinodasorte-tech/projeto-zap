@@ -96,7 +96,7 @@
     \`;
     if(!document.getElementById('rdsOperationalCompactStyles')){const style=document.createElement('style');style.id='rdsOperationalCompactStyles';style.textContent=css;document.head.appendChild(style);}
     function compactSettings(){
-      if((window.page||localStorage.getItem('rds_current_page')||'')!=='settings')return;
+      // Compactar apenas os cartões com títulos de configuração conhecidos, em qualquer rota que os renderize.
       const root=document.getElementById('app');if(!root)return;
       const headings=[...root.querySelectorAll('h2')];
       for(const h of headings){
