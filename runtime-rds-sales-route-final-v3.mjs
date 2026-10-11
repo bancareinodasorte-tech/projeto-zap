@@ -37,9 +37,8 @@ const block=`
     '✏️ *EDITAR DADOS DO PEDIDO*','',
     '1️⃣ Quantidade',
     '2️⃣ Nome',
-    '3️⃣ CPF',
-    '4️⃣ Todos',
-    '5️⃣ Voltar','',
+    '3️⃣ Todos',
+    '4️⃣ Voltar','',
     'Digite o número do dado que deseja alterar.'
   ].join(NL);
 
@@ -72,7 +71,7 @@ const block=`
     await logMessage({phone,direction:'IN',type:'text',body:'COMPRAR',status:'RECEBIDA',created_at:nowISO()});
     await logEvent('PEDIDO_INICIADO',{phone,order:order.code,stage:'COMPRA_GUIADA_V3'});
     await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
-    await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'⚠️ *ATENÇÃO* ⚠️'+NL+NL+'✅ *Nome* deve ter mínimo 4 caracteres.'+NL+NL+'✅ *CPF* deve ser válido com 11 dígitos.');
+    await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'⚠️ *ATENÇÃO* ⚠️'+NL+NL+'✅ *Nome* deve ter mínimo 4 caracteres.');
     await replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
     return true;
   }
@@ -83,14 +82,14 @@ const block=`
     const quantity=Number(fresh.quantity||0);
     const name=cleanName(fresh.customer_name);
     const cpf=cleanCpf(fresh.customer_tax_id);
-    if(!quantity||quantity<1||name.length<4||!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){
+    if(!quantity||quantity<1||name.length<4){
       await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});
       return replyInbound(identity,'⚠️ Os dados do pedido estão incompletos. Escolha *2 — EDITAR* para corrigir.');
     }
     const total=Number((quantity*Number(fresh.unit_price||3)).toFixed(2));
     await patch('rds10_orders','id=eq.'+fresh.id,{
       customer_name:name,
-      customer_tax_id:cpf,
+      customer_tax_id:cpf||null,
       contact_phone:identity.phone||fresh.phone||null,
       quantity,
       total_amount:total,
@@ -123,7 +122,7 @@ const block=`
   async function rdsFinalHandleInbound(identity,order,text){
     const t=cleanText(text);
     let step=cleanText(order.guided_step||'');
-    if(!step)step=order.customer_tax_id?'CONFIRMAR':order.customer_name?'CPF':order.quantity?'NOME':'QUANTIDADE';
+    if(!step)step=order.customer_name?'CONFIRMAR':order.quantity?'NOME':'QUANTIDADE';
 
     if(/^(?:cancelar|cancelar pedido|desistir|não quero|nao quero|sair|4)$/i.test(t)){
       await patch('rds10_orders','id=eq.'+order.id,{status:'CANCELADO',cancel_reason:'CANCELAMENTO_CLIENTE',cancelled_at:nowISO(),guided_step:null,updated_at:nowISO()});
@@ -145,17 +144,20 @@ const block=`
     if(step==='NOME'){
       const name=cleanName(t);
       if(name.length<4){await replyInbound(identity,'❌ *NOME INVÁLIDO*'+NL+NL+'Digite seu nome completo para continuar.');return true;}
-      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'CPF',updated_at:nowISO()});
-      await replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
+      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
+      await replyInbound(identity,confirmText(fresh||{...order,customer_name:name,guided_step:'CONFIRMAR'}));
       return true;
     }
 
     if(step==='CPF'){
       const cpf=cleanCpf(t);
-      if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){await replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');return true;}
-      await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      if(cpf&&(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))){await replyInbound(identity,'❌ CPF inválido. Para continuar sem CPF, digite *PULAR*.');return true;}
+      const patchData={guided_step:'CONFIRMAR',updated_at:nowISO()};
+      if(cpf)patchData.customer_tax_id=cpf;
+      await patch('rds10_orders','id=eq.'+order.id,patchData);
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
-      await replyInbound(identity,confirmText(fresh||{...order,customer_tax_id:cpf,guided_step:'CONFIRMAR'}));
+      await replyInbound(identity,confirmText(fresh||{...order,customer_tax_id:cpf||order.customer_tax_id,guided_step:'CONFIRMAR'}));
       return true;
     }
 
@@ -176,10 +178,9 @@ const block=`
     if(step==='EDITAR'){
       if(t==='1'){await patch('rds10_orders','id=eq.'+order.id,{guided_step:'EDIT_QUANTIDADE'});return replyInbound(identity,'🎟️ *DIGITE A NOVA QUANTIDADE DE BILHETES:* 👇');}
       if(t==='2'){await patch('rds10_orders','id=eq.'+order.id,{guided_step:'EDIT_NOME'});return replyInbound(identity,'👤 *DIGITE O NOVO NOME:* 👇');}
-      if(t==='3'){await patch('rds10_orders','id=eq.'+order.id,{guided_step:'EDIT_CPF'});return replyInbound(identity,'🧾 *DIGITE O NOVO CPF:* 👇');}
-      if(t==='4'){await patch('rds10_orders','id=eq.'+order.id,{quantity:null,total_amount:null,customer_name:null,customer_tax_id:null,guided_step:'TODOS_QUANTIDADE',updated_at:nowISO()});return replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');}
-      if(t==='5'){await patch('rds10_orders','id=eq.'+order.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));}
-      return replyInbound(identity,'❌ *OPÇÃO INVÁLIDA*'+NL+NL+'Escolha uma opção de *1 a 5*.');
+      if(t==='3'){await patch('rds10_orders','id=eq.'+order.id,{quantity:null,total_amount:null,customer_name:null,guided_step:'TODOS_QUANTIDADE',updated_at:nowISO()});return replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');}
+      if(t==='4'){await patch('rds10_orders','id=eq.'+order.id,{guided_step:'CONFIRMAR',updated_at:nowISO()});const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));}
+      return replyInbound(identity,'❌ *OPÇÃO INVÁLIDA*'+NL+NL+'Escolha uma opção de *1 a 4*.');
     }
 
     if(step==='EDIT_QUANTIDADE'){
@@ -206,12 +207,14 @@ const block=`
     }
     if(step==='TODOS_NOME'){
       const name=cleanName(t);if(name.length<4)return replyInbound(identity,'❌ *NOME INVÁLIDO*'+NL+NL+'Digite seu nome completo para continuar.');
-      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'TODOS_CPF',updated_at:nowISO()});
-      return replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
+      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||{...order,customer_name:name}));
     }
     if(step==='TODOS_CPF'){
-      const cpf=cleanCpf(t);if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
-      await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const cpf=cleanCpf(t);
+      if(cpf&&(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))))return replyInbound(identity,'❌ CPF inválido. Para continuar sem CPF, digite *PULAR*.');
+      const patchData={guided_step:'CONFIRMAR',updated_at:nowISO()};if(cpf)patchData.customer_tax_id=cpf;
+      await patch('rds10_orders','id=eq.'+order.id,patchData);
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
     return false;
