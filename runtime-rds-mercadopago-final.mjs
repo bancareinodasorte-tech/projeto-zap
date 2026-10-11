@@ -90,7 +90,7 @@ async function rdsMercadoPagoRequest(endpoint,opt={},accessToken=MERCADOPAGO_ACC
 function rdsMercadoPagoPayment(data){return data?.transactions?.payments?.[0]||null;}
 function rdsMercadoPagoQR(data){const p=rdsMercadoPagoPayment(data);const pm=p?.payment_method||{};const text=pm.qr_code||'';return text?{id:p?.id||null,text,png:null,base64:pm.qr_code_base64||null,url:pm.ticket_url||null,amount:Number(p?.amount||data?.total_amount||0)}:null;}
 function rdsMercadoPagoStatus(data){return String(rdsMercadoPagoPayment(data)?.status||data?.status||'WAITING').toUpperCase();}
-function rdsMercadoPagoAmount(data){return Number(rdsMercadoPagoPayment(data)?.amount||data?.total_amount||0);}
+function rdsMercadoPagoAmount(data){const amount=rdsMercadoPagoPayment(data)?.amount;return amount===null||amount===undefined||amount===''?NaN:Number(amount);}
 function rdsMercadoPagoPaid(data){return rdsMercadoPagoStatus(data)==='PROCESSED'&&String(data?.status_detail||rdsMercadoPagoPayment(data)?.status_detail||'').toLowerCase()==='accredited';}
 function rdsMercadoPagoExpiration(order){
   const fallback=Number(MERCADOPAGO_PIX_EXPIRATION_HOURS||24);
