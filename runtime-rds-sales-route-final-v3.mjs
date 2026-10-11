@@ -70,8 +70,11 @@ const block=`
       if(r.status!=='fulfilled')continue;
       const v=r.value;
       if(Array.isArray(v))rows.push(...v);
-      else if(Array.isArray(v?.data))rows.push(...v.data);
       else if(Array.isArray(v?.draws))rows.push(...v.draws);
+      else if(Array.isArray(v?.items))rows.push(...v.items);
+      else if(Array.isArray(v?.data))rows.push(...v.data);
+      else if(Array.isArray(v?.data?.draws))rows.push(...v.data.draws);
+      else if(Array.isArray(v?.result?.draws))rows.push(...v.result.draws);
       else if(v&&typeof v==='object'&&(v.drawId||v.id))rows.push(v);
     }
     const unique=new Map();
