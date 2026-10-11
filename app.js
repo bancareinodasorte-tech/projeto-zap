@@ -42,6 +42,7 @@ async function renderAccountNative(){
  else if(page==='execution'){await automation();await renderBotSettingsPanel();}
  else if(page==='returns')await returnsPage();
  else if(page==='orders')await orders();
+ else if(page==='results'){if(typeof window.rdsResultsPage!=='function')throw new Error('A tela Resultados não foi carregada. Atualize o painel e tente novamente.');await window.rdsResultsPage();}
  else if(page==='commissions'){if(typeof window.rdsCommissionPage!=='function')throw new Error('Não foi possível abrir Comissões. Tente novamente.');await window.rdsCommissionPage();}
  else if(page==='payments'){
    if(typeof window.rdsPaymentsRefined!=='function'){
