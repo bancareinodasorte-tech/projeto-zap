@@ -46,7 +46,7 @@ async function rdsGuidedDbStart(identity,campaignCode=null){
   await cancelFutureDeliveries(phone,'INTERESSE');
   await logEvent('INTERESSE',{phone,order:order.code,campaignCode:campaignCode||null,stage:'COMPRA_GUIADA_INICIADA'});
   await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
-  await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*\\n\\n⚠️ *ATENÇÃO* ⚠️\\n\\n✅ *Nome* deve ter mínimo 4 caracteres.\\n\\n✅ *CPF* deve ser válido com 11 dígitos.');
+  await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*\\n\\n⚠️ *ATENÇÃO* ⚠️\\n\\n✅ *Nome* deve ter mínimo 4 caracteres.');
   return replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
 }
 async function rdsGuidedDbHandle(identity,inbound,m){
@@ -65,7 +65,7 @@ async function rdsGuidedDbHandle(identity,inbound,m){
   if(order.status!=='COLETANDO_DADOS')return false;
 
   let step=cleanText(order.guided_step||'');
-  if(!step)step=order.customer_tax_id?'CONFIRMAR':order.customer_name?'CPF':order.quantity?'NOME':'QUANTIDADE';
+  if(!step)step=order.customer_name?'CONFIRMAR':order.quantity?'NOME':'QUANTIDADE';
 
   if(isBuy){
     return true;
@@ -97,10 +97,10 @@ async function rdsGuidedDbHandle(identity,inbound,m){
 
   if(step==='CPF'){
     const cpf=rdsGuidedDbCpf(text);
-    if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))){await replyInbound(identity,'❌ *CPF INVÁLIDO*\\n\\nDigite novamente seu CPF com 11 dígitos.');return true;}
-    order.customer_tax_id=cpf;
-    await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
-    order.guided_step='CONFIRMAR';
+    if(cpf&&(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))){await replyInbound(identity,'CPF inválido. Para continuar sem CPF, digite *PULAR*.');return true;}
+    const patchData={guided_step:'CONFIRMAR',updated_at:nowISO()};if(cpf)patchData.customer_tax_id=cpf;
+    await patch('rds10_orders','id=eq.'+order.id,patchData);
+    order.customer_tax_id=cpf||order.customer_tax_id;order.guided_step='CONFIRMAR';
     return replyInbound(identity,rdsGuidedDbConfirm(order));
   }
 
@@ -158,13 +158,14 @@ async function rdsGuidedDbHandle(identity,inbound,m){
   if(step==='TODOS_NOME'){
     const name=rdsGuidedDbName(text);
     if(name.length<4)return replyInbound(identity,'❌ *NOME INVÁLIDO*\\n\\nDigite seu nome completo para continuar.');
-    await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'TODOS_CPF',updated_at:nowISO()});
-    return replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
+    await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'CONFIRMAR',updated_at:nowISO()});
+    const fresh=await one('rds10_orders','select=*&id=eq.'+order.id);return replyInbound(identity,rdsGuidedDbConfirm(fresh||{...order,customer_name:name}));
   }
   if(step==='TODOS_CPF'){
     const cpf=rdsGuidedDbCpf(text);
-    if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*\\n\\nDigite novamente seu CPF com 11 dígitos.');
-    await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+    if(cpf&&(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))))return replyInbound(identity,'CPF inválido. Para continuar sem CPF, digite *PULAR*.');
+    const patchData={guided_step:'CONFIRMAR',updated_at:nowISO()};if(cpf)patchData.customer_tax_id=cpf;
+    await patch('rds10_orders','id=eq.'+order.id,patchData);
     const fresh=await one('rds10_orders','select=*&id=eq.'+order.id);return replyInbound(identity,rdsGuidedDbConfirm(fresh||order));
   }
   return false;
