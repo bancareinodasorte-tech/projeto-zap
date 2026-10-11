@@ -60,25 +60,93 @@ const block=`
     }catch(e){console.warn('[RDS] CRM do pedido:',e?.message||e);}
   }
 
+  async function selectableOfficialDraws(){
+    const results=await Promise.allSettled([
+      rdsFinalRequest('/draws/seller/available'),
+      rdsFinalRequest('/draws/seller/all')
+    ]);
+    const rows=[];
+    for(const r of results){
+      if(r.status!=='fulfilled')continue;
+      const v=r.value;
+      if(Array.isArray(v))rows.push(...v);
+      else if(Array.isArray(v?.data))rows.push(...v.data);
+      else if(Array.isArray(v?.draws))rows.push(...v.draws);
+      else if(v&&typeof v==='object'&&(v.drawId||v.id))rows.push(v);
+    }
+    const unique=new Map();
+    for(const d of rows){
+      const id=String(d?.drawId??d?.draw_id??d?.id??d?.draw?.drawId??'').trim();
+      if(!id)continue;
+      const prior=unique.get(id)||{};
+      unique.set(id,{...prior,...d,drawId:id});
+    }
+    const now=Date.now();
+    return [...unique.values()].filter(d=>{
+      const status=String(d.status??d.drawStatus??'').toUpperCase();
+      if(d.active===false||d.isDrawClosed===true||d.isSalesClosed===true||d.salesOpen===false)return false;
+      if(/CLOSED|ENCERRADO|FECHADO|INATIVO|CANCELADO/.test(status))return false;
+      const rawDate=d.drawDate??d.drawAt??d.draw_at??d.date??d.scheduledAt??null;
+      if(rawDate){const ms=new Date(rawDate).getTime();if(Number.isFinite(ms)&&ms<now)return false;}
+      return true;
+    }).map(d=>{
+      const id=String(d.drawId);
+      const title=cleanText(d.drawTitle??d.title??d.name??d.description??('Sorteio '+id));
+      const rawPrice=d.pricePerTicket??d.price_per_ticket??d.ticketPrice??d.price??null;
+      const price=Number(rawPrice);
+      const rawDate=d.drawDate??d.drawAt??d.draw_at??d.date??d.scheduledAt??null;
+      return {id,title,price:Number.isFinite(price)&&price>0?price:null,drawAt:rawDate?String(rawDate):null};
+    }).sort((a,b)=>{
+      if(a.drawAt&&b.drawAt)return new Date(a.drawAt).getTime()-new Date(b.drawAt).getTime();
+      if(a.drawAt)return -1;if(b.drawAt)return 1;
+      return a.title.localeCompare(b.title,'pt-BR');
+    });
+  }
+  const drawMenu=options=>[
+    '🎯 *ESCOLHA O SORTEIO*','',
+    ...options.map((d,i)=>String(i+1)+'️⃣ *'+d.title+'*'+(d.drawAt?' — '+new Date(d.drawAt).toLocaleString('pt-BR',{timeZone:'America/Fortaleza',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')+(d.price?' — R$ '+money(d.price):'')),
+    '',
+    'Digite o número do sorteio desejado.'
+  ].join(NL);
   async function startFinalPurchase(identity){
     const phone=normalizeBR(identity?.phone||'');
     if(!phone)return false;
+    const draws=await selectableOfficialDraws();
+    if(!draws.length){
+      await replyInbound(identity,'⚠️ *SORTEIOS INDISPONÍVEIS NO MOMENTO*'+NL+NL+'Não foi criado pedido e nenhum pagamento deve ser feito. Tente novamente quando houver sorteio oficial aberto.');
+      await logEvent('COMPRA_BLOQUEADA_SEM_SORTEIO_OFICIAL',{phone});
+      return true;
+    }
     let order=await activeOrder(phone);
-    if(order)return rdsFinalHandleInbound(identity,order,'');
-    order=await createOrder(phone,null);
+    if(!order)order=await createOrder(phone,null);
     if(!order)throw new Error('Não foi possível criar o pedido.');
-    await patch('rds10_orders','id=eq.'+order.id,{guided_step:'QUANTIDADE',status:'COLETANDO_DADOS',updated_at:nowISO()});
+    if(draws.length===1){
+      const d=draws[0];
+      const patchData={guided_step:'QUANTIDADE',status:'COLETANDO_DADOS',official_draw_id:d.id,official_draw_title:d.title,official_ticket_payload:null,updated_at:nowISO()};
+      if(d.price)patchData.unit_price=d.price;
+      await patch('rds10_orders','id=eq.'+order.id,patchData);
+      order={...order,...patchData};
+    }else{
+      const options=draws.slice(0,9);
+      const payload={purchaseDrawOptions:options};
+      await patch('rds10_orders','id=eq.'+order.id,{guided_step:'SORTEIO',status:'COLETANDO_DADOS',official_ticket_payload:payload,updated_at:nowISO()});
+      order={...order,guided_step:'SORTEIO',official_ticket_payload:payload};
+    }
     await logMessage({phone,direction:'IN',type:'text',body:'COMPRAR',status:'RECEBIDA',created_at:nowISO()});
-    await logEvent('PEDIDO_INICIADO',{phone,order:order.code,stage:'COMPRA_GUIADA_V3'});
+    await logEvent('PEDIDO_INICIADO',{phone,order:order.code,stage:'COMPRA_GUIADA_V4',drawOptions:draws.length});
     await replyInbound(identity,'🍀 Olá! Vamos iniciar seu pedido.');
-    await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'⚠️ *ATENÇÃO* ⚠️'+NL+NL+'✅ *Nome* deve ter mínimo 4 caracteres.');
-    await replyInbound(identity,'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
+    if(draws.length>1)return replyInbound(identity,drawMenu(draws.slice(0,9)));
+    await replyInbound(identity,'🛒 *PREENCHA O PEDIDO*'+NL+NL+'Sorteio: *'+draws[0].title+'*'+NL+NL+'Informe apenas a quantidade de bilhetes.'+NL+'Exemplo: *5*'+NL+NL+'Digite *CANCELAR* para sair.');
     return true;
   }
 
   async function confirmFinalPurchase(identity,order){
     const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
     if(!fresh)throw new Error('Pedido não encontrado.');
+    if(!String(fresh.official_draw_id||'').trim()){
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',status:'COLETANDO_DADOS',updated_at:nowISO()});
+      throw new Error('Selecione um sorteio oficial antes de gerar o PIX.');
+    }
     const quantity=Number(fresh.quantity||0);
     const name=cleanName(fresh.customer_name);
     const cpf=cleanCpf(fresh.customer_tax_id);
@@ -130,6 +198,33 @@ const block=`
       await logEvent('PEDIDO_CANCELADO',{phone:order.phone,order:order.code,reason:'CANCELAMENTO_CLIENTE'});
       await replyInbound(identity,'✅ *SEU PEDIDO FOI CANCELADO*');
       return true;
+    }
+
+    if(step==='SORTEIO'){
+      let options=Array.isArray(order.official_ticket_payload?.purchaseDrawOptions)?order.official_ticket_payload.purchaseDrawOptions:[];
+      const choice=Number(t);
+      if(!Number.isInteger(choice)||choice<1||choice>options.length){
+        if(options.length)return replyInbound(identity,drawMenu(options));
+        const refreshed=await selectableOfficialDraws();
+        if(!refreshed.length)return replyInbound(identity,'⚠️ Não há sorteio oficial aberto neste momento. Nenhum pagamento deve ser feito.');
+        options=refreshed.slice(0,9);
+        await patch('rds10_orders','id=eq.'+order.id,{official_ticket_payload:{purchaseDrawOptions:options},updated_at:nowISO()});
+        return replyInbound(identity,drawMenu(options));
+      }
+      const chosen=options[choice-1];
+      const available=await selectableOfficialDraws();
+      const current=available.find(d=>String(d.id)===String(chosen.id));
+      if(!current){
+        const refreshed=available.slice(0,9);
+        if(!refreshed.length)return replyInbound(identity,'⚠️ O sorteio escolhido foi encerrado. Não pague nada; tente novamente mais tarde.');
+        await patch('rds10_orders','id=eq.'+order.id,{official_ticket_payload:{purchaseDrawOptions:refreshed},guided_step:'SORTEIO',updated_at:nowISO()});
+        return replyInbound(identity,'⚠️ Esse sorteio não está mais disponível. Escolha um dos sorteios abertos:'+NL+NL+drawMenu(refreshed));
+      }
+      const data={official_draw_id:current.id,official_draw_title:current.title,official_ticket_payload:null,guided_step:'QUANTIDADE',status:'COLETANDO_DADOS',updated_at:nowISO()};
+      if(current.price)data.unit_price=current.price;
+      await patch('rds10_orders','id=eq.'+order.id,data);
+      await logEvent('SORTEIO_SELECIONADO_NO_WHATSAPP',{phone:identity.phone,order:order.code,drawId:current.id,drawTitle:current.title});
+      return replyInbound(identity,'✅ Sorteio escolhido: *'+current.title+'*'+NL+NL+'🎟️ *DIGITE QUANTOS BILHETES VOCÊ QUER:* 👇');
     }
 
     if(step==='QUANTIDADE'){
