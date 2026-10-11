@@ -1,7 +1,8 @@
 (()=>{
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const token=()=>localStorage.getItem('rds_operator_token')||'';
-const adminToken=()=>localStorage.getItem('rds_admin_token')||'';
+const sellerAudience=()=>new URLSearchParams(location.search).get('audience')==='seller';
+const adminToken=()=>sellerAudience()?'':(localStorage.getItem('rds_admin_token')||'');
 const json=async(u,o={})=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);try{const r=await fetch(u,{cache:'no-store',...o,signal:controller.signal});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.message||'Falha na operação.');return d;}catch(e){if(e?.name==='AbortError')throw new Error('O servidor demorou para responder.');throw e;}finally{clearTimeout(timer);}};
 const headers=()=>{const t=token();return t?{Authorization:'Bearer '+t}:{}};
 const adminHeaders=()=>{const t=adminToken();return t?{Authorization:'Bearer '+t}:{}};
@@ -10,19 +11,19 @@ function deviceId(){let v=localStorage.getItem(deviceKey);if(!v){v='web_'+crypto
 function toast(t){if(typeof window.toast==='function')window.toast(t);else alert(t);}
 function openLogin(message=''){
  const app=document.getElementById('app');if(!app)return;
- app.innerHTML='<div class="page-title"><div><span class="eyebrow">Acesso</span><h1>Entrar no CANAL DE VENDAS RDS</h1><p class="mut">Use telefone e senha de vendedor. Administradores usam o e-mail administrativo.</p></div></div><div class="card" style="max-width:520px;margin:auto">'+(message?'<div class="badge bad" style="margin-bottom:14px">'+esc(message)+'</div>':'')+'<label>Telefone ou e-mail</label><input id="rdsUnifiedIdentifier" autocomplete="username" placeholder="DDD + número ou e-mail"><label>Senha</label><input id="rdsUnifiedPassword" type="password" autocomplete="current-password" placeholder="Sua senha"><div class="row" style="margin-top:16px"><button class="btn primary" id="rdsUnifiedLogin">Entrar</button></div><p class="mut">A partir de agora, este é o acesso único do RDS.</p></div>';
+ app.innerHTML='<div class="page-title"><div><span class="eyebrow">Acesso</span><h1>Entrar no CANAL DE VENDAS RDS</h1><p class="mut">Entre com o e-mail ou telefone e a senha da sua conta de vendedor.</p></div></div><div class="card" style="max-width:520px;margin:auto">'+(message?'<div class="badge bad" style="margin-bottom:14px">'+esc(message)+'</div>':'')+'<label>Telefone ou e-mail</label><input id="rdsUnifiedIdentifier" autocomplete="username" placeholder="DDD + número ou e-mail"><label>Senha</label><input id="rdsUnifiedPassword" type="password" autocomplete="current-password" placeholder="Sua senha"><div class="row" style="margin-top:16px"><button class="btn primary" id="rdsUnifiedLogin">Entrar</button></div><p class="mut">A partir de agora, este é o acesso único do RDS.</p></div>';
  document.getElementById('rdsUnifiedLogin').onclick=async()=>{
   const b=document.getElementById('rdsUnifiedLogin');b.disabled=true;b.textContent='Entrando…';
   try{
-   const d=await json('/api/rds/unified/login',{method:'POST',headers:{'Content-Type':'application/json','x-rds-device-id':deviceId()},body:JSON.stringify({identifier:document.getElementById('rdsUnifiedIdentifier').value,password:document.getElementById('rdsUnifiedPassword').value,platform:'app',deviceId:deviceId()})});
-   if(d.role==='VENDEDOR'){localStorage.setItem('rds_operator_token',d.token);localStorage.removeItem('rds_admin_token');}
-   else{localStorage.setItem('rds_admin_token',d.token);localStorage.removeItem('rds_operator_token');}
+   const d=await json('/api/rds/unified/login',{method:'POST',headers:{'Content-Type':'application/json','x-rds-device-id':deviceId()},body:JSON.stringify({identifier:document.getElementById('rdsUnifiedIdentifier').value,password:document.getElementById('rdsUnifiedPassword').value,audience:'seller',platform:'app',deviceId:deviceId()})});
+   if(d.role!=='VENDEDOR')throw new Error('O aplicativo comercial aceita somente contas de vendedor.');
+   localStorage.setItem('rds_operator_token',d.token);
    window.rdsUnifiedRole=d.role;
    if(typeof window.go==='function')window.go('account');else location.href='/?rds=account';
   }catch(e){b.disabled=false;b.textContent='Entrar';openLogin(e.message);}
  };
 }
-async function context(){try{return await json('/api/rds/unified/context',{headers:{...headers(),...adminHeaders()}});}catch{return {authenticated:false};}}
+async function context(){try{return await json('/api/rds/unified/context'+(sellerAudience()?'?audience=seller':''),{headers:{...headers(),...adminHeaders()}});}catch{return {authenticated:false};}}
 async function sellerData(){
  const fast=(u,o={})=>Promise.race([
   json(u,o),
@@ -46,7 +47,7 @@ async function account(){
 
  // A Conta não pode depender de uma chamada ao servidor para começar a renderizar.
  // O token local já identifica o tipo de sessão; os dados complementares entram depois.
- const hasSeller=!!token(), hasAdmin=!!adminToken();
+ const hasSeller=!!token(), hasAdmin=!sellerAudience()&&!!adminToken();
  // A sessão unificada também pode estar no cookie HttpOnly. Não bloqueie a Conta
  // apenas porque o bearer do localStorage não está presente.
  const initialContext=await Promise.race([
