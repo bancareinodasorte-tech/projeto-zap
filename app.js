@@ -36,6 +36,7 @@ async function renderAccountNative(){
  else if(page==='whatsapp'){
    if(typeof window.__rdsWaPage==='function') await window.__rdsWaPage();
    else if(typeof window.rdsWaReload==='function') await window.rdsWaReload();
+   else throw new Error('O módulo do WhatsApp não foi carregado. Use Atualizar para recarregar os arquivos mais recentes; a conexão do WhatsApp é independente desta tela.');
  }
  else if(page==='campaigns')await campaigns();
  else if(page==='execution'){await automation();await renderBotSettingsPanel();}
