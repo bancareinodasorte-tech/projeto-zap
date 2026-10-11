@@ -63,8 +63,10 @@ else{
   const phone=normalizeBR(order.phone||order.contact_phone||'');if(!phone)throw new Error('Telefone do cliente não informado.');
   const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp do cliente não retornou um JID válido.');
   // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
-  const result=await sendToJid(target.jid,{document:info.pdfUrl?{url:info.pdfUrl}:{},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});
-  if(!result?.key?.id)throw new Error('WhatsApp não confirmou o envio do PDF.');
+  let result;
+  try{result=await sendToJid(target.jid,{document:info.pdfUrl?{url:info.pdfUrl}:{},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});}
+  catch(e){if(e&&typeof e==='object')e.code=e.code||'WHATSAPP_SEND_AMBIGUOUS';throw e;}
+  if(!result?.key?.id){const error=new Error('WhatsApp não confirmou o resultado do envio; conferir manualmente antes de reenviar.');error.code='WHATSAPP_SEND_AMBIGUOUS';throw error;}
   const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()});
   if(!archived?.length){const error=new Error('O WhatsApp aceitou o PDF, mas o arquivo não pôde ser confirmado no histórico. Não reenviar automaticamente.');error.code='ARCHIVE_FAILED_AFTER_SEND';throw error;}
   await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||order.official_sale_id||''),status:'ENVIADA',waId:result.key.id,raw:{automatic:true,order:order.code,saleId:info.saleId||order.official_sale_id||null}});
@@ -92,7 +94,7 @@ else{
     console.log('[RDS AUTO] PDF oficial enviado e pedido concluído '+String(order.code||order.id));
    }
   }catch(e){
-   const err=String(e?.message||e),ambiguous=e?.code==='ARCHIVE_FAILED_AFTER_SEND';
+   const err=String(e?.message||e),ambiguous=['ARCHIVE_FAILED_AFTER_SEND','WHATSAPP_SEND_AMBIGUOUS'].includes(e?.code);
    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_sale_id=eq.'+encodeURIComponent(info.saleId),{status:'PAGO_AGUARDANDO_BILHETES',official_issue_status:ambiguous?'ERRO_RECONCILIAR':'EMITIDO_AGUARDANDO_ENVIO',official_issue_error:err,updated_at:nowISO()});
    if(ambiguous)await addAlert('PDF_ARQUIVO_FALHA_APOS_ENVIO','PDF enviado mas arquivo não confirmado — '+order.code,{order:order.code,saleId:info.saleId,error:err,warning:'Não reenviar automaticamente; conferir histórico.'});
    else if(issue!=='EMITIDO_AGUARDANDO_ENVIO')await addAlert('BILHETES_EMITIDOS_ENVIO_PENDENTE','Bilhetes emitidos mas não enviados — '+order.code,{order:order.code,saleId:info.saleId,error:err});
