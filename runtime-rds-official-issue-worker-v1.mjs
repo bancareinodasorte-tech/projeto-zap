@@ -63,7 +63,7 @@ else{
   const phone=normalizeBR(order.phone||order.contact_phone||'');if(!phone)throw new Error('Telefone do cliente não informado.');
   const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp do cliente não retornou um JID válido.');
   // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
-  const result=await sendToJid(target.jid,{document:{url:info.pdfUrl||'https://invalid.local/rds-ticket.pdf'},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});
+  const result=await sendToJid(target.jid,{document:info.pdfUrl?{url:info.pdfUrl}:{},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});
   if(!result?.key?.id)throw new Error('WhatsApp não confirmou o envio do PDF.');
   const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()});
   if(!archived?.length){const error=new Error('O WhatsApp aceitou o PDF, mas o arquivo não pôde ser confirmado no histórico. Não reenviar automaticamente.');error.code='ARCHIVE_FAILED_AFTER_SEND';throw error;}
@@ -106,9 +106,13 @@ else{
   let age=(Date.now()-new Date(order.updated_at||0).getTime())/1000;
   if(issue==='EMITINDO'){
    if(Number.isFinite(age)&&age<60)return;
-   const reset=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
-   if(!reset?.length)return;
-   issue='';order.official_issue_status=null;order.updated_at=nowISO();age=0;
+   const reason='Estado EMITINDO expirou após reinício/timeout; resultado da chamada oficial é desconhecido. Conferência manual obrigatória para impedir venda duplicada.';
+   const changed=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:'ERRO_RECONCILIAR',official_issue_error:reason,updated_at:nowISO()});
+   if(changed?.length){
+    await addAlert('EMISSAO_OFICIAL_RESULTADO_AMBIGUO','Pedido com emissão interrompida; conferir no sistema oficial antes de qualquer nova tentativa — '+order.code,{order:order.code,order_id:order.id,warning:'Reemissão automática bloqueada.'});
+    await logEvent('EMISSAO_OFICIAL_RESULTADO_AMBIGUO',{order:order.code,order_id:order.id,source:'stale_EMITINDO'});
+   }
+   return;
   }
   if(order.official_sale_id)return deliverExisting({...order,official_issue_status:issue||null});
   if(issue==='AGUARDANDO_AUTORIZACAO'&&Number.isFinite(age)&&age<15)return;
