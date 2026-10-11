@@ -183,10 +183,11 @@ const block=String.raw`
     return done;
   }
 
-  async function archive(order,pdf,sentAt=null){
+  async function archive(order,pdf,sentAt=undefined){
     const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-    const row={order_id:order.id,seller_id:sid||order.seller_id||null,order_code:String(order.code||''),customer_name:order.customer_name||null,customer_phone:normalizeBR(order.phone||order.contact_phone||'')||null,official_sale_id:String(order.official_sale_id||'')||null,file_name:'bilhetes-'+order.code+'.pdf',mime_type:'application/pdf',pdf_base64:pdf.toString('base64'),sent_at:sentAt,updated_at:nowISO()};
-    const ex=await one('rds10_ticket_documents','select=id&order_id=eq.'+encodeURIComponent(order.id));
+    const ex=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id));
+    const finalSentAt=sentAt===undefined?(ex?.sent_at||null):sentAt;
+    const row={order_id:order.id,seller_id:sid||order.seller_id||null,order_code:String(order.code||''),customer_name:order.customer_name||null,customer_phone:normalizeBR(order.phone||order.contact_phone||'')||null,official_sale_id:String(order.official_sale_id||'')||null,file_name:'bilhetes-'+order.code+'.pdf',mime_type:'application/pdf',pdf_base64:pdf.toString('base64'),sent_at:finalSentAt,updated_at:nowISO()};
     if(ex?.id)await patch('rds10_ticket_documents','id=eq.'+encodeURIComponent(ex.id),row);else await insert('rds10_ticket_documents',row);
   }
 
