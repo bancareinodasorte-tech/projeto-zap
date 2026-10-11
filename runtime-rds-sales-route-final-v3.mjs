@@ -207,12 +207,14 @@ const block=`
     }
     if(step==='TODOS_NOME'){
       const name=cleanName(t);if(name.length<4)return replyInbound(identity,'❌ *NOME INVÁLIDO*'+NL+NL+'Digite seu nome completo para continuar.');
-      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'TODOS_CPF',updated_at:nowISO()});
-      return replyInbound(identity,'🧾 *DIGITE SEU CPF:* 👇');
+      await patch('rds10_orders','id=eq.'+order.id,{customer_name:name,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||{...order,customer_name:name}));
     }
     if(step==='TODOS_CPF'){
-      const cpf=cleanCpf(t);if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
-      await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const cpf=cleanCpf(t);
+      if(cpf&&(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))))return replyInbound(identity,'❌ CPF inválido. Para continuar sem CPF, digite *PULAR*.');
+      const patchData={guided_step:'CONFIRMAR',updated_at:nowISO()};if(cpf)patchData.customer_tax_id=cpf;
+      await patch('rds10_orders','id=eq.'+order.id,patchData);
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
     return false;
