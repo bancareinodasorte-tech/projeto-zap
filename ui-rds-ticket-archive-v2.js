@@ -20,14 +20,20 @@
   function statusLabel(o){return o.sent_at?'✓ Enviado pelo WhatsApp':'PDF arquivado — envio não confirmado';}
   function openPdf(id){window.location.assign('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'?fresh=1')}
   window.rdsOpenTicketPdf=openPdf;
-  window.rdsResendTicketPdf=async id=>{
+  window.rdsResendTicketPdf=async(id,button)=>{
+    if(button?.disabled)return;
+    if(button){button.disabled=true;button.dataset.oldText=button.textContent;button.textContent='Enviando…';}
     try{
       const r=await fetch('/api/rds/ticket-pdf/'+encodeURIComponent(id)+'/resend',{method:'POST',headers:{'Content-Type':'application/json'}});
       const d=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(d.error||'Falha ao reenviar o PDF.');
+      if(!r.ok||!d.ok){
+        if(d.ambiguous||d.sent){toast(d.error||'Resultado incerto. Confira antes de tentar novamente.');return;}
+        throw new Error(d.error||'Falha ao reenviar o PDF.');
+      }
       toast('PDF reenviado pelo WhatsApp.');
       await loadArchive();renderArchiveTable();
     }catch(e){toast(e.message||'Falha ao reenviar o PDF.')}
+    finally{if(button){button.disabled=false;button.textContent=button.dataset.oldText||'WhatsApp';delete button.dataset.oldText;}}
   };
   async function loadArchive(){
     try{const r=await fetch('/api/rds/ticket-archive?rds='+Date.now(),{cache:'no-store'});const d=await r.json();archiveRows=Array.isArray(d.rows)?d.rows:[];}
@@ -66,7 +72,7 @@
     const box=q('#rdsTicketArchiveTable'),sum=q('#rdsTicketArchiveSummary');if(!box)return;const rows=getFilteredRows();
     if(sum)sum.innerHTML='<b>'+rows.length+'</b> compra(s) no período selecionado.';
     if(!rows.length){box.innerHTML='<div class="empty-state">Nenhuma compra concluída encontrada neste período ou busca.</div>';return;}
-    box.innerHTML='<div class="rds-ticket-table-wrap"><table class="rds-ticket-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Venda oficial</th><th>Data</th><th>PDF</th><th>Ações</th></tr></thead><tbody>'+rows.map(o=>'<tr><td><b>'+esc(o.order_code||'—')+'</b></td><td><b>'+esc(o.customer_name||'Cliente')+'</b><small>'+esc(o.customer_phone||'—')+'</small></td><td>'+esc(o.official_sale_id||'—')+'</td><td>'+esc(dtR(o.created_at||o.sent_at||o.updated_at))+'</td><td><span class="'+(o.sent_at?'rds-pdf-sent':'rds-pdf-pending')+'">'+statusLabel(o)+'</span></td><td><div class="rds-ticket-actions"><button class="btn" onclick="rdsOpenTicketPdf(\''+esc(o.order_id||o.id)+'\')">📄 Abrir PDF</button><button class="btn primary" onclick="rdsResendTicketPdf(\''+esc(o.order_id||o.id)+'\')">WhatsApp</button></div></td></tr>').join('')+'</tbody></table></div>';
+    box.innerHTML='<div class="rds-ticket-table-wrap"><table class="rds-ticket-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Venda oficial</th><th>Data</th><th>PDF</th><th>Ações</th></tr></thead><tbody>'+rows.map(o=>'<tr><td><b>'+esc(o.order_code||'—')+'</b></td><td><b>'+esc(o.customer_name||'Cliente')+'</b><small>'+esc(o.customer_phone||'—')+'</small></td><td>'+esc(o.official_sale_id||'—')+'</td><td>'+esc(dtR(o.created_at||o.sent_at||o.updated_at))+'</td><td><span class="'+(o.sent_at?'rds-pdf-sent':'rds-pdf-pending')+'">'+statusLabel(o)+'</span></td><td><div class="rds-ticket-actions"><button class="btn" onclick="rdsOpenTicketPdf(\''+esc(o.order_id||o.id)+'\')">📄 Abrir PDF</button><button class="btn primary" onclick="rdsResendTicketPdf(\''+esc(o.order_id||o.id)+'\',this)">WhatsApp</button></div></td></tr>').join('')+'</tbody></table></div>';
   }
   async function refreshArchive(){await loadArchive();renderArchiveTable();}
   function bind(){
