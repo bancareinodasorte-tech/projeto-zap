@@ -1,6 +1,26 @@
 (()=>{const appEl=document.querySelector('#app');let refreshBusy=false;
+let coreRecoveryPromise=null;
+async function recoverCore(){
+ if(typeof window.rdsCoreRender==='function')return true;
+ if(coreRecoveryPromise)return coreRecoveryPromise;
+ coreRecoveryPromise=new Promise(resolve=>{
+  const old=document.getElementById('rdsCoreRecoveryScript');
+  if(old)old.remove();
+  const s=document.createElement('script');s.id='rdsCoreRecoveryScript';s.src='/app.js?core_recovery='+Date.now();
+  s.onload=()=>resolve(typeof window.rdsCoreRender==='function');
+  s.onerror=()=>resolve(false);
+  document.head.appendChild(s);
+  setTimeout(()=>resolve(typeof window.rdsCoreRender==='function'),5000);
+ }).finally(()=>{coreRecoveryPromise=null;});
+ return coreRecoveryPromise;
+}
 async function stableRender(){const target=window.page||localStorage.getItem('rds_current_page')||'home';window.page=target;try{
-if(typeof window.rdsCoreRender==='function')return await window.rdsCoreRender();throw new Error('Controlador principal do painel ainda não foi carregado.');
+if(typeof window.rdsCoreRender!=='function'){
+ const recovered=await recoverCore();
+ if(!recovered)throw new Error('O arquivo principal do painel não carregou. A página tentou recuperar o controlador automaticamente; use Atualizar para nova tentativa.');
+}
+if(typeof window.rdsCoreRender==='function')return await window.rdsCoreRender();
+throw new Error('Controlador principal do painel indisponível após recuperação automática.');
 }catch(e){if(e?.code==='NAV_STALE'||e?.message==='NAV_STALE')return;if(appEl)appEl.innerHTML='<div class="card"><h2>Não foi possível carregar o painel</h2><p class="mut">'+String(e?.message||e).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))+'</p><button class="btn primary" type="button" onclick="window.rdsRenderCurrentPage()">Tentar novamente</button></div>';}
 finally{document.body.classList.remove('rds-booting');stableSetNav();setTimeout(()=>{try{window.rdsOfficialMaybeRender?.()}catch{}try{window.rdsOfficialFinalMaybeRender?.()}catch{}try{window.rdsV11Refresh?.()}catch{}try{window.rdsInterfaceRefresh?.()}catch{}try{window.rdsInjectEmitOrders?.()}catch{}try{window.rdsPostPaymentRefresh?.()}catch{}try{window.rdsMobileUxRefresh?.()}catch{}},0);}}
 function stableSetNav(){const p=window.page||localStorage.getItem('rds_current_page')||'home';document.querySelectorAll('#nav button[data-page],#mobileNav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));}
