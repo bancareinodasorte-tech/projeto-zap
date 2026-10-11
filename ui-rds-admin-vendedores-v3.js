@@ -14,9 +14,9 @@ async function devices(s){
     const rows=d.devices||[];
     box.innerHTML=(rows.length?rows.map(x=>{
       const status=String(x.status||'');
-      const action=status==='PENDENTE'?'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Autorizar</button>':status==='ATIVO'?'<button class="btn danger" data-d="block" data-id="'+esc(x.id)+'">Bloquear</button>':'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Reativar</button>';
+      const action=status==='PENDENTE'?'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Autorizar este dispositivo</button>':status==='ATIVO'?'<button class="btn danger" data-d="block" data-id="'+esc(x.id)+'">Bloquear</button>':'<button class="btn primary" data-d="authorize" data-id="'+esc(x.id)+'">Autorizar novamente</button>';
       return '<div class="card" style="margin:10px 0"><b>'+esc(platformText(x.platform))+'</b><div style="margin:6px 0">Situação da autorização: <strong>'+esc(status==='ATIVO'?'Autorizado':status==='PENDENTE'?'Aguardando autorização':status==='BLOQUEADO'?'Bloqueado':'Revogado')+'</strong></div><div class="muted" style="word-break:break-all;margin:5px 0">Identificador: '+esc(x.device_id||'não informado')+'</div><div class="muted">Primeiro registro: '+esc(dateBR(x.first_seen_at))+'</div><div class="muted">Autorizado em: '+esc(dateBR(x.authorized_at))+'</div><div class="muted">Último acesso registrado: '+esc(dateBR(x.last_seen_at))+'</div><div class="row" style="margin-top:8px">'+action+(status==='ATIVO'?'<button class="btn dangerOutline" data-d="revoke" data-id="'+esc(x.id)+'">Revogar</button>':'')+'</div></div>';
-    }).join(''):'<div class="empty">Nenhum dispositivo registrado.</div>')+'<p class="muted">Dispositivos ativos autorizados: <b>'+esc(d.activeDeviceCount||0)+'</b>/2</p>';
+    }).join(''):'<div class="empty">Nenhum dispositivo registrado.</div>')+'<p class="muted">Dispositivos ativos autorizados: <b>'+esc(d.activeDeviceCount||0)+'</b>/2. Para liberar um novo acesso, procure o dispositivo com situação “Aguardando autorização” e toque em “Autorizar este dispositivo”.</p>';
     box.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{
       try{
         const id=b.dataset.id,a=b.dataset.d;
