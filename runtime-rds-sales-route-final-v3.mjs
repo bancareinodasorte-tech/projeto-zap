@@ -144,8 +144,13 @@ const block=`
     const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
     if(!fresh)throw new Error('Pedido não encontrado.');
     if(!String(fresh.official_draw_id||'').trim()){
-      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',status:'COLETANDO_DADOS',updated_at:nowISO()});
-      throw new Error('Selecione um sorteio oficial antes de gerar o PIX.');
+      const options=(await selectableOfficialDraws()).slice(0,9);
+      if(!options.length){
+        await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',status:'COLETANDO_DADOS',updated_at:nowISO()});
+        return replyInbound(identity,'⚠️ Não há sorteio oficial aberto. Não faça pagamento; tente novamente quando houver sorteio disponível.');
+      }
+      await patch('rds10_orders','id=eq.'+fresh.id,{guided_step:'SORTEIO',status:'COLETANDO_DADOS',official_ticket_payload:{purchaseDrawOptions:options},updated_at:nowISO()});
+      return replyInbound(identity,'⚠️ Antes de gerar o PIX, selecione o sorteio oficial:'+NL+NL+drawMenu(options));
     }
     const quantity=Number(fresh.quantity||0);
     const name=cleanName(fresh.customer_name);
