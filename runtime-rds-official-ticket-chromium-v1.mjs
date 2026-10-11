@@ -244,6 +244,7 @@ const block=String.raw`
       const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id);
       const o=await one('rds10_orders',f);
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
+      if(o.code==='RDS-559D8F'&&req.body?.allowProtectedResend!==true)return res.status(409).json({ok:false,protected:true,error:'Pedido de referência protegido: já possui histórico de envios. Não reenvie sem aprovação e reconciliação manual.'});
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
       if(!phone)throw new Error('Telefone do cliente não informado.');
       const target=await ensureTargetJid(phone);
