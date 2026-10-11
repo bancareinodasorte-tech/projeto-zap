@@ -79,7 +79,7 @@
    if(p.length<8){msg.className='auth-msg bad';msg.textContent='A senha deve ter pelo menos 8 caracteres.';return;}
    if(p!==q){msg.className='auth-msg bad';msg.textContent='As senhas não conferem.';return;}
    b.disabled=true;b.textContent='Salvando…';msg.className='auth-msg';msg.textContent='Atualizando senha…';
-   try{const endpoint=admin?'/api/operator/admin/reset-password':'/api/operator/reset-password';const result=await api(endpoint,{method:'POST',body:JSON.stringify({token:resetToken,password:p})});localStorage.removeItem(OP);localStorage.removeItem(AD);msg.className='auth-msg ok';msg.textContent=result.message||'Senha alterada. Entre novamente.';b.textContent='Senha alterada';b.disabled=true;const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Voltar ao login';back.onclick=()=>{location.href='/';};$('#rdsResetForm').appendChild(back);}
+   try{const endpoint=admin?'/api/operator/admin/reset-password':'/api/operator/reset-password';const result=await api(endpoint,{method:'POST',body:JSON.stringify({token:resetToken,password:p})});localStorage.removeItem(OP);if(admin)localStorage.removeItem(AD);msg.className='auth-msg ok';msg.textContent=result.message||'Senha alterada. Entre novamente.';b.textContent='Senha alterada';b.disabled=true;const back=document.createElement('button');back.type='button';back.className='secondary';back.textContent='Voltar ao login';back.onclick=()=>{location.href='/';};$('#rdsResetForm').appendChild(back);}
    catch(err){b.disabled=false;b.textContent='Salvar nova senha';msg.className='auth-msg bad';msg.textContent=err.message||'Não foi possível alterar a senha.';}
   };
  }
@@ -89,7 +89,7 @@
   const d=document.createElement('div');d.id='rdsAccount';d.innerHTML='<span class="account-name" title="'+esc(name)+'">'+esc(name)+'</span>'+'<button type="button" id="rdsAccountOpen">Conta</button><button type="button" id="rdsLogout">Sair</button>';
   host.appendChild(d);
   $('#rdsAccountOpen').onclick=()=>window.go?.('account');
-  $('#rdsLogout').onclick=async()=>{if(!confirm('Deseja sair do CANAL DE VENDAS RDS?'))return;try{await api('/api/rds/unified/logout',{method:'POST'});}catch{}localStorage.removeItem(OP);localStorage.removeItem(AD);location.reload();};
+  $('#rdsLogout').onclick=async()=>{if(!confirm('Deseja sair do CANAL DE VENDAS RDS?'))return;try{await api('/api/rds/unified/logout?audience=seller',{method:'POST'});}catch{}localStorage.removeItem(OP);location.reload();};
  }
  async function boot(){
   const params=new URLSearchParams(location.search),resetKind=params.get('rds'),resetToken=params.get('token');
