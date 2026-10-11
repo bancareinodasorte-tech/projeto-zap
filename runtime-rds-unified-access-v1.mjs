@@ -88,10 +88,17 @@ app.post('/api/rds/unified/login',async(req,res)=>{
 });
 app.post('/api/rds/unified/logout',async(req,res)=>{
   try{
-    const st=rdsOpBearer(req)||rdsOpCookie(req);if(st)await patch('rds10_seller_sessions','token_hash=eq.'+encodeURIComponent(rdsOpTHash(st)),{revoked_at:nowISO()}).catch(()=>{});
-    const at=rdsAdminBearer(req)||rdsAdminCookie(req);if(at)await patch('rds10_admin_sessions','token_hash=eq.'+encodeURIComponent(rdsAdminHash(at)),{revoked_at:nowISO()}).catch(()=>{});
-    rdsOpClearCookie(res);rdsAdminClearCookie(res);
-    return res.json({success:true});
+    const sellerAudience=String(req.query?.audience||req.body?.audience||'')==='seller';
+    if(sellerAudience){
+      const st=rdsOpBearer(req)||rdsOpCookie(req);
+      if(st)await patch('rds10_seller_sessions','token_hash=eq.'+encodeURIComponent(rdsOpTHash(st)),{revoked_at:nowISO()}).catch(()=>{});
+      rdsOpClearCookie(res);
+      return res.json({success:true,scope:'seller'});
+    }
+    const at=rdsAdminBearer(req)||rdsAdminCookie(req);
+    if(at)await patch('rds10_admin_sessions','token_hash=eq.'+encodeURIComponent(rdsAdminHash(at)),{revoked_at:nowISO()}).catch(()=>{});
+    rdsAdminClearCookie(res);
+    return res.json({success:true,scope:'admin'});
   }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
 console.log('[RDS] acesso unificado V1 instalado');
