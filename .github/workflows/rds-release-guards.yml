@@ -5,6 +5,7 @@ on:
     paths:
       - 'runtime-rds-official-issue-worker-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
       - '.github/workflows/rds-release-guards.yml'
   workflow_dispatch:
 jobs:
@@ -21,3 +22,27 @@ jobs:
         run: |
           node --check runtime-rds-official-issue-worker-v1.mjs
           node --check runtime-rds-tenant-scope-v1.mjs
+          node --check runtime-rds-official-ticket-chromium-v1.mjs
+      - name: Verify release safety invariants
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const worker = fs.readFileSync('runtime-rds-official-issue-worker-v1.mjs', 'utf8');
+          const ticket = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
+          const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
+          const checks = [
+            [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
+            [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
+            [worker, "if(issue==='ERRO_RECONCILIAR')return", 'ambiguous issuance must not retry automatically'],
+            [ticket, String.raw`fileName.match(/bilhetes-(RDS-[A-Z0-9]{6,12})\.pdf/i)`, 'ticket PDF filename matcher must be correct'],
+            [ticket, 'RDS_OFFICIAL_PDF_PREPARATION_FAILED', 'PDF preparation failures must block sending'],
+            [ticket, 'if(!b||!b.length)', 'empty PDFs must be rejected'],
+            [tenant, '&active=eq.true&order=updated_at.desc&limit=1', 'tenant membership lookup must be bounded']
+          ];
+          for (const [source, pattern, message] of checks) {
+            if (!source.includes(pattern)) { console.error('FAILED:', message); process.exitCode = 1; }
+          }
+          if (worker.includes('https://invalid.local/rds-ticket.pdf')) { console.error('FAILED: PDF placeholder URL remains'); process.exitCode = 1; }
+          if (process.exitCode) process.exit(process.exitCode);
+          console.log('Release safety invariants present.');
+          NODE
