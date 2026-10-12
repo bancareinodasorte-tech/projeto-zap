@@ -28,7 +28,7 @@ jobs:
           import fs from 'node:fs';
           const source = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
           if (source.includes('RDS-559D8F')) throw new Error('Obsolete order-code lock remains');
-          for (const guard of ['RDS_OFFICIAL_PDF_PREPARATION_FAILED', 'WHATSAPP_SEND_AMBIGUOUS', 'Não foi possível preparar e arquivar o PDF oficial']) {
+          for (const guard of ["if(!b||!b.length)", "if(!s?.key?.id)", "ambiguous:true", "não clique novamente agora"]) {
             if (!source.includes(guard)) throw new Error('Required general safeguard missing: ' + guard);
           }
           console.log('No fixed order-code lock; general PDF/send safeguards remain.');
