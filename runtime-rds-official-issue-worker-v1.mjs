@@ -30,7 +30,7 @@ else{
   for(const d of available){
    const did=drawIdOf(d);if(!did)continue;
    const status=String(d?.status||d?.drawStatus||d?.draw_status||'').toUpperCase();
-   if(d?.isDrawClosed===true||d?.isSalesClosed===true||d?.salesOpen===false||d?.active===false||d?.isActive===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
+   if(d?.isDrawClosed===true||d?.is_draw_closed===true||d?.isSalesClosed===true||d?.is_sales_closed===true||d?.salesOpen===false||d?.sales_open===false||d?.active===false||d?.isActive===false||d?.is_active===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
    byId.set(did,{...(byId.get(did)||{}),...d});
   }
   try{
@@ -45,16 +45,8 @@ else{
     byId.set(did,{...prior,...item,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
    }
   }catch{}
-  let found=byId.get(String(id));
-  if(found)return found;
-  try{
-   const company=await one('rds10_companies','select=id&code=eq.RDS');
-   if(company?.id){
-    const rows=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,raw_data&company_id=eq.'+encodeURIComponent(company.id)+'&external_draw_id=eq.'+encodeURIComponent(String(id)));
-    const d=rows?.[0];if(d){const raw=d.raw_data&&typeof d.raw_data==='object'?d.raw_data:{};found={...raw,...d,drawId:String(d.external_draw_id),availableBooklets:d.available_booklets??raw.availableBooklets??raw.bookletsAvailable};}
-   }
-  }catch{}
-  return found||null;
+  // Sem confirmação no endpoint oficial de disponíveis, não aceitar cache local como autorização.
+  return byId.get(String(id))||null;
  }
  async function alreadySent(order,info){
   try{
