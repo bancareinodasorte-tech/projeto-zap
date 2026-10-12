@@ -23,13 +23,14 @@ else{
   return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:sale||{}};
  }
  async function selectedOfficialDraw(id){
-  const [availableResult,allResult]=await Promise.allSettled([
-   rdsFinalRequest('/draws/seller/available'),
-   rdsFinalRequest('/draws/seller/all')
-  ]);
+  // Fail closed: somente sorteios retornados pelo endpoint oficial de disponíveis.
+  // Não misturar /draws/seller/all, que pode incluir sorteios encerrados ou inelegíveis.
+  const available=arr(await rdsFinalRequest('/draws/seller/available'));
   const byId=new Map();
-  for(const d of [...(availableResult.status==='fulfilled'?arr(availableResult.value):[]),...(allResult.status==='fulfilled'?arr(allResult.value):[])]){
+  for(const d of available){
    const did=drawIdOf(d);if(!did)continue;
+   const status=String(d?.status||d?.drawStatus||d?.draw_status||'').toUpperCase();
+   if(d?.isDrawClosed===true||d?.isSalesClosed===true||d?.salesOpen===false||d?.active===false||d?.isActive===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
    byId.set(did,{...(byId.get(did)||{}),...d});
   }
   try{
