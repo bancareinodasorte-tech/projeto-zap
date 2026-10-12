@@ -57,7 +57,7 @@ const middleware = [
   "    if(typeof rdsOpSession==='function'){",
   "      const s=await rdsOpSession(req).catch(()=>null);",
   "      if(s?.seller?.id){",
-  "        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc').catch(()=>null);",
+  "        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null);",
   "        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());",
   "      }",
   "    }",
