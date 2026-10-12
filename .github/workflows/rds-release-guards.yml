@@ -30,6 +30,10 @@ jobs:
           node --check runtime-rds-official-issue-worker-v1.mjs
           node --check runtime-rds-tenant-scope-v1.mjs
           node --check runtime-rds-official-ticket-chromium-v1.mjs
+      - name: Apply tenant installer and validate generated server syntax
+        run: |
+          node runtime-rds-tenant-scope-v1.mjs
+          node --check server.js
       - name: Verify release safety invariants
         run: |
           node --input-type=module <<'NODE'
