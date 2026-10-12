@@ -69,6 +69,8 @@ const middleware = [
   "  if(requested&&!companyIds.includes(requested))return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_MISMATCH',error:'A empresa selecionada não está autorizada para esta conta.'});",
   "  if(companyIds.length>1&&!requested)return res.status(409).json({success:false,code:'COMPANY_SELECTION_REQUIRED',error:'Selecione a empresa antes de continuar.'});",
   "  const companyId=requested||companyIds[0];",
+  "  let company;try{company=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(companyId));}catch(e){return res.status(503).json({success:false,code:'COMPANY_STATUS_UNAVAILABLE',error:'Não foi possível validar o estado da empresa. Tente novamente.'});}",
+  "  if(!company)return res.status(403).json({success:false,code:'COMPANY_INACTIVE',error:'A empresa selecionada está inativa ou não existe.'});",
   "  return rdsRequestScope.run({sellerId:session.seller.id,companyId},()=>next());",
   "});"
 ].join(String.fromCharCode(10));
