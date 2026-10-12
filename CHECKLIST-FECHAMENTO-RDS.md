@@ -102,7 +102,18 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [ ] Validar isolamento multiempresa em pedidos, pagamentos, clientes, campanhas e emissão oficial.
 - [ ] Definir e implementar, se aprovado no fechamento financeiro, registro auditável de comissões pagas, estornos e comprovantes de repasse. A tela atual mostra comissão calculada e não presume pagamento.
 
-## BLOCO 8 — LOGIN OBRIGATÓRIO E FECHAMENTO DO APK
+## BLOCO 8 — CONTA, PAGAMENTOS E CONEXÕES
+
+- [x] Conta comercial simplificada para identidade e dispositivos autorizados.
+- [x] Área própria de Conexões adicionada à navegação comercial e mobile.
+- [x] Mercado Pago mantido por autorização OAuth, sem inserir credenciais secretas em formulários.
+- [x] Estado do WhatsApp consultado sem iniciar conexão automaticamente ao abrir a tela.
+- [x] Botão explícito para solicitar conexão do WhatsApp e mostrar QR somente após ação do vendedor.
+- [x] Vínculo de empresa/banca exibido separadamente da identidade e dos dados de recebimento.
+- [ ] Confirmar publicação e validar visualmente Conta, Pagamentos e Conexões em aparelho.
+- [ ] Revisar permissões e isolamento multiempresa em operação controlada, sem alterar dados de produção.
+
+## BLOCO 9 — LOGIN OBRIGATÓRIO E FECHAMENTO DO APK
 
 - [x] Módulo de autenticação global incluído no painel principal, com login unificado de vendedor/administrador.
 - [ ] Validar entrada com vendedor ativo e dispositivo autorizado.
