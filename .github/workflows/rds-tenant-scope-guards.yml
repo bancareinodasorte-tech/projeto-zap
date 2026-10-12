@@ -1,0 +1,56 @@
+name: RDS tenant scope fail-closed guards
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - '.github/workflows/rds-tenant-scope-guards.yml'
+  push:
+    branches: [fix/tenant-scope-fail-closed]
+    paths:
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - '.github/workflows/rds-tenant-scope-guards.yml'
+permissions:
+  contents: read
+jobs:
+  tenant-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check installer syntax
+        run: node --check runtime-rds-tenant-scope-v1.mjs
+      - name: Verify fail-closed tenant invariants
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
+          const checks = [
+            ['RDS_TENANT_COMPANY_REQUIRED', 'missing company context must reject tenant writes'],
+            ['RDS_TENANT_COMPANY_AMBIGUOUS', 'ambiguous seller memberships must reject tenant writes'],
+            ['COMPANY_SELECTION_REQUIRED', 'multi-company sellers must select a company'],
+            ['COMPANY_MEMBERSHIP_UNAVAILABLE', 'membership lookup failures must return an error'],
+            ['COMPANY_MEMBERSHIP_MISMATCH', 'unverified company selection must be rejected'],
+            ["'active=eq.true&limit=1000'", 'only active memberships may establish company scope'],
+            ['rdsRequestScope.run({sellerId:session.seller.id,companyId}', 'seller and verified company must scope the request'],
+            ["res.status(503).json({success:false,code:'COMPANY_MEMBERSHIP_UNAVAILABLE'", 'membership lookup failure must fail closed']
+          ];
+          for (const [pattern, message] of checks) {
+            if (!source.includes(pattern)) {
+              console.error('FAILED:', message);
+              process.exitCode = 1;
+            }
+          }
+          if (source.includes("one('rds10_companies','select=id&code=eq.RDS')")) {
+            console.error('FAILED: default-company fallback remains');
+            process.exitCode = 1;
+          }
+          if (source.includes('&active=eq.true&order=updated_at.desc')) {
+            console.error('FAILED: arbitrary latest-membership selection remains');
+            process.exitCode = 1;
+          }
+          if (process.exitCode) process.exit(process.exitCode);
+          console.log('Fail-closed tenant invariants are present.');
+          NODE
