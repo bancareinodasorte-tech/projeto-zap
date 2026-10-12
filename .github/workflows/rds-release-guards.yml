@@ -34,9 +34,11 @@ jobs:
             [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
             [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
             [worker, "if(issue==='ERRO_RECONCILIAR')return", 'ambiguous issuance must not retry automatically'],
+            [worker, "if(String(order?.code||'')==='RDS-559D8F')throw new Error", 'protected historical order must not be auto-delivered'],
             [ticket, String.raw`fileName.match(/bilhetes-(RDS-[A-Z0-9]{6,12})\.pdf/i)`, 'ticket PDF filename matcher must be correct'],
             [ticket, 'RDS_OFFICIAL_PDF_PREPARATION_FAILED', 'PDF preparation failures must block sending'],
             [ticket, 'if(!b||!b.length)', 'empty PDFs must be rejected'],
+            [ticket, "if(String(o.code||'')==='RDS-559D8F')return res.status(409)", 'protected historical order must not be regenerated'],
             [tenant, '&active=eq.true&order=updated_at.desc&limit=1', 'tenant membership lookup must be bounded']
           ];
           for (const [source, pattern, message] of checks) {
