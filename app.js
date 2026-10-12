@@ -61,6 +61,10 @@ async function renderAccountNative(){
    if(typeof window.rdsPaymentsRefined!=='function')throw new Error('A área de Pagamentos não ficou disponível. Tente novamente.');
    await window.rdsPaymentsRefined();await renderPaymentSettingsPanel();
  }
+ else if(page==='connections'){
+   if(typeof window.rdsConnectionsPage!=='function')throw new Error('A área de Conexões não foi carregada. Atualize o painel e tente novamente.');
+   await window.rdsConnectionsPage();
+ }
  else if(page==='account'){
    await renderAccountNative();
  }
