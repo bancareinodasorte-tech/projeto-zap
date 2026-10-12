@@ -14,6 +14,7 @@ on:
     branches: [fix/commission-company-scope]
     paths:
       - 'runtime-rds-commission-center-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
       - 'runtime-rds-seller-recovery-v1.mjs'
       - 'runtime-rds-admin-auth-v5.mjs'
       - 'prepare-pagbank-no-email.mjs'
@@ -44,12 +45,11 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const source = fs.readFileSync('runtime-rds-commission-center-v1.mjs', 'utf8');
+          const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
           const required = [
             "if(!membership?.company_id)return res.status(403)",
             "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)",
-            "&active=eq.true&order=updated_at.desc&limit=1",
-            "&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)",
-            "encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)"
+            "&active=eq.true&order=updated_at.desc&limit=1"
           ];
           for (const pattern of required) {
             if (!source.includes(pattern)) {
@@ -57,5 +57,15 @@ jobs:
               process.exit(1);
             }
           }
-          console.log('Commission endpoint contains seller + active-company scope guards.');
+          const tenantRequired = [
+            "&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)",
+            "encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)"
+          ];
+          for (const pattern of tenantRequired) {
+            if (!tenant.includes(pattern)) {
+              console.error('Missing tenant middleware guard:', pattern);
+              process.exit(1);
+            }
+          }
+          console.log('Commission and tenant middleware scope guards present.');
           NODE
