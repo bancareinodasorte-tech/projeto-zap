@@ -223,6 +223,7 @@ const block=String.raw`
     try{
       const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
+      if(String(o.code||'')==='RDS-559D8F')return res.status(409).json({ok:false,protected:true,error:'Pedido protegido: regeneração do PDF bloqueada para preservar o arquivo oficial arquivado.'});
       const forceFresh=String(req.query.fresh||'')==='1';
       let b=null;
       if(!forceFresh){
