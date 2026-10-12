@@ -7,6 +7,13 @@ on:
       - 'runtime-rds-tenant-scope-v1.mjs'
       - 'runtime-rds-official-ticket-chromium-v1.mjs'
       - '.github/workflows/rds-release-guards.yml'
+  push:
+    branches: [fix/final-release-audit-guards]
+    paths:
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - '.github/workflows/rds-release-guards.yml'
   workflow_dispatch:
 jobs:
   syntax:
