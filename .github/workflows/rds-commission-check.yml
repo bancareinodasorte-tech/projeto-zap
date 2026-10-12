@@ -44,7 +44,8 @@ jobs:
           const source = fs.readFileSync('runtime-rds-commission-center-v1.mjs', 'utf8');
           const required = [
             "if(!membership?.company_id)return res.status(403)",
-            "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)"
+            "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)",
+            "&active=eq.true&order=updated_at.desc&limit=1"
           ];
           for (const pattern of required) {
             if (!source.includes(pattern)) {
