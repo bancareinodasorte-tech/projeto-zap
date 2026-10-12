@@ -17,9 +17,10 @@ const helper = [
   "  const prepare=async(item)=>{",
   "    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error('RDS_TENANT_ROW_INVALID');",
   "    let out={...item};",
-  "    if(sellerId&&out.seller_id==null)out.seller_id=sellerId;",
-  "    if(companyId&&out.company_id==null)out.company_id=companyId;",
+  "    if(sellerId&&!out.seller_id)out.seller_id=sellerId;",
+  "    if(companyId&&!out.company_id)out.company_id=companyId;",
   "    const rowSeller=String(out.seller_id||sellerId||'');",
+  "    if(sellerId&&rowSeller&&rowSeller!==String(sellerId))throw new Error('RDS_TENANT_SELLER_MISMATCH');",
   "    if(companyId&&out.company_id&&String(out.company_id)!==String(companyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
   "    if(!out.company_id){",
   "      if(rowSeller){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');out.company_id=ids[0];}",
@@ -47,7 +48,7 @@ if(!server.includes(oldInsert))throw new Error('função insert não localizada 
 server=server.replace(oldInsert,newInsert);
 
 const oldPatch = "async function patch(table, filter, row){\n  return sb(\`/rest/v1/\${table}?\${filter}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
-const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,rdsTenantCompanyScope()):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
+const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&typeof row==='object'){\n    if(Object.prototype.hasOwnProperty.call(row,'seller_id')&&String(row.seller_id||'')!==String(sellerId))throw new Error('RDS_TENANT_SELLER_MISMATCH');\n    if(Object.prototype.hasOwnProperty.call(row,'company_id')&&String(row.company_id||'')!==String(companyId||''))throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n  }\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,companyId):filter;\n  return sb('/rest/v1/'+table+'?'+scoped, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldPatch))throw new Error('função patch não localizada para substituição.');
 server=server.replace(oldPatch,newPatch);
 
