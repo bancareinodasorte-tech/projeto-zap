@@ -20,7 +20,8 @@ else{
  function saleInfo(sale){
   const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
   const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','publicUrl','url','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl','data.publicUrl','data.url','data.downloadUrl']);
-  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:sale||{}};
+  const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{};
+  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload};
  }
  async function selectedOfficialDraw(id){
   // Fail closed: somente sorteios retornados pelo endpoint oficial de disponíveis.
