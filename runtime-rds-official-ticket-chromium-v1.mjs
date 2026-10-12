@@ -58,7 +58,8 @@ const block=String.raw`
 
   async function makeHtml(order,booksOverride=null){
     const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}]);
+    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)?p.booklets:[]);
+    if(!books.length||books.some(b=>!Array.isArray(b?.tickets)||!b.tickets.length))throw new Error('RDS_OFFICIAL_TICKETS_MISSING');
     const name=String(p.customerName||order?.customer_name||'-');
     const phone=String(p.customerPhone||order?.phone||order?.contact_phone||'-');
     const seller=String(p.sellerName||'—')+(p.sellerPhone?' – '+String(p.sellerPhone):'');
