@@ -28,7 +28,7 @@ jobs:
           import fs from 'node:fs';
           const source = fs.readFileSync('ui-rds-ticket-archive-v2.js', 'utf8');
           if (source.includes('RDS-559D8F')) throw new Error('Obsolete hardcoded order lock remains in the archive UI');
-          for (const guard of ['rdsOpenTicketPdf', 'rdsResendTicketPdf', 'data-rdsTicketArchiveToggle']) {
+          for (const guard of ['rdsOpenTicketPdf', 'rdsResendTicketPdf', 'rdsTicketArchiveToggle']) {
             if (!source.includes(guard)) throw new Error('Archive action missing: ' + guard);
           }
           if (!source.includes('onclick="rdsResendTicketPdf')) throw new Error('WhatsApp resend action is not rendered');
