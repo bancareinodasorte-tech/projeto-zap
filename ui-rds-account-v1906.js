@@ -90,7 +90,7 @@ async function account(){
   const name=document.getElementById('rdsAccountName');
   const identity=document.getElementById('rdsAccountIdentity');
   if(name)name.textContent=seller.name||'Minha conta';
-  if(identity)identity.textContent='Gerencie seus dados e acompanhe suas conexões';
+  if(identity)identity.textContent='Gerencie seus dados pessoais e dispositivos autorizados';
   await loadSellerAccountDetails();
  }catch(e){
   // The account remains visible even when the validation/data APIs are temporarily slow.
@@ -226,7 +226,7 @@ window.addEventListener('load',()=>setTimeout(gate,20));
 const originalGo=window.go;
 window.go=async p=>{
  if(window.rdsUnifiedRole==='VENDEDOR'){
-  if(!['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','commissions','account'].includes(p))p='home';
+  if(!['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','results','commissions','connections','account'].includes(p))p='home';
   localStorage.setItem('rds_current_page',p);
   if(typeof setNav==='function')setNav();
   return originalGo(p);
