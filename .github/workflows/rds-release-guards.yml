@@ -1,0 +1,23 @@
+name: RDS release guard syntax
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - '.github/workflows/rds-release-guards.yml'
+  workflow_dispatch:
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check modified runtime modules
+        run: |
+          node --check runtime-rds-official-issue-worker-v1.mjs
+          node --check runtime-rds-tenant-scope-v1.mjs
