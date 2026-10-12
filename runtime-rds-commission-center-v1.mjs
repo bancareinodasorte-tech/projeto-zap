@@ -24,7 +24,9 @@ app.get('/api/rds/commission-center',async(req,res)=>{
   if(ctx.role==='VENDEDOR'){
    const sid=ctx.seller?.id;
    if(!sid)return res.status(403).json({success:false,error:'A conta de vendedor não foi identificada.'});
-   query+='&seller_id=eq.'+encodeURIComponent(sid);
+   const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&order=updated_at.desc').catch(()=>null);
+   if(!membership?.company_id)return res.status(403).json({success:false,error:'A conta não possui vínculo ativo com uma empresa.'});
+   query+='&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id);
   }
   const [orders,sellers]=await Promise.all([list('rds10_orders',query),ctx.role==='ADMINISTRADOR'?list('rds10_sellers','select=id,name'):Promise.resolve([])]);
   const sellerMap=new Map(sellers.map(s=>[s.id,s.name]));
