@@ -116,6 +116,22 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [x] Corrigido Atualizar para preservar os parâmetros atuais da URL, incluindo `audience=seller`, evitando perder o contexto comercial após a atualização.
 - [ ] Aguardar deploy dessas correções e revisar logs; validar navegação no navegador/aparelho sem acionar conexão, cobrança ou emissão.
 
+## BLOCO 10 — RECUPERAÇÃO DE SENHA POR E-MAIL (OBRIGATÓRIO ANTES DO FECHAMENTO)
+
+**Não fechar o aplicativo nem aprovar o APK final enquanto este bloco não estiver concluído e validado para vendedor e administrador.**
+
+- [ ] Tornar o e-mail obrigatório em todo novo cadastro de vendedor, mesmo quando o telefone for usado como identificador de login.
+- [ ] Validar formato e normalizar e-mail (remover espaços e padronizar minúsculas); impedir cadastro sem e-mail e tratar duplicidade de forma segura.
+- [ ] Confirmar o e-mail cadastrado como destino de recuperação; não permitir que o usuário informe um endereço arbitrário para redefinir senha.
+- [ ] Integrar recuperação de senha do vendedor ao login unificado atualmente usado pelo CANAL DE VENDAS RDS; exibir “Esqueci minha senha” e o fluxo de redefinição dentro do painel comercial, sem depender de uma tela antiga.
+- [ ] Integrar recuperação da senha administrativa à tela e ao login administrativo atuais, usando o e-mail administrativo realmente cadastrado/configurado — não presumir um endereço padrão sem confirmação de configuração.
+- [ ] Ativar e validar envio de e-mail no provedor de e-mail do servidor, sem expor chaves/API secrets.
+- [ ] Usar token aleatório de uso único, armazenar somente hash, limitar validade, invalidar token após uso e não revelar se um e-mail existe no sistema.
+- [ ] Garantir política de senha segura e que a redefinição invalide sessões antigas conforme o fluxo de autenticação.
+- [ ] Conferir as rotas de recuperação já existentes nos scripts do repositório: elas não estavam presentes no `server.js` nem conectadas ao `index.html` na inspeção de 2026-10-12; portanto, não considerar a função implementada apenas porque os scripts existem.
+- [ ] Testar recuperação de vendedor e administrador usando contas/e-mails controlados, cobrindo e-mail válido, e-mail não cadastrado, token expirado, token já utilizado e senha inválida; não criar pedidos nem pagamentos para esses testes.
+- [ ] Confirmar a recuperação por e-mail em navegador e APK antes de autorizar a distribuição final.
+
 ## BLOCO 9 — LOGIN OBRIGATÓRIO E FECHAMENTO DO APK
 
 - [x] Módulo de autenticação global incluído no painel principal, com login unificado de vendedor/administrador.
