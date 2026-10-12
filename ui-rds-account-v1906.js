@@ -66,7 +66,7 @@ async function account(){
   document.getElementById('rdsOpenAdminPanel').onclick=()=>{window.location.href='/admin-vendedores.html';};
   document.getElementById('rdsUnifiedLogout').onclick=()=>{if(confirm('Deseja realmente sair da conta?'))logout();};
  }else{
-  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsAccountName">Minha conta</h1><p id="rdsAccountIdentity" class="mut">Gerencie seus dados e acompanhe suas conexões</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Dados da conta</h2><div class="status ok">🟢 Conta ativa e autenticada</div><div id="rdsAccountSummary" class="rds-account-summary"><div><small>Vendedor / conta</small><b id="rdsAccountSummaryName">—</b></div><div><small>Favorecido do PIX</small><b id="rdsAccountSummaryPixName">—</b></div><div><small>Chave PIX cadastrada</small><b id="rdsAccountSummaryPix">—</b></div><div><small>E-mail da conta</small><b id="rdsAccountSummaryEmail">—</b></div><div><small>Telefone da conta</small><b id="rdsAccountSummaryPhone">—</b></div></div></div><div class="card"><h2>🔗 Conexões</h2><p class="mut">Conecte suas próprias contas para operar com segurança. Nenhuma senha ou token deve ser compartilhado com o suporte.</p><h3>💳 Mercado Pago</h3><div id="rdsMpAccountStatus" class="status warn">🟡 Verificando conexão…</div><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button><button id="rdsConnectionGuide" class="btn">Como configurar minhas conexões</button></div><p id="rdsMpMsg" class="mut"></p><div id="rdsConnectionGuidePanel" class="card" hidden style="margin-top:12px;background:#f7faff"><h3>Guia de configuração</h3><p><b>1. Mercado Pago</b> — toque em “Conectar Mercado Pago” e entre na página oficial para autorizar sua própria conta. Confira o nome da conta antes de confirmar.</p><p><b>2. WhatsApp</b> — abra a aba WhatsApp e siga o procedimento de conexão exibido no painel. Só escaneie o QR Code quando você decidir vincular o aparelho correto.</p><p><b>3. Segurança</b> — não envie senha, código de autenticação, Access Token, Refresh Token ou Client Secret para ninguém.</p><p><b>4. Problemas de conexão</b> — confirme que está usando a conta do vendedor correta e tente atualizar o estado da conexão. Se persistir, solicite ajuda ao administrador.</p><p><a href="https://www.mercadopago.com.br/developers/pt" target="_blank" rel="noopener noreferrer">Central oficial de desenvolvedores do Mercado Pago</a></p><button id="rdsConnectionGuideClose" class="btn">Fechar guia</button></div></div><div class="card"><h2>📱 Acessos</h2><p class="mut">Aparelhos com acesso à sua conta.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
+  root.innerHTML='<div class="page-title"><div><span class="eyebrow">Minha conta</span><h1 id="rdsAccountName">Minha conta</h1><p id="rdsAccountIdentity" class="mut">Seus dados pessoais e segurança de acesso.</p></div><button class="btn" id="rdsUnifiedLogout">Sair</button></div><div class="card"><h2>👤 Dados da conta</h2><div class="status ok">🟢 Conta autenticada</div><div id="rdsAccountSummary" class="rds-account-summary"><div><small>Vendedor / conta</small><b id="rdsAccountSummaryName">—</b></div><div><small>E-mail da conta</small><b id="rdsAccountSummaryEmail">—</b></div><div><small>Telefone da conta</small><b id="rdsAccountSummaryPhone">—</b></div></div></div><div class="card"><h2>📱 Acessos autorizados</h2><p class="mut">Aparelhos com acesso à sua conta. Se houver um aparelho desconhecido, solicite ao administrador a revisão do acesso.</p><div id="rdsAccountDevices"><span class="mut">Carregando…</span></div></div>';
   document.getElementById('rdsUnifiedLogout').onclick=logout;
  }
 
@@ -105,26 +105,40 @@ async function loadSellerAccountDetails(){
  const mpDisconnect=document.getElementById('rdsMpDisconnect');
  const mpStatus=document.getElementById('rdsMpAccountStatus');
  const mpMsg=document.getElementById('rdsMpMsg');
- if(!mpConnect||!mpStatus)return;
-
- mpConnect.onclick=async()=>{
-  mpConnect.disabled=true;mpMsg.textContent='Abrindo Mercado Pago…';
-  try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});if(!r?.url)throw new Error('Mercado Pago não retornou o endereço de autorização.');window.location.assign(r.url);}
-  catch(e){mpMsg.textContent=e.message;mpConnect.disabled=false;}
- };
+ const waStatus=document.getElementById('rdsWaConnectionStatus');
+ const waQr=document.getElementById('rdsWaConnectionQr');
+ const waConnect=document.getElementById('rdsWaConnect');
  const guide=document.getElementById('rdsConnectionGuidePanel');
  const guideButton=document.getElementById('rdsConnectionGuide');
  const guideClose=document.getElementById('rdsConnectionGuideClose');
  if(guideButton&&guide)guideButton.onclick=()=>{guide.hidden=!guide.hidden;};
  if(guideClose&&guide)guideClose.onclick=()=>{guide.hidden=true;};
- mpDisconnect.onclick=async()=>{
-  if(!confirm('Deseja realmente desconectar a conta?'))return;
-  try{await json('/api/operator/mercadopago/oauth/disconnect',{method:'POST',headers:headers()});account();}
-  catch(e){toast(e.message);}
- };
+ if(mpConnect&&mpStatus){
+  mpConnect.onclick=async()=>{
+   mpConnect.disabled=true;if(mpMsg)mpMsg.textContent='Abrindo Mercado Pago…';
+   try{const r=await json('/api/mercadopago/oauth/start',{headers:headers()});if(!r?.url)throw new Error('Mercado Pago não retornou o endereço de autorização.');window.location.assign(r.url);}
+   catch(e){if(mpMsg)mpMsg.textContent=e.message;mpConnect.disabled=false;}
+  };
+  if(mpDisconnect)mpDisconnect.onclick=async()=>{
+   if(!confirm('Deseja realmente desconectar a conta do Mercado Pago?'))return;
+   mpDisconnect.disabled=true;
+   try{await json('/api/operator/mercadopago/oauth/disconnect',{method:'POST',headers:headers()});await loadSellerAccountDetails();}
+   catch(e){toast(e.message);mpDisconnect.disabled=false;}
+  };
+ }
+ if(waConnect&&waStatus){
+  waConnect.onclick=async()=>{
+   waConnect.disabled=true;waStatus.className='status warn';waStatus.textContent='Solicitando conexão do WhatsApp…';
+   if(waQr)waQr.innerHTML='';
+   try{
+    const d=await json('/api/operator/whatsapp/connect',{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify({})});
+    renderWaConnection(d);
+   }catch(e){waStatus.className='status bad';waStatus.textContent=e.message||'Não foi possível solicitar a conexão.';}
+   finally{waConnect.disabled=false;}
+  };
+ }
  try{
-  const d=await sellerData();
-  const st=d.settings||{},m=d.mp||{},connected=Boolean(m.configured);
+  const d=await sellerData(),st=d.settings||{},m=d.mp||{};
   window.__rdsAccountSellerName=(d.me||{}).name||'';
   window.__rdsAccountSellerEmail=(d.me||{}).email||'';
   window.__rdsAccountSellerPhone=(d.me||{}).phone||'';
@@ -134,23 +148,51 @@ async function loadSellerAccountDetails(){
   const summaryPix=document.getElementById('rdsAccountSummaryPix');
   const summaryEmail=document.getElementById('rdsAccountSummaryEmail');
   const summaryPhone=document.getElementById('rdsAccountSummaryPhone');
-  if(summaryName)summaryName.textContent=sellerName(st)||'—';
+  if(summaryName)summaryName.textContent=sellerName(st)||window.__rdsAccountSellerName||'—';
   if(summaryPixName)summaryPixName.textContent=st.pix_name||'Não cadastrada';
   if(summaryPix)summaryPix.textContent=st.pix_key||'Não cadastrada';
   if(summaryEmail)summaryEmail.textContent=window.__rdsAccountSellerEmail||'Não informado';
   if(summaryPhone)summaryPhone.textContent=window.__rdsAccountSellerPhone||'Não informado';
-  mpStatus.className='status '+(connected?'ok':'warn');
-  mpStatus.textContent=connected?'🟢 Mercado Pago conectado'+(m.environment?' • '+String(m.environment).toUpperCase():''):'🟡 Mercado Pago não conectado';
-  mpConnect.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
-  mpDisconnect.style.display=connected?'':'none';
-  const devices=d.devices||[];
-  document.getElementById('rdsAccountDevices').innerHTML=devices.length?devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status||'')+'<br><span class="mini">Acesso autorizado</span></div>').join(''):'<span class="mut">Nenhum dispositivo registrado.</span>';
+  if(mpStatus){
+   const connected=Boolean(m.configured);
+   mpStatus.className='status '+(connected?'ok':'warn');
+   mpStatus.textContent=connected?'🟢 Mercado Pago conectado'+(m.environment?' • '+String(m.environment).toUpperCase():''):'🟡 Mercado Pago não conectado';
+   if(mpConnect)mpConnect.textContent=connected?'Reconectar Mercado Pago':'Conectar Mercado Pago';
+   if(mpDisconnect)mpDisconnect.style.display=connected?'':'none';
+  }
+  const devices=d.devices||[],deviceRoot=document.getElementById('rdsAccountDevices');
+  if(deviceRoot)deviceRoot.innerHTML=devices.length?devices.map(x=>'<div class="status '+(x.status==='ATIVO'?'ok':'bad')+'" style="margin:7px 0"><b>'+esc(x.platform||'web')+'</b> • '+esc(x.status||'')+'<br><span class="mini">Acesso autorizado</span></div>').join(''):'<span class="mut">Nenhum dispositivo registrado.</span>';
  }catch(e){
-  mpStatus.className='status warn';
-  mpStatus.textContent='🟡 Conta carregada; alguns dados adicionais não responderam.';
-  document.getElementById('rdsAccountDevices').innerHTML='<span class="mut">Dados adicionais indisponíveis no momento.</span>';
+  if(mpStatus){mpStatus.className='status warn';mpStatus.textContent='🟡 Conexão indisponível no momento.';}
+  const deviceRoot=document.getElementById('rdsAccountDevices');if(deviceRoot)deviceRoot.innerHTML='<span class="mut">Dados adicionais indisponíveis no momento.</span>';
+ }
+ if(waStatus){
+  try{renderWaConnection(await json('/api/operator/whatsapp/status',{headers:headers()}));}
+  catch(e){waStatus.className='status warn';waStatus.textContent='Não foi possível consultar o WhatsApp agora. Use Atualizar para tentar novamente.';}
  }
 }
+function renderWaConnection(d){
+ const status=document.getElementById('rdsWaConnectionStatus'),qr=document.getElementById('rdsWaConnectionQr');
+ if(!status)return;
+ const connected=Boolean(d?.connected);
+ status.className='status '+(connected?'ok':d?.qr?'warn':'bad');
+ status.textContent=connected?'🟢 WhatsApp conectado'+(d.number?' • '+d.number:''):d?.qr?'🟡 QR Code disponível — escaneie pelo aparelho que deseja vincular.':'🔴 WhatsApp não conectado';
+ if(qr)qr.innerHTML=d?.qr?'<img alt="QR Code de conexão do WhatsApp" style="display:block;width:min(280px,100%);height:auto;margin:12px auto;border:8px solid white;border-radius:12px" src="'+esc(d.qr)+'"><p class="mut">O QR Code expira. Só escaneie se deseja vincular esse WhatsApp a esta conta de vendedor.</p>':'';
+}
+async function connections(){
+ const root=document.getElementById('app');if(!root)return;
+ const c=await context();
+ if(!c?.authenticated){openLogin('Entre para gerenciar as conexões da sua conta.');return;}
+ if(c.role==='ADMINISTRADOR'){window.location.replace('/admin-vendedores.html');return;}
+ root.innerHTML='<div class="page-title"><div><span class="eyebrow">Configuração segura</span><h1>Conexões</h1><p class="mut">Integrações operacionais da sua conta de vendedor.</p></div><button class="btn" onclick="window.rdsRefreshCurrentPage()">Atualizar</button></div><div class="card"><h2>💳 Mercado Pago</h2><p class="mut">Autorize a sua própria conta pelo Mercado Pago. Não compartilhe senha, Access Token, Refresh Token ou Client Secret.</p><div id="rdsMpAccountStatus" class="status warn">Verificando conexão…</div><div class="row"><button id="rdsMpConnect" class="btn primary">Conectar Mercado Pago</button><button id="rdsMpDisconnect" class="btn danger" style="display:none">Desconectar</button></div><p id="rdsMpMsg" class="mut"></p><p><a href="https://www.mercadopago.com.br/developers/pt" target="_blank" rel="noopener noreferrer">Central oficial de desenvolvedores do Mercado Pago</a></p></div><div class="card"><h2>📱 WhatsApp</h2><p class="mut">A conexão pertence à sua conta de vendedor. O painel só inicia o vínculo quando você pressiona o botão abaixo.</p><div id="rdsWaConnectionStatus" class="status warn">Consultando conexão…</div><div class="row"><button id="rdsWaConnect" class="btn primary">Conectar / consultar QR Code</button><button class="btn" onclick="window.rdsRefreshCurrentPage()">Atualizar estado</button></div><div id="rdsWaConnectionQr"></div></div><div class="card"><h2>🏢 Empresa / banca</h2><p class="mut">O vínculo oficial da banca e os parâmetros administrados pela empresa são gerenciados pelo administrador. Se a empresa vinculada estiver incorreta, solicite a correção antes de operar.</p><div id="rdsCompanyConnectionStatus" class="status warn">Consultando vínculo…</div></div><div class="card"><h2>🔐 Segurança e configuração</h2><p><b>1.</b> Conecte o Mercado Pago usando a autorização oficial.</p><p><b>2.</b> Para o WhatsApp, use o botão de conexão e escaneie o QR Code somente no aparelho correto.</p><p><b>3.</b> Nunca compartilhe senha, código de autenticação, Access Token, Refresh Token ou Client Secret.</p><p><b>4.</b> Se a conexão não funcionar, confira se entrou na conta de vendedor correta e peça ajuda ao administrador.</p><button id="rdsConnectionGuide" class="btn">Mostrar / ocultar instruções</button><div id="rdsConnectionGuidePanel" hidden style="margin-top:12px"><p>O Mercado Pago deve ser autorizado na conta que receberá as cobranças do vendedor. A conexão do WhatsApp é independente e não deve ser desconectada para solucionar problemas de pagamento.</p></div><button id="rdsConnectionGuideClose" class="btn" hidden>Fechar instruções</button></div>';
+ await loadSellerAccountDetails();
+ try{
+  const co=await json('/api/rds/company/context',{headers:headers()});
+  const company=co.company||{},el=document.getElementById('rdsCompanyConnectionStatus');
+  if(el){el.className='status '+(company.id?'ok':'warn');el.textContent=company.id?'Vínculo atual: '+(company.name||company.code||'Empresa vinculada')+' • '+(company.active?'ativa':'inativa'):'Nenhuma empresa vinculada identificada. Solicite revisão administrativa.';}
+ }catch(e){const el=document.getElementById('rdsCompanyConnectionStatus');if(el)el.textContent='Não foi possível consultar o vínculo da empresa.';}
+}
+window.rdsConnectionsPage=connections;
 async function logout(){const seller=sellerAudience();try{await json('/api/rds/unified/logout'+(seller?'?audience=seller':''),{method:'POST',headers:{...headers(),...adminHeaders()}});}catch{}if(seller)localStorage.removeItem('rds_operator_token');else localStorage.removeItem('rds_admin_token');window.rdsUnifiedRole=null;location.reload();}
 (()=>{if(!document.getElementById('rdsAccountRefinedStyles')){const s=document.createElement('style');s.id='rdsAccountRefinedStyles';s.textContent='.rds-account-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.rds-account-summary>div{border:1px solid rgba(30,70,120,.12);border-radius:13px;background:#f8fbff;padding:11px 12px;min-width:0}.rds-account-summary small{display:block;color:#71809a;font-weight:800;font-size:11px;margin-bottom:5px}.rds-account-summary b{display:block;color:#17355d;font-size:14px;line-height:1.25;overflow-wrap:anywhere}@media(max-width:560px){.rds-account-summary{grid-template-columns:1fr}}';document.head.appendChild(s);}})();window.rdsUnifiedAccountPage=account;
 window.rdsUnifiedSetRole=role=>{window.rdsUnifiedRole=role||null};
@@ -159,7 +201,7 @@ window.addEventListener('load',()=>{const q=new URLSearchParams(location.search)
 })();
 /* RDS ROLE GATE V2 — painel operacional unificado */
 (()=>{
-const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','commissions','account']);
+const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','results','commissions','account','connections']);
 const nav=()=>[...document.querySelectorAll('#nav button,#mobileNav button')];
 const applySellerNav=()=>nav().forEach(b=>{const ok=sellerPages.has(b.dataset.page);b.style.display=ok?'':'none';});
 async function gate(){
