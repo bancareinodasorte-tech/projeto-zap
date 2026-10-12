@@ -9,6 +9,28 @@ const insertFn="async function insert(table, row, returning='representation'){";
 const helper = [
   "// RDS TENANT SCOPE V1",
   "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders','rds10_whatsapp_chat_state','rds10_seller_settings','rds10_ticket_documents']);",
+  "async function rdsTenantPrepareInsertRow(table,row,sellerId,companyId){",
+  "  if(!RDS_TENANT_TABLES.has(table))return row;",
+  "  let activeCompanyPromise=null;",
+  "  const onlyActiveCompany=async()=>{if(!activeCompanyPromise)activeCompanyPromise=(async()=>{const rows=await list('rds10_companies','select=id&active=eq.true&limit=2');const ids=[...new Set((rows||[]).map(c=>String(c.id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');return ids[0];})();return activeCompanyPromise;};",
+  "  const prepare=async(item)=>{",
+  "    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error('RDS_TENANT_ROW_INVALID');",
+  "    let out={...item};",
+  "    if(sellerId&&out.seller_id==null)out.seller_id=sellerId;",
+  "    if(companyId&&out.company_id==null)out.company_id=companyId;",
+  "    const rowSeller=String(out.seller_id||sellerId||'');",
+  "    if(companyId&&out.company_id&&String(out.company_id)!==String(companyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
+  "    if(!out.company_id){",
+  "      if(rowSeller){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');out.company_id=ids[0];}",
+  "      else out.company_id=await onlyActiveCompany();",
+  "    }",
+  "    const active=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(String(out.company_id)));",
+  "    if(!active)throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
+  "    if(rowSeller){const membership=await one('rds10_seller_companies','select=seller_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&company_id=eq.'+encodeURIComponent(String(out.company_id))+'&active=eq.true');if(!membership)throw new Error('RDS_TENANT_COMPANY_MISMATCH');}",
+  "    return out;",
+  "  };",
+  "  return Array.isArray(row)?Promise.all(row.map(prepare)):prepare(row);",
+  "}",
   "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
   "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
@@ -19,7 +41,7 @@ const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não lo
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
-const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),scopeCompanyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  if(scopeCompanyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:scopeCompanyId};\n  if(RDS_TENANT_TABLES.has(table)&&row){\n    const rowSeller=String(row.seller_id||sellerId||'');\n    if(scopeCompanyId&&row.company_id&&String(row.company_id)!==String(scopeCompanyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n    if(!row.company_id){\n      if(!rowSeller)throw new Error('RDS_TENANT_COMPANY_REQUIRED');\n      const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');\n      const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];\n      if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');\n      row={...row,company_id:ids[0]};\n    }\n    if(rowSeller){\n      const membership=await one('rds10_seller_companies','select=seller_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&company_id=eq.'+encodeURIComponent(String(row.company_id))+'&active=eq.true');\n      if(!membership)throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n    }\n  }\n  return sb('/rest/v1/'+table, { method:'POST', headers:{Prefer:'return='+returning}, body:JSON.stringify(row) });\n}";
+const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  row=await rdsTenantPrepareInsertRow(table,row,sellerId,companyId);\n  return sb('/rest/v1/'+table, { method:'POST', headers:{Prefer:'return='+returning}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
