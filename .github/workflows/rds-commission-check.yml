@@ -48,7 +48,8 @@ jobs:
             "if(!membership?.company_id)return res.status(403)",
             "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)",
             "&active=eq.true&order=updated_at.desc&limit=1",
-            "&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)"
+            "&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)",
+            "encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)"
           ];
           for (const pattern of required) {
             if (!source.includes(pattern)) {
