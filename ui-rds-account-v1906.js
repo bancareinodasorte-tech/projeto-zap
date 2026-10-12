@@ -174,10 +174,10 @@ async function loadSellerAccountDetails(){
 function renderWaConnection(d){
  const status=document.getElementById('rdsWaConnectionStatus'),qr=document.getElementById('rdsWaConnectionQr');
  if(!status)return;
- const connected=Boolean(d?.connected);
- status.className='status '+(connected?'ok':d?.qr?'warn':'bad');
- status.textContent=connected?'🟢 WhatsApp conectado'+(d.number?' • '+d.number:''):d?.qr?'🟡 QR Code disponível — escaneie pelo aparelho que deseja vincular.':'🔴 WhatsApp não conectado';
- if(qr)qr.innerHTML=d?.qr?'<img alt="QR Code de conexão do WhatsApp" style="display:block;width:min(280px,100%);height:auto;margin:12px auto;border:8px solid white;border-radius:12px" src="'+esc(d.qr)+'"><p class="mut">O QR Code expira. Só escaneie se deseja vincular esse WhatsApp a esta conta de vendedor.</p>':'';
+ const connected=Boolean(d?.connected),qrData=String(d?.qrDataUrl||'');
+ status.className='status '+(connected?'ok':qrData?'warn':'bad');
+ status.textContent=connected?'🟢 WhatsApp conectado'+(d.number?' • '+d.number:''):qrData?'🟡 QR Code disponível — escaneie pelo aparelho que deseja vincular.':'🔴 WhatsApp não conectado';
+ if(qr)qr.innerHTML=qrData?'<img alt="QR Code de conexão do WhatsApp" style="display:block;width:min(280px,100%);height:auto;margin:12px auto;border:8px solid white;border-radius:12px" src="'+esc(qrData)+'"><p class="mut">O QR Code expira. Só escaneie se deseja vincular esse WhatsApp a esta conta de vendedor.</p>':'';
 }
 async function connections(){
  const root=document.getElementById('app');if(!root)return;
