@@ -43,6 +43,7 @@ jobs:
           const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
           const checks = [
             [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
+            [worker, "const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{}", 'nested official sale payload must be normalized for ticket rendering'],
             [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
             [worker, "if(issue==='ERRO_RECONCILIAR')return", 'ambiguous issuance must not retry automatically'],
             [ticket, 'fileName.match(/bilhetes-', 'ticket PDF filename matcher must be present'],
