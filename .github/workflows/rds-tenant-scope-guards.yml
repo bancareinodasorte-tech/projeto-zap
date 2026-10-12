@@ -33,7 +33,7 @@ jobs:
             ['COMPANY_SELECTION_REQUIRED', 'multi-company sellers must select a company'],
             ['COMPANY_MEMBERSHIP_UNAVAILABLE', 'membership lookup failures must return an error'],
             ['COMPANY_MEMBERSHIP_MISMATCH', 'unverified company selection must be rejected'],
-            ["'active=eq.true&limit=1000'", 'only active memberships may establish company scope'],
+            ['&active=eq.true&limit=1000', 'only active memberships may establish company scope'],
             ['rdsRequestScope.run({sellerId:session.seller.id,companyId}', 'seller and verified company must scope the request'],
             ["res.status(503).json({success:false,code:'COMPANY_MEMBERSHIP_UNAVAILABLE'", 'membership lookup failure must fail closed']
           ];
