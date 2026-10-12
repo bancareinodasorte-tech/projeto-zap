@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'runtime-rds-commission-center-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
       - 'runtime-rds-seller-recovery-v1.mjs'
       - 'runtime-rds-admin-auth-v5.mjs'
       - 'prepare-pagbank-no-email.mjs'
@@ -34,6 +35,7 @@ jobs:
       - name: Check runtime installer syntax
         run: |
           node --check runtime-rds-commission-center-v1.mjs
+          node --check runtime-rds-tenant-scope-v1.mjs
           node --check runtime-rds-seller-recovery-v1.mjs
           node --check runtime-rds-admin-auth-v5.mjs
           node --check prepare-pagbank-no-email.mjs
@@ -45,7 +47,8 @@ jobs:
           const required = [
             "if(!membership?.company_id)return res.status(403)",
             "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)",
-            "&active=eq.true&order=updated_at.desc&limit=1"
+            "&active=eq.true&order=updated_at.desc&limit=1",
+            "&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null)"
           ];
           for (const pattern of required) {
             if (!source.includes(pattern)) {
