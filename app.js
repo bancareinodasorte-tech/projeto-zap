@@ -19,7 +19,7 @@ setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('pt-BR',{time
 async function refreshCurrentPage(){
  const target=page||localStorage.getItem('rds_current_page')||'home';
  localStorage.setItem('rds_current_page',target);
- window.location.assign('/?rds='+encodeURIComponent(target));
+ const q=new URLSearchParams(location.search);q.set('rds',target);window.location.assign('/?'+q.toString());
 }
 window.rdsRefreshCurrentPage=refreshCurrentPage;
 
