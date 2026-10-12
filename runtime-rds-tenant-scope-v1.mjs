@@ -19,7 +19,7 @@ const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não lo
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
-const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};\n  if(RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null){const rowSeller=String(row.seller_id||sellerId||'');let resolved=companyId;if(!resolved&&rowSeller){const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null);resolved=membership?.company_id||null;}if(!resolved){const fallback=await one('rds10_companies','select=id&code=eq.RDS').catch(()=>null);resolved=fallback?.id||null;}if(resolved)row={...row,company_id:resolved};}\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
+const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),scopeCompanyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  if(scopeCompanyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:scopeCompanyId};\n  if(RDS_TENANT_TABLES.has(table)&&row){\n    const rowSeller=String(row.seller_id||sellerId||'');\n    if(scopeCompanyId&&row.company_id&&String(row.company_id)!==String(scopeCompanyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n    if(!row.company_id){\n      if(!rowSeller)throw new Error('RDS_TENANT_COMPANY_REQUIRED');\n      const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');\n      const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];\n      if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');\n      row={...row,company_id:ids[0]};\n    }\n    if(rowSeller){\n      const membership=await one('rds10_seller_companies','select=seller_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&company_id=eq.'+encodeURIComponent(String(row.company_id))+'&active=eq.true');\n      if(!membership)throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n    }\n  }\n  return sb('/rest/v1/'+table, { method:'POST', headers:{Prefer:'return='+returning}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
@@ -53,16 +53,25 @@ const jp=server.indexOf(jsonAnchor);if(jp<0)throw new Error('express.json não l
 const middleware = [
   "app.use(async(req,res,next)=>{",
   "  if(!String(req.path||'').startsWith('/api'))return next();",
-  "  try{",
-  "    if(typeof rdsOpSession==='function'){",
-  "      const s=await rdsOpSession(req).catch(()=>null);",
-  "      if(s?.seller?.id){",
-  "        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc&limit=1').catch(()=>null);",
-  "        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());",
-  "      }",
-  "    }",
-  "  }catch{}",
-  "  return next();",
+  "  if(['/api/rds/unified/login','/api/rds/unified/context','/api/rds/unified/logout'].includes(String(req.path||'')))return next();",
+  "  const sellerToken=(typeof rdsOpBearer==='function'?rdsOpBearer(req):null)||(typeof rdsOpCookie==='function'?rdsOpCookie(req):null);",
+  "  if(!sellerToken)return next();",
+  "  let session=null;try{if(typeof rdsOpSession==='function')session=await rdsOpSession(req);}catch{}",
+  "  if(!session?.seller?.id){",
+  "    let admin=null;try{if((typeof rdsAdminBearer==='function'&&rdsAdminBearer(req))||(typeof rdsAdminCookie==='function'&&rdsAdminCookie(req)))admin=await rdsAdminSession(req);}catch{}",
+  "    if(admin?.admin?.id)return next();",
+  "    return res.status(401).json({success:false,code:'SELLER_SESSION_INVALID',error:'Sessão de vendedor inválida ou expirada. Entre novamente.'});",
+  "  }",
+  "  let memberships;try{memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(session.seller.id)+'&active=eq.true&limit=1000');}catch(e){return res.status(503).json({success:false,code:'COMPANY_MEMBERSHIP_UNAVAILABLE',error:'Não foi possível validar a empresa vinculada à conta. Tente novamente.'});}",
+  "  const companyIds=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];",
+  "  if(!companyIds.length)return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_REQUIRED',error:'Esta conta não possui vínculo ativo com uma empresa.'});",
+  "  const requested=String(req.headers['x-rds-company-id']||req.query?.company_id||req.body?.company_id||'').trim();",
+  "  if(requested&&!companyIds.includes(requested))return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_MISMATCH',error:'A empresa selecionada não está autorizada para esta conta.'});",
+  "  if(companyIds.length>1&&!requested)return res.status(409).json({success:false,code:'COMPANY_SELECTION_REQUIRED',error:'Selecione a empresa antes de continuar.'});",
+  "  const companyId=requested||companyIds[0];",
+  "  let company;try{company=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(companyId));}catch(e){return res.status(503).json({success:false,code:'COMPANY_STATUS_UNAVAILABLE',error:'Não foi possível validar o estado da empresa. Tente novamente.'});}",
+  "  if(!company)return res.status(403).json({success:false,code:'COMPANY_INACTIVE',error:'A empresa selecionada está inativa ou não existe.'});",
+  "  return rdsRequestScope.run({sellerId:session.seller.id,companyId},()=>next());",
   "});"
 ].join(String.fromCharCode(10));
 server=server.slice(0,jp+jsonAnchor.length)+'\n'+middleware+server.slice(jp+jsonAnchor.length);
