@@ -1,0 +1,36 @@
+name: RDS obsolete order UI lock checks
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ui-rds-ticket-archive-v2.js'
+      - '.github/workflows/rds-obsolete-order-ui-checks.yml'
+  push:
+    branches: [fix/remove-obsolete-order-lock-ui]
+    paths:
+      - 'ui-rds-ticket-archive-v2.js'
+      - '.github/workflows/rds-obsolete-order-ui-checks.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check archive UI syntax
+        run: node --check ui-rds-ticket-archive-v2.js
+      - name: Verify no hardcoded order lock and preserve normal actions
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('ui-rds-ticket-archive-v2.js', 'utf8');
+          if (source.includes('RDS-559D8F')) throw new Error('Obsolete hardcoded order lock remains in the archive UI');
+          for (const guard of ['rdsOpenTicketPdf', 'rdsResendTicketPdf', 'data-rdsTicketArchiveToggle']) {
+            if (!source.includes(guard)) throw new Error('Archive action missing: ' + guard);
+          }
+          if (!source.includes('onclick="rdsResendTicketPdf')) throw new Error('WhatsApp resend action is not rendered');
+          console.log('Archive PDF and WhatsApp actions remain available without an order-code lock.');
+          NODE
