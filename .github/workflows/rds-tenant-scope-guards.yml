@@ -29,6 +29,10 @@ jobs:
           const source = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
           const checks = [
             ['RDS_TENANT_COMPANY_REQUIRED', 'missing company context must reject tenant writes'],
+            ['rdsTenantPrepareInsertRow', 'tenant inserts must use the row preparation guard'],
+            ['Promise.all(row.map(prepare))', 'batch inserts must preserve array payloads'],
+            ['onlyActiveCompany', 'background writes must resolve only a single active company'],
+            ['RDS_TENANT_ROW_INVALID', 'invalid tenant insert payloads must be rejected'],
             ['RDS_TENANT_COMPANY_AMBIGUOUS', 'ambiguous seller memberships must reject tenant writes'],
             ['COMPANY_SELECTION_REQUIRED', 'multi-company sellers must select a company'],
             ['COMPANY_MEMBERSHIP_UNAVAILABLE', 'membership lookup failures must return an error'],
