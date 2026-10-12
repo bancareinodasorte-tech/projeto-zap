@@ -112,6 +112,9 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [x] Vínculo de empresa/banca exibido separadamente da identidade e dos dados de recebimento.
 - [ ] Confirmar publicação e validar visualmente Conta, Pagamentos e Conexões em aparelho.
 - [ ] Revisar permissões e isolamento multiempresa em operação controlada, sem alterar dados de produção.
+- [x] Corrigido o botão de configuração do Mercado Pago em Pagamentos para abrir Conexões, onde a integração operacional é gerenciada.
+- [x] Corrigido Atualizar para preservar os parâmetros atuais da URL, incluindo `audience=seller`, evitando perder o contexto comercial após a atualização.
+- [ ] Aguardar deploy dessas correções e revisar logs; validar navegação no navegador/aparelho sem acionar conexão, cobrança ou emissão.
 
 ## BLOCO 9 — LOGIN OBRIGATÓRIO E FECHAMENTO DO APK
 
