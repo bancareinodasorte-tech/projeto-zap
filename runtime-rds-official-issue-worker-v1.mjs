@@ -38,7 +38,9 @@ else{
    for(const item of inventory){
     const did=drawIdOf(item)||drawIdOf(item?.draw)||String(item?.draw?.drawId||'').trim();
     if(!did)continue;
-    const prior=byId.get(did)||{drawId:did};
+    const prior=byId.get(did);
+    // O inventário apenas complementa sorteios já autorizados por /draws/seller/available.
+    if(!prior)continue;
     const stock=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.count;
     byId.set(did,{...prior,...item,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
    }
