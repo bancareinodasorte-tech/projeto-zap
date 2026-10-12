@@ -47,6 +47,8 @@ jobs:
             [worker, "if(issue==='ERRO_RECONCILIAR')return", 'ambiguous issuance must not retry automatically'],
             [ticket, 'fileName.match(/bilhetes-', 'ticket PDF filename matcher must be present'],
             [ticket, 'if(!b||!b.length)', 'empty PDFs must be rejected'],
+            [ticket, 'RDS_OFFICIAL_TICKETS_MISSING', 'PDF/PNG generation must fail when official ticket numbers are missing'],
+            [ticket, 'books.some(b=>!Array.isArray(b?.tickets)||!b.tickets.length)', 'every rendered booklet must contain ticket numbers'],
             [ticket, "if(!s?.key?.id)", 'unconfirmed WhatsApp sends must not be treated as successful'],
             [tenant, 'RDS_TENANT_COMPANY_REQUIRED', 'tenant writes without a verified company must fail'],
             [tenant, 'RDS_TENANT_SELLER_MISMATCH', 'seller cannot insert or update records for another seller'],
