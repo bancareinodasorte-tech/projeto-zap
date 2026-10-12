@@ -1,0 +1,56 @@
+name: RDS commission safety checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-commission-center-v1.mjs'
+      - 'runtime-rds-seller-recovery-v1.mjs'
+      - 'runtime-rds-admin-auth-v5.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - '.github/workflows/rds-commission-check.yml'
+  push:
+    branches: [fix/commission-company-scope]
+    paths:
+      - 'runtime-rds-commission-center-v1.mjs'
+      - 'runtime-rds-seller-recovery-v1.mjs'
+      - 'runtime-rds-admin-auth-v5.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - '.github/workflows/rds-commission-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check runtime installer syntax
+        run: |
+          node --check runtime-rds-commission-center-v1.mjs
+          node --check runtime-rds-seller-recovery-v1.mjs
+          node --check runtime-rds-admin-auth-v5.mjs
+          node --check prepare-pagbank-no-email.mjs
+      - name: Verify seller commission scope is fail-closed
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('runtime-rds-commission-center-v1.mjs', 'utf8');
+          const required = [
+            "if(!membership?.company_id)return res.status(403)",
+            "'&seller_id=eq.'+encodeURIComponent(sid)+'&company_id=eq.'+encodeURIComponent(membership.company_id)"
+          ];
+          for (const pattern of required) {
+            if (!source.includes(pattern)) {
+              console.error('Missing commission isolation guard:', pattern);
+              process.exit(1);
+            }
+          }
+          console.log('Commission endpoint contains seller + active-company scope guards.');
+          NODE
