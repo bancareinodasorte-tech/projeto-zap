@@ -1,0 +1,45 @@
+name: RDS protected-ticket guards
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - '.github/workflows/rds-ticket-protection-check.yml'
+  push:
+    branches: [fix/protect-rds-ticket-resend]
+    paths:
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - '.github/workflows/rds-ticket-protection-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check installer syntax
+        run: |
+          node --check runtime-rds-official-ticket-chromium-v1.mjs
+          node --check runtime-rds-official-issue-worker-v1.mjs
+      - name: Verify protected order guards
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const chromium = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
+          const worker = fs.readFileSync('runtime-rds-official-issue-worker-v1.mjs', 'utf8');
+          if (!chromium.includes("if(String(o.code||'')==='RDS-559D8F')return res.status(409)")) {
+            throw new Error('Missing protected-order guard on PDF generation endpoint');
+          }
+          if (!worker.includes("if(String(order?.code||'')==='RDS-559D8F')throw new Error")) {
+            throw new Error('Missing protected-order guard on automatic delivery');
+          }
+          console.log('Protected order cannot be regenerated or sent by these runtime paths.');
+          NODE
