@@ -95,8 +95,8 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [x] Gestão administrativa de bancas/empresas adicionada ao painel: cadastro/edição, preço padrão, fuso horário, divisão de comissão e vínculo/desvínculo de vendedores.
 - [x] Login unificado ajustado para não reativar automaticamente dispositivos bloqueados/revogados e para exigir autorização administrativa de novos dispositivos.
 - [x] Login unificado ajustado para impedir acesso de contas inativas.
-- [ ] Confirmar deploy final de todas as mudanças e revisar logs de inicialização.
-- [ ] Conferir no painel os valores de comissão usando dados reais já existentes, sem criar pedido nem pagamento.
+- [x] Confirmar deploy final de todas as mudanças e revisar logs de inicialização (deploy mais recente LIVE; consulta de erros/fatais sem ocorrências no intervalo verificado).
+- [x] Conferir valores de comissão com dados reais já existentes, sem criar pedido nem pagamento: 4 pedidos concluídos, R$ 12,00 em vendas, R$ 3,60 de comissão dos vendedores e R$ 8,40 de receita da empresa; todos os 4 pedidos têm vendedor, empresa e valores de comissão registrados.
 - [ ] Validar cadastro/edição de empresa e vínculo de vendedor com uma operação controlada que não altere a empresa padrão.
 - [ ] Validar acesso administrativo, bloqueio/desbloqueio, revogação de dispositivo e limite de dois dispositivos.
 - [ ] Validar isolamento multiempresa em pedidos, pagamentos, clientes, campanhas e emissão oficial.
