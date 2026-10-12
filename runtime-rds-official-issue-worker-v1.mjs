@@ -55,6 +55,7 @@ else{
   }catch{return false;}
  }
  async function sendProof(order,info){
+  if(String(order?.code||'')==='RDS-559D8F')throw new Error('Pedido protegido: envio automático bloqueado para preservar o registro oficial.');
   const phone=normalizeBR(order.phone||order.contact_phone||'');if(!phone)throw new Error('Telefone do cliente não informado.');
   const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp do cliente não retornou um JID válido.');
   // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
