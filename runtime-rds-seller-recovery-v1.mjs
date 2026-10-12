@@ -24,6 +24,7 @@ app.post('/api/operator/forgot-password',async(req,res)=>{
     if(!seller||!seller.email)return res.json({success:true,message:rdsSellerResetPublicMessage()});
     const key=String(process.env.RDS_RESEND_API_KEY||'').trim();
     if(!key)throw new Error('Recuperação por e-mail ainda não configurada no servidor.');
+    await patch('rds10_seller_reset_tokens','seller_id=eq.'+encodeURIComponent(seller.id)+'&used_at=is.null',{used_at:nowISO()}).catch(()=>{});
     const token=crypto.randomBytes(32).toString('base64url');
     await insert('rds10_seller_reset_tokens',{seller_id:seller.id,token_hash:rdsAdminHash(token),expires_at:new Date(Date.now()+1800000).toISOString(),created_at:nowISO()});
     const link=RDS_PUBLIC_BASE_URL_SELLER+'/?rds=reset-password&token='+encodeURIComponent(token);
