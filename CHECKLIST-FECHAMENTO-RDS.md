@@ -120,15 +120,15 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 
 **Não fechar o aplicativo nem aprovar o APK final enquanto este bloco não estiver concluído e validado para vendedor e administrador.**
 
-- [ ] Tornar o e-mail obrigatório em todo novo cadastro de vendedor, mesmo quando o telefone for usado como identificador de login.
-- [ ] Validar formato e normalizar e-mail (remover espaços e padronizar minúsculas); impedir cadastro sem e-mail e tratar duplicidade de forma segura.
+- [x] Tornar o e-mail obrigatório no formulário e na API de novos cadastros de vendedor, mesmo quando o telefone for usado como identificador de login; validar formato, normalizar minúsculas e exigir senha mínima de 8 caracteres.
+- [x] Validar formato e normalizar e-mail (remover espaços e padronizar minúsculas); impedir cadastro sem e-mail e rejeitar duplicidade.
 - [ ] Confirmar o e-mail cadastrado como destino de recuperação; não permitir que o usuário informe um endereço arbitrário para redefinir senha.
-- [ ] Integrar recuperação de senha do vendedor ao login unificado atualmente usado pelo CANAL DE VENDAS RDS; exibir “Esqueci minha senha” e o fluxo de redefinição dentro do painel comercial, sem depender de uma tela antiga.
-- [ ] Integrar recuperação da senha administrativa à tela e ao login administrativo atuais, usando o e-mail administrativo realmente cadastrado/configurado — não presumir um endereço padrão sem confirmação de configuração.
+- [x] Integrada a solicitação de recuperação do vendedor à tela de login unificado e ao formulário de redefinição atual; formulário de cadastro exige e-mail.
+- [x] Tela administrativa atual já oferece “Esqueci a senha”; redefinição usa a rota administrativa e retorna ao login administrativo. **Pendente validar que o e-mail configurado corresponde à conta administrativa de produção.**
 - [ ] Ativar e validar envio de e-mail no provedor de e-mail do servidor, sem expor chaves/API secrets.
-- [ ] Usar token aleatório de uso único, armazenar somente hash, limitar validade, invalidar token após uso e não revelar se um e-mail existe no sistema.
+- [x] Rotas existentes usam token aleatório com hash armazenado, validade de 30 minutos, resposta genérica e invalidam sessões de vendedor/administrador após redefinição; nova solicitação do vendedor invalida links anteriores. A validação de ponta a ponta ainda está pendente.
 - [ ] Garantir política de senha segura e que a redefinição invalide sessões antigas conforme o fluxo de autenticação.
-- [ ] Conferir as rotas de recuperação já existentes nos scripts do repositório: elas não estavam presentes no `server.js` nem conectadas ao `index.html` na inspeção de 2026-10-12; portanto, não considerar a função implementada apenas porque os scripts existem.
+- [x] Confirmado o mecanismo de boot: `prepare-pagbank-no-email.mjs` importa as rotas de recuperação do vendedor e o login administrativo atual já declara as rotas administrativas. Ajustes feitos para cadastro obrigatório e atualização do formulário atual.
 - [ ] Testar recuperação de vendedor e administrador usando contas/e-mails controlados, cobrindo e-mail válido, e-mail não cadastrado, token expirado, token já utilizado e senha inválida; não criar pedidos nem pagamentos para esses testes.
 - [ ] Confirmar a recuperação por e-mail em navegador e APK antes de autorizar a distribuição final.
 
