@@ -154,7 +154,7 @@ window.addEventListener('load',()=>{const q=new URLSearchParams(location.search)
 })();
 /* RDS ROLE GATE V2 — painel operacional unificado */
 (()=>{
-const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','account']);
+const sellerPages=new Set(['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','commissions','account']);
 const nav=()=>[...document.querySelectorAll('#nav button,#mobileNav button')];
 const applySellerNav=()=>nav().forEach(b=>{const ok=sellerPages.has(b.dataset.page);b.style.display=ok?'':'none';});
 async function gate(){
@@ -179,7 +179,7 @@ window.addEventListener('load',()=>setTimeout(gate,20));
 const originalGo=window.go;
 window.go=async p=>{
  if(window.rdsUnifiedRole==='VENDEDOR'){
-  if(!['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','account'].includes(p))p='home';
+  if(!['home','contacts','whatsapp','campaigns','execution','returns','payments','orders','commissions','account'].includes(p))p='home';
   localStorage.setItem('rds_current_page',p);
   if(typeof setNav==='function')setNav();
   return originalGo(p);
