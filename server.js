@@ -1098,6 +1098,10 @@ app.get('/api/diagnostic',async(req,res)=>{
     try{
       const order=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(id));
       if(!order||String(order.status||'').toUpperCase()!=='PAGO_AGUARDANDO_BILHETES')return;
+      if(String(order.official_sale_id||'').trim()||String(order.official_issue_status||'').toUpperCase()==='ERRO_RECONCILIAR'){
+        console.warn('[RDS AUTO] '+String(order.code||id)+': venda oficial já registrada ou reconciliação pendente; nova emissão automática bloqueada para evitar duplicidade.');
+        return;
+      }
       if(String(order.official_issue_status||'').toUpperCase()!=='CONCLUIDO'||!order.official_sale_id){
         let drawId=String(order.official_draw_id||'').trim();
         if(!drawId&&order.campaign_id){const camp=await one('rds10_campaigns','select=official_draw_id&id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);drawId=String(camp?.official_draw_id||'').trim();}
@@ -1107,7 +1111,7 @@ app.get('/api/diagnostic',async(req,res)=>{
         drawId=String(draw?.drawId||draw?.id||drawId||'').trim();if(!drawId)throw new Error('ID do sorteio oficial não identificado.');
         const qty=Math.max(1,Math.floor(Number(order.quantity||0)));const rawAvail=draw?.availableBooklets??draw?.bookletsAvailable??draw?.availableTickets??draw?.remainingBooklets??draw?.remainingTickets??draw?.totalBooklets;const available=rawAvail===null||rawAvail===undefined||rawAvail===''?null:Number(rawAvail);if(Number.isFinite(available)&&available<qty)throw new Error('Disponibilidade oficial insuficiente.');
         const customerName=String(order.customer_name||'').trim();const customerPhone=String(order.phone||order.contact_phone||'').trim();if(customerName.length<2||!customerPhone)throw new Error('Dados do cliente insuficientes.');
-        const sale=await officialRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets:qty,lotNumber:1,paymentMethod:String(order.payment_method||'pix').trim().toLowerCase()})});
+        const sale=await officialRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId,customerName,customerPhone,quantityBooklets:qty,lotNumber:1,paymentMethod:(/^(?:pix|pix_mercado_pago|pix_mercadopago)$/i.test(String(order.payment_method||''))?'pix':String(order.payment_method||'pix').trim().toLowerCase())})});
         const data=sale?.data||sale||{};const saleId=String(data?.saleId||data?.id||data?.sale?.saleId||data?.sale?.id||'').trim()||null;
         await patch('rds10_orders','id=eq.'+encodeURIComponent(id),{official_draw_id:drawId,official_draw_title:String(draw.drawTitle||draw.title||draw.name||'').trim()||null,official_draw_at:draw.drawDate||draw.drawAt||draw.date||null,official_sale_id:saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_issue_error:null,official_ticket_payload:data,official_ticket_url:data?.publicUrl||data?.ticketUrl||data?.url||null,status:'PAGO_AGUARDANDO_BILHETES',updated_at:nowISO()});
         await logEvent('EMISSAO_OFICIAL_AUTOMATICA',{order:order.code,order_id:id,official_sale_id:saleId,draw_id:drawId});
