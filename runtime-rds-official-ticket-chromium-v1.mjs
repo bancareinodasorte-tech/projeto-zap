@@ -217,19 +217,23 @@ const block=String.raw`
 
   const rawSend=sendToJid;
   sendToJid=async(jid,content)=>{
-    try{
-      const m=String(content?.fileName||'').match(/bilhetes-(RDS-[A-Z0-9]{6,12})\\.pdf/i);
-      if(m&&content?.document){
+    const fileName=String(content?.fileName||content?.filename||'');
+    const ticketMatch=fileName.match(/bilhetes-(RDS-[A-Z0-9]{6,12})\.pdf/i);
+    if(ticketMatch&&content?.document){
+      try{
         const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-        const f=sid?'select=*&code=eq.'+encodeURIComponent(m[1])+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&code=eq.'+encodeURIComponent(m[1]);
+        const f=sid?'select=*&code=eq.'+encodeURIComponent(ticketMatch[1])+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&code=eq.'+encodeURIComponent(ticketMatch[1]);
         const o=await one('rds10_orders',f);
-        if(o){
-          const b=await renderPdf(o);await archive(o,b);
-          console.log('[RDS TICKET CHROMIUM] modelo visual renderizado '+o.code);
-          return rawSend(jid,{...content,document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf'});
-        }
+        if(!o)throw new Error('Pedido do bilhete não encontrado; envio do anexo bloqueado.');
+        const b=validateRdsTicketPdf(await renderPdf(o));
+        await archive(o,b);
+        console.log('[RDS TICKET CHROMIUM] PDF íntegro renderizado e arquivado '+o.code+' ('+b.length+' bytes)');
+        return await rawSend(jid,{...content,document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf'});
+      }catch(e){
+        console.error('[RDS TICKET CHROMIUM] PDF bloqueado para evitar anexo corrompido:',e?.stack||e);
+        throw e;
       }
-    }catch(e){console.error('[RDS TICKET CHROMIUM] envio:',e?.message||e);}
+    }
     return rawSend(jid,content);
   };
 
