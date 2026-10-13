@@ -1098,11 +1098,13 @@ app.get('/api/diagnostic',async(req,res)=>{
     try{
       const order=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(id));
       if(!order||String(order.status||'').toUpperCase()!=='PAGO_AGUARDANDO_BILHETES')return;
-      if(String(order.official_sale_id||'').trim()||String(order.official_issue_status||'').toUpperCase()==='ERRO_RECONCILIAR'){
-        console.warn('[RDS AUTO] '+String(order.code||id)+': venda oficial já registrada ou reconciliação pendente; nova emissão automática bloqueada para evitar duplicidade.');
+      const hasOfficialSale=Boolean(String(order.official_sale_id||'').trim());
+      const issueStatus=String(order.official_issue_status||'').toUpperCase();
+      if(issueStatus==='ERRO_RECONCILIAR'){
+        console.warn('[RDS AUTO] '+String(order.code||id)+': reconciliação pendente; emissão automática bloqueada para evitar duplicidade.');
         return;
       }
-      if(String(order.official_issue_status||'').toUpperCase()!=='CONCLUIDO'||!order.official_sale_id){
+      if(!hasOfficialSale||issueStatus!=='CONCLUIDO'){
         let drawId=String(order.official_draw_id||'').trim();
         if(!drawId&&order.campaign_id){const camp=await one('rds10_campaigns','select=official_draw_id&id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);drawId=String(camp?.official_draw_id||'').trim();}
         const all=await officialRequest('/draws/seller/all');const arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
