@@ -34,13 +34,11 @@ async function rdsFinalHandleOrderForm(identity,order,text){
     if(name.length<3||/^(CANCELAR|SAIR|REINICIAR)$/i.test(name))return replyInbound(identity,'❌ Informe seu *nome completo* para continuar.');
     await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{customer_name:name,contact_phone:identity.phone||null,updated_at:nowISO()});
     order.customer_name=name;
-    await replyInbound(identity,'Nome recebido: *'+name+'*.\\n\\nAgora informe seu *CPF* com 11 dígitos.');
-    return;
+    // CPF removido: nome e quantidade bastam para seguir ao PIX.
   }
 
-  if(!cleanText(order.customer_tax_id)){
-    const cpf=digits(t);
-    if(!/^\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ Informe um CPF válido com 11 dígitos.');
+  {
+    // Checkout API Orders recebe o e-mail operacional do servidor; CPF do comprador não é enviado.
     const quantity=Number(order.quantity||0);
     let officialDraw=null;
     if(typeof rdsFinalRequest==='function'){
@@ -77,7 +75,7 @@ async function rdsFinalHandleOrderForm(identity,order,text){
         if(existing)await patch('rds10_contacts','id=eq.'+existing.id,data);else await saveOrMergeContact(data);
       }catch(e){console.error('[RDS] CRM pedido:',e.message);}
     }
-    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{customer_name:order.customer_name,customer_tax_id:cpf,contact_phone:identity.phone||null,quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',payment_method:'PIX_MERCADO_PAGO',updated_at:nowISO()});
+    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id),{customer_name:order.customer_name,contact_phone:identity.phone||null,quantity,total_amount:total,status:'AGUARDANDO_PAGAMENTO',payment_method:'PIX_MERCADO_PAGO',updated_at:nowISO()});
     const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));
     if(!fresh)throw new Error('Pedido não encontrado após atualização.');
     let pix;
