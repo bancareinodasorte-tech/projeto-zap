@@ -56,9 +56,21 @@ const block=String.raw`
   const dateBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric'});};
   const dateTimeBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});};
 
+  function normalizedRdsTicketPayload(order){
+    const raw=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
+    const nested=raw?.data&&typeof raw.data==='object'&&!Array.isArray(raw.data)?raw.data:{};
+    return {...raw,...nested};
+  }
+  function validRdsTicketBooklets(booklets){
+    if(!Array.isArray(booklets)||!booklets.length)throw new Error('A API oficial não retornou as cadernetas do pedido. O PDF não foi gerado nem enviado.');
+    const withNumbers=booklets.filter(b=>Array.isArray(b?.tickets)&&b.tickets.some(v=>v!==null&&v!==undefined&&String(v).trim()!==''));
+    if(!withNumbers.length)throw new Error('A API oficial não retornou os números dos bilhetes. O PDF não foi gerado nem enviado.');
+    return booklets;
+  }
+
   async function makeHtml(order,booksOverride=null){
-    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}]);
+    const p=normalizedRdsTicketPayload(order);
+    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[]);
     const name=String(p.customerName||order?.customer_name||'-');
     const phone=String(p.customerPhone||order?.phone||order?.contact_phone||'-');
     const seller=String(p.sellerName||'—')+(p.sellerPhone?' – '+String(p.sellerPhone):'');
@@ -171,8 +183,8 @@ const block=String.raw`
   }
 
   async function renderPdf(order){
-    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const allBooks=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}];
+    const p=normalizedRdsTicketPayload(order);
+    const allBooks=validRdsTicketBooklets(p.booklets);
     const MAX_BOOKLETS_PER_PAGE=50;
     const pages=[];
     for(let i=0;i<allBooks.length;i+=MAX_BOOKLETS_PER_PAGE){
