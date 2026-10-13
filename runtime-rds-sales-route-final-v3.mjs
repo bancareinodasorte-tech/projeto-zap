@@ -80,7 +80,10 @@ const block=`
       const id=String(d.drawId);
       const date=d.drawDate||d.drawAt||d.date;
       const when=date?new Date(date).toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'}):'';
-      lines.push('• *'+cleanText(d.drawTitle||('Sorteio '+id))+'* — código *'+id+'*'+(when?' — '+when:''));
+      lines.push('🎟️ *'+cleanText(d.drawTitle||('Sorteio '+id))+'*');
+      lines.push('Código do sorteio: *'+id+'*');
+      lines.push('Data do sorteio: *'+(when||'Não informada')+'*');
+      lines.push('');
     }
     lines.push('','Digite o *código do sorteio* desejado para continuar.');
     return lines.join(NL);

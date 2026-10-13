@@ -56,15 +56,29 @@ const block=String.raw`
   const dateBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric'});};
   const dateTimeBR=v=>{if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});};
 
+  function normalizedRdsTicketPayload(order){
+    const raw=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
+    const nested=raw?.data&&typeof raw.data==='object'&&!Array.isArray(raw.data)?raw.data:{};
+    return {...raw,...nested};
+  }
+  function validRdsTicketBooklets(booklets){
+    if(!Array.isArray(booklets)||!booklets.length)throw new Error('A API oficial não retornou as cadernetas do pedido. O PDF não foi gerado nem enviado.');
+    const withNumbers=booklets.filter(b=>Array.isArray(b?.tickets)&&b.tickets.some(v=>v!==null&&v!==undefined&&String(v).trim()!==''));
+    if(!withNumbers.length)throw new Error('A API oficial não retornou os números dos bilhetes. O PDF não foi gerado nem enviado.');
+    return booklets;
+  }
+
   async function makeHtml(order,booksOverride=null){
-    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}]);
+    const p=normalizedRdsTicketPayload(order);
+    const books=Array.isArray(booksOverride)&&booksOverride.length?booksOverride:(Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[]);
     const name=String(p.customerName||order?.customer_name||'-');
     const phone=String(p.customerPhone||order?.phone||order?.contact_phone||'-');
     const seller=String(p.sellerName||'—')+(p.sellerPhone?' – '+String(p.sellerPhone):'');
-    const drawTitle=String(p.drawTitle||'REINO DA SORTE');
+    const drawTitle=String(p.drawTitle||order?.official_draw_title||'REINO DA SORTE');
+    const drawCode=String(p.drawCode||p.drawId||order?.official_draw_id||order?.campaign_code||'-');
+    const drawDate=p.drawDate||order?.official_draw_at||null;
     const prize=p.drawDescription?drawTitle+' - '+String(p.drawDescription):drawTitle;
-    const dd=dateBR(p.drawDate),sd=dateTimeBR(p.createdAt||order?.created_at);
+    const dd=dateBR(drawDate),sd=dateTimeBR(p.createdAt||order?.created_at);
     const publicUrl=String(p.publicUrl||'https://admin.reinodasorte.com.br/');
     const logo=logoB64?'data:image/webp;base64,'+logoB64:'';
     const cards=[];
@@ -78,7 +92,8 @@ const block=String.raw`
       const logoHtml=logo?'<img class="official-logo" src="'+logo+'" alt="Reino da Sorte">':'<div class="logo-fallback">REINO<br><strong>DA SORTE</strong></div>';
       cards.push('<div class="ticket-horizontal">'+
         '<div class="ticket-blue">'+
-          '<div class="topline"><div>Data do Sorteio: '+esc(dd)+'</div><div>Data da Venda: '+esc(sd)+'</div></div>'+
+          '<div class="topline"><div>Data da Venda: '+esc(sd)+'</div></div>'+
+          '<div class="draw-identification"><div><b>Nome do sorteio:</b> '+esc(drawTitle)+'</div><div><b>Código do sorteio:</b> '+esc(drawCode)+'</div><div><b>Data do sorteio:</b> '+esc(dd||'Não informada')+'</div></div>'+
           '<div class="main-blue">'+
             '<div class="logo-col">'+logoHtml+'<span>JARDIM - CEARÁ</span></div>'+
             '<div class="numbers-col">'+
@@ -113,7 +128,8 @@ const block=String.raw`
       '.sheet{width:'+sheetWidth+'px;height:'+sheetHeight+'px;padding:'+pad+'px;display:grid;grid-template-columns:repeat('+cols+',800px);grid-auto-rows:560px;gap:'+gap+'px;background:#fff;align-items:start}'+
       '.ticket-horizontal{width:800px;height:560px;background:#fff;border:2px dashed #9ca3af;border-radius:12px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:Montserrat,"Segoe UI",sans-serif;color:#1f2937;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}'+
       '.ticket-blue{height:58%;width:100%;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:#c7def0;z-index:10;position:relative}'+
-      '.topline{display:flex;justify-content:space-between;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:18px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
+      '.topline{display:flex;justify-content:flex-end;align-items:flex-start;width:100%;color:#172554;font-weight:700;font-size:14px;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
+      '.draw-identification{font-size:13px;line-height:1.35;font-weight:600;color:#172554;margin-top:2px;padding:5px 8px;background:rgba(255,255,255,.24);border-radius:5px;position:relative;z-index:2}.draw-identification b{font-weight:800}'+
       '.main-blue{display:flex;justify-content:space-between;align-items:center;flex:1;margin-top:8px;position:relative;z-index:1}'+
       '.logo-col{width:28%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-right:16px;text-align:center}.official-logo{display:block;width:100%;max-width:190px;mix-blend-mode:normal;max-height:170px;height:auto;object-fit:contain;object-position:center;image-rendering:auto}.logo-col>span{font-size:10px;font-weight:800;color:#1e3a8a;letter-spacing:.1em;margin-top:4px}.logo-fallback{font-size:28px;line-height:.85;color:#17458a;font-weight:800;text-align:center;text-shadow:0 2px 2px rgba(255,255,255,.5)}.logo-fallback strong{font-size:32px}'+
       '.numbers-col{width:72%;display:flex;flex-direction:column}.numbers-title{display:flex;align-items:center;justify-content:center;margin-bottom:12px}.numbers-title i{flex-grow:1;height:2px;background:rgba(30,58,138,.2);border-radius:999px}.numbers-title span{margin:0 12px;font-size:14px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.1em;text-shadow:0 1px 2px rgba(255,255,255,.3)}'+
@@ -158,9 +174,17 @@ const block=String.raw`
     throw lastErr||new Error('Falha ao renderizar bilhete.');
   }
 
+  function validateRdsTicketPdf(buffer){
+    if(!Buffer.isBuffer(buffer)||buffer.length<1500)throw new Error('PDF oficial inválido: o arquivo gerado está vazio ou incompleto. O envio foi bloqueado.');
+    if(buffer.subarray(0,5).toString('ascii')!=='%PDF-')throw new Error('PDF oficial inválido: assinatura PDF ausente. O envio foi bloqueado.');
+    const tail=buffer.subarray(Math.max(0,buffer.length-2048)).toString('latin1');
+    if(!tail.includes('%%EOF'))throw new Error('PDF oficial incompleto: marcador final ausente. O envio foi bloqueado.');
+    return buffer;
+  }
+
   async function renderPdf(order){
-    const p=order?.official_ticket_payload&&typeof order.official_ticket_payload==='object'?order.official_ticket_payload:{};
-    const allBooks=Array.isArray(p.booklets)&&p.booklets.length?p.booklets:[{bookletNumber:order?.official_sale_id||'-',lotNumber:1,tickets:[]}];
+    const p=normalizedRdsTicketPayload(order);
+    const allBooks=validRdsTicketBooklets(p.booklets);
     const MAX_BOOKLETS_PER_PAGE=50;
     const pages=[];
     for(let i=0;i<allBooks.length;i+=MAX_BOOKLETS_PER_PAGE){
@@ -180,10 +204,12 @@ const block=String.raw`
       doc.image(pg.png,0,0,{width:pg.sheet.width,height:pg.sheet.height});
     }
     doc.end();
-    return done;
+    const output=await done;
+    return validateRdsTicketPdf(output);
   }
 
   async function archive(order,pdf,sentAt=undefined){
+    validateRdsTicketPdf(pdf);
     const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
     const ex=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id));
     const finalSentAt=sentAt===undefined?(ex?.sent_at||null):sentAt;
@@ -228,7 +254,7 @@ const block=String.raw`
       if(!forceFresh){
         const cached=await one('rds10_ticket_documents','select=pdf_base64&order_id=eq.'+encodeURIComponent(o.id));
         if(cached?.pdf_base64){
-          try{b=Buffer.from(String(cached.pdf_base64),'base64');}catch{}
+          try{b=Buffer.from(String(cached.pdf_base64),'base64');validateRdsTicketPdf(b);}catch{b=null;}
         }
       }
       if(!b||!b.length){b=await renderPdf(o);await archive(o,b);}
@@ -249,7 +275,7 @@ const block=String.raw`
       const target=await ensureTargetJid(phone);
       if(!target?.jid)throw new Error('WhatsApp não localizado.');
       const existing=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(o.id));
-      const b=await renderPdf(o);
+      const b=validateRdsTicketPdf(await renderPdf(o));
       await archive(o,b,existing?.sent_at||null);
       let s;
       try{s=await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'});}
