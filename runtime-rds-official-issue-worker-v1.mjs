@@ -43,7 +43,8 @@ else{
     // O inventário apenas complementa sorteios já autorizados por /draws/seller/available.
     if(!prior)continue;
     const stock=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.count;
-    byId.set(did,{...prior,...item,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
+    // O inventário informa estoque; nunca pode sobrescrever estado/título do sorteio oficial.
+    byId.set(did,{...item,...prior,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
    }
   }catch{}
   // Sem confirmação no endpoint oficial de disponíveis, não aceitar cache local como autorização.
