@@ -1104,7 +1104,15 @@ app.get('/api/diagnostic',async(req,res)=>{
         console.warn('[RDS AUTO] '+String(order.code||id)+': reconciliação pendente; emissão automática bloqueada para evitar duplicidade.');
         return;
       }
-      if(!hasOfficialSale||issueStatus!=='CONCLUIDO'){
+      if(hasOfficialSale&&issueStatus!=='CONCLUIDO'){
+        console.warn('[RDS AUTO] '+String(order.code||id)+': já existe venda oficial '+String(order.official_sale_id)+' com estado '+(issueStatus||'vazio')+'; bloqueada nova emissão para evitar duplicidade.');
+        return;
+      }
+      if(!hasOfficialSale&&issueStatus==='CONCLUIDO'){
+        console.error('[RDS AUTO] '+String(order.code||id)+': estado CONCLUIDO sem ID de venda oficial; requer reconciliação manual.');
+        return;
+      }
+      if(!hasOfficialSale){
         let drawId=String(order.official_draw_id||'').trim();
         if(!drawId&&order.campaign_id){const camp=await one('rds10_campaigns','select=official_draw_id&id=eq.'+encodeURIComponent(order.campaign_id)).catch(()=>null);drawId=String(camp?.official_draw_id||'').trim();}
         const all=await officialRequest('/draws/seller/all');const arr=Array.isArray(all)?all:(all?.draws||all?.items||all?.data||[]);
