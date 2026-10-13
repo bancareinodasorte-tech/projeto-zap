@@ -49,6 +49,8 @@ jobs:
             [ticket, 'fileName.match(/bilhetes-', 'ticket PDF filename matcher must be present'],
             [ticket, 'if(!b||!b.length)', 'empty PDFs must be rejected'],
             [ticket, 'RDS_OFFICIAL_TICKETS_MISSING', 'PDF/PNG generation must fail when official ticket numbers are missing'],
+            [ticket, 'const sheetHeight=singleCard?400:20+(rows*420)', 'official ticket canvas must use the approved 2:1 aspect ratio'],
+            [ticket, 'grid-auto-rows:400px;', 'ticket sheets must preserve the official 2:1 ticket ratio'],
             [ticket, 'books.some(b=>!Array.isArray(b?.tickets)||!b.tickets.length||b.tickets.some', 'every rendered booklet must contain ticket numbers'],
             [ticket, "if(!s?.key?.id)", 'unconfirmed WhatsApp sends must not be treated as successful'],
             [tenant, 'RDS_TENANT_COMPANY_REQUIRED', 'tenant writes without a verified company must fail'],
