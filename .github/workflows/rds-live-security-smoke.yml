@@ -17,7 +17,7 @@ jobs:
           const base = process.env.RDS_BASE_URL;
           const checks = [
             {path:'/api/v1011/official-sales/draw-info', method:'GET', expected:[401,403]},
-            {path:'/api/v1012/official-sales/draw-info', method:'GET', expected:[401,403]},
+            {path:'/api/v1012/official-sales/issue', method:'POST', body:JSON.stringify({}), expected:[401,403]},
             {path:'/api/rds/ticket-archive', method:'GET', expected:[401,403]},
             {path:'/api/whatsapp/meta/webhook', method:'POST', body:JSON.stringify({object:'invalid'}), expected:[403]}
           ];
