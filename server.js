@@ -559,7 +559,7 @@ async function rdsWhatsappSellerId(){
   }catch{}
   const configuredOwner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
   if(configuredOwner){
-    const owner=await one('rds10_sellers',\`select=id,status&id=eq.\${encodeURIComponent(configuredOwner)}\`).catch(()=>null);
+    const owner=await one('rds10_sellers',`select=id,status&id=eq.${encodeURIComponent(configuredOwner)}`).catch(()=>null);
     return owner?.status==='ATIVO'?String(owner.id):null;
   }
   const active=await list('rds10_sellers','select=id,status&status=eq.ATIVO&order=created_at.asc');
