@@ -551,6 +551,17 @@ async function upsertInboundContact(identity, pushName=''){
   return null;
 }
 async function rdsWhatsappSellerId(){
+  try{
+    if(typeof rdsRequestScope!=='undefined'){
+      const scoped=rdsRequestScope.getStore?.()?.sellerId;
+      if(scoped)return String(scoped);
+    }
+  }catch{}
+  const configuredOwner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+  if(configuredOwner){
+    const owner=await one('rds10_sellers',`select=id,status&id=eq.${encodeURIComponent(configuredOwner)}`).catch(()=>null);
+    return owner?.status==='ATIVO'?String(owner.id):null;
+  }
   const active=await list('rds10_sellers','select=id,status&status=eq.ATIVO&order=created_at.asc');
   if(active.length===1)return active[0].id;
   const authorized=await list('rds10_seller_settings','select=seller_id,official_authorized&official_authorized=eq.true&limit=20');
