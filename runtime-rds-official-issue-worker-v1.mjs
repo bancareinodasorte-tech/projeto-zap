@@ -190,8 +190,9 @@ else{
  async function cycle(){
   if(running)return;running=true;
   try{
-   const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-   const filter=sellerId?'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=50':'select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=50';
+   const sellerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+   if(!sellerId){console.warn('[RDS AUTO] proprietário oficial não configurado; emissão automática suspensa por segurança.');return;}
+   const filter='select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=50';
    const rows=await list('rds10_orders',filter);
    for(const o of rows){try{await issueOne(o);}catch(e){console.error('[RDS AUTO] pedido '+String(o.code||o.id)+': '+String(e?.message||e));}}
   }catch(e){console.error('[RDS AUTO] ciclo:',e?.message||e);}
