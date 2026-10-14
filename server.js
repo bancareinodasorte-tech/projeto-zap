@@ -114,7 +114,7 @@ async function authWrite(id, value){
   }
 }
 async function authDelete(id){
-  try{await del('zap_auth', \`id=eq.\${encodeURIComponent(id)}\`);}
+  try{await del('zap_auth', `id=eq.${encodeURIComponent(id)}`);}
   catch(e){console.warn('[RDS WA AUTH] falha temporária ao remover chave:',String(e?.message||e));}
 }
 async function loadWaControl(){
