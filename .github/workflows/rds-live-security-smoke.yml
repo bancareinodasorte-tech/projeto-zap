@@ -14,6 +14,7 @@ jobs:
           RDS_BASE_URL: https://projeto-zap-4tyg.onrender.com
         run: |
           node <<'NODE'
+          console.log('Security smoke against current live production deployment');
           const base = process.env.RDS_BASE_URL;
           const checks = [
             {path:'/api/v1011/official-sales/draw-info', method:'GET', expected:[401,403]},
