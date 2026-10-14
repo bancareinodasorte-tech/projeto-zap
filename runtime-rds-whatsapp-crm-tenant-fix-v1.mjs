@@ -20,7 +20,7 @@ const logNew=[
 "async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){",
 "  try{",
 "    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
-"    await insert('rds10_messages',{seller_id:sellerId||null,phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');",
+"    if(!sellerId)throw new Error('Vendedor não identificado; mensagem não será gravada sem escopo.');\n    await insert('rds10_messages',{seller_id:sellerId,phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');",
 "  }catch(e){ console.error('[RDS] logMessage:',e.message); }",
 "}"
 ].join('\n');
@@ -77,7 +77,7 @@ const crmNew=[
 "  try{",
 "    const p=normalizeBR(phone);",
 "    if(!validBRPhone(p))return;",
-"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;",
+"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
 "    const sellerFilter='&seller_id=eq.'+encodeURIComponent(sellerId);",
 "    const existing=await one('rds10_contacts','select=*&phone=eq.'+encodeURIComponent(p)+sellerFilter);",
 "    if(existing){",
@@ -86,7 +86,7 @@ const crmNew=[
 "      await patch('rds10_contacts','id=eq.'+existing.id,patchData);",
 "      return;",
 "    }",
-"    const data={seller_id:sellerId||null,name:rdsAutoCustomerContactName(cleanText(name)),phone:p,group_name:'INTERESSADOS',status:'ATIVO',origin:'PEDIDO',whatsapp_validated:true,validated:true,last_seen_at:nowISO(),updated_at:nowISO()};",
+"    const data={seller_id:sellerId,name:rdsAutoCustomerContactName(cleanText(name)),phone:p,group_name:'INTERESSADOS',status:'ATIVO',origin:'PEDIDO',whatsapp_validated:true,validated:true,last_seen_at:nowISO(),updated_at:nowISO()};",
 "    if(lid)data.lid=String(lid);",
 "    await insert('rds10_contacts',data,'minimal');",
 "  }catch(e){console.error('[RDS] CRM interessado:',e.message);}",
