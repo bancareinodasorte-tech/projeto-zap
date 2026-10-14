@@ -577,9 +577,11 @@ async function activeOrder(phone){
   const sellerFilter=sellerId?`&seller_id=eq.${encodeURIComponent(sellerId)}`:'';
   return one('rds10_orders',`select=*&phone=eq.${encodeURIComponent(phone)}&status=not.in.(CONCLUIDO,CANCELADO)${sellerFilter}&order=created_at.desc`);
 }
+function rdsSalesChannelEnabled(){return String(process.env.RDS_SALES_CHANNEL_ENABLED||'false').trim().toLowerCase()==='true';}
 async function createOrder(phone, campaignCode=null){
   const existing = await activeOrder(phone);
   if(existing) return existing;
+  if(!rdsSalesChannelEnabled())throw new Error('O canal de vendas está temporariamente pausado para validação. Nenhum novo pedido foi criado.');
   const sellerId=await rdsWhatsappSellerId();
   if(!sellerId)throw new Error('Não foi possível identificar o vendedor responsável pelo WhatsApp. Configure um único vendedor ATIVO para este canal.');
   const sellerCompany=await one('rds10_seller_companies',`select=company_id,role,active&seller_id=eq.${encodeURIComponent(sellerId)}&active=eq.true&order=created_at.asc`).catch(()=>null);
@@ -998,7 +1000,7 @@ app.get('/api/production-summary',async(req,res)=>{
     });
   }catch(e){res.status(500).json({error:e.message});}
 });
-app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); if(typeof globalThis.rdsAutoOfficialIssueAndDeliver==='function') globalThis.rdsAutoOfficialIssueAndDeliver(o.id).catch(e=>console.error('[RDS AUTO TRIGGER]',e?.message||e)); res.json({ok:true,auto_issue_triggered:true}); }catch(e){res.status(400).json({error:e.message});} });
+app.post('/api/orders/:id/payment-confirmed',async(req,res)=>{ try{ if(!rdsSalesChannelEnabled())return res.status(503).json({ok:false,error:'O canal de vendas está temporariamente pausado para validação.'}); const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`); if(!o) throw new Error('Pedido não encontrado.'); await patch('rds10_orders',`id=eq.${o.id}`,{status:'PAGO_AGUARDANDO_BILHETES',payment_confirmed_at:nowISO(),updated_at:nowISO()}); await sendTextPhone(o.phone,`✅ *PAGAMENTO CONFIRMADO*\nPedido ${o.code}.\nSeus bilhetes serão emitidos e enviados em seguida.`); if(typeof globalThis.rdsAutoOfficialIssueAndDeliver==='function') globalThis.rdsAutoOfficialIssueAndDeliver(o.id).catch(e=>console.error('[RDS AUTO TRIGGER]',e?.message||e)); res.json({ok:true,auto_issue_triggered:true}); }catch(e){res.status(400).json({error:e.message});} });
 app.post('/api/orders/:id/tickets-sent',async(req,res)=>{ try{
   const o=await one('rds10_orders',`select=*&id=eq.${req.params.id}`);
   const s=await getSettings();
