@@ -12,7 +12,7 @@ if(server.includes(marker)){
   const gate=String.raw`
 ${marker}
 app.use(async(req,res,next)=>{
-  const pathname=String(req.path||'');
+  const pathname=String(req.path||'').toLowerCase();
   if(!pathname.startsWith('/api/'))return next();
 
   // Rotas públicas estritamente necessárias para callbacks assinados/validados.
