@@ -39,9 +39,13 @@ const block=String.raw`
    if(!r.ok)throw new Error(data?.error?.message||data?.error?.error_user_msg||('Meta Graph API '+r.status));
    return data;
  }
- function metaTenant(req,res){
-   if(typeof requireTenant==='function')return requireTenant(req,res);
-   return {seller:{id:null}};
+ async function metaTenant(req,res){
+   if(typeof requireTenant!=='function'){res.status(503).json({ok:false,error:'Autenticação multiusuário indisponível.'});return null;}
+   const session=await requireTenant(req,res);
+   if(!session?.seller?.id)return null;
+   const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+   if(!ownerId||String(session.seller.id)!==ownerId){res.status(403).json({ok:false,error:'A integração WhatsApp Meta deste ambiente pertence à conta proprietária. Conecte sua própria integração.'});return null;}
+   return session;
  }
  function metaPhone(v){
    let n=String(v||'').replace(/\D/g,'');
@@ -167,7 +171,7 @@ const block=String.raw`
  });
  app.post('/api/whatsapp/meta/verification/request',async(req,res)=>{
    try{
-     const s=metaTenant(req,res);if(!s)return;
+     const s=await metaTenant(req,res);if(!s)return;
      if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
      const method=String(req.body?.method||'SMS').toUpperCase();
      if(!['SMS','VOICE'].includes(method))throw new Error('Método inválido. Use SMS ou VOICE.');
@@ -177,7 +181,7 @@ const block=String.raw`
  });
  app.post('/api/whatsapp/meta/verification/verify',async(req,res)=>{
    try{
-     const s=metaTenant(req,res);if(!s)return;
+     const s=await metaTenant(req,res);if(!s)return;
      if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
      const code=String(req.body?.code||'').replace(/\D/g,'');
      if(!/^\d{6}$/.test(code))throw new Error('Informe o código de 6 dígitos recebido por SMS.');
@@ -187,7 +191,7 @@ const block=String.raw`
  });
  app.post('/api/whatsapp/meta/register',async(req,res)=>{
    try{
-     const s=metaTenant(req,res);if(!s)return;
+     const s=await metaTenant(req,res);if(!s)return;
      if(!metaConfigured())throw new Error('Configure primeiro o token Meta e o Phone Number ID no Render.');
      const pin=String(req.body?.pin||'').replace(/\D/g,'');
      if(!/^\d{6}$/.test(pin))throw new Error('Crie um PIN de 6 dígitos para a proteção em duas etapas.');
