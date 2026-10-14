@@ -239,6 +239,7 @@ app.post('/api/v1011/official-sales/issue',async(req,res)=>{
   try{
     if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');
     var session=await rdsOfficialRequireOwnerV3(req,res);if(!session)return;
+    if(typeof rdsSalesChannelEnabled==='function'&&!rdsSalesChannelEnabled())return res.status(503).json({success:false,message:'O canal de vendas está temporariamente pausado para validação.'});
     var b=req.body||{},orderId=String(b.orderId||'').trim();if(!orderId)throw new Error('Pedido do vendedor não informado.');
     var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url&id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
     if(!order)throw new Error('Pedido não encontrado para este vendedor.');
