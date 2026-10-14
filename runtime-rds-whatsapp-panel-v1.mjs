@@ -10,8 +10,12 @@ const block=String.raw`
 ${marker}
 (()=>{
  async function waPanelSession(req,res){
-   if(typeof requireTenant==='function')return requireTenant(req,res);
-   return {seller:{id:null}};
+   if(typeof requireTenant!=='function'){res.status(503).json({ok:false,error:'Autenticação multiusuário indisponível.'});return null;}
+   const session=await requireTenant(req,res);
+   if(!session?.seller?.id)return null;
+   const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+   if(!ownerId||String(session.seller.id)!==ownerId){res.status(403).json({ok:false,error:'Este canal WhatsApp pertence exclusivamente à conta proprietária. Conecte seu próprio WhatsApp na aba WhatsApp.'});return null;}
+   return session;
  }
  app.get('/api/whatsapp/chats',async(req,res)=>{
    try{
