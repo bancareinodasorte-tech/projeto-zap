@@ -35,14 +35,12 @@ ${marker}
     return m?decodeURIComponent(m[1]):'';
   }
   async function tenantSession(req){
-    const token=tenantToken(req);if(!token)return null;
-    const hash=crypto.createHash('sha256').update(token).digest('hex');
-    const session=await one('rds10_seller_sessions','select=id,seller_id,expires_at&token_hash=eq.'+encodeURIComponent(hash)+'&revoked_at=is.null');
-    if(!session||!session.expires_at||new Date(session.expires_at).getTime()<=Date.now())return null;
-    const seller=await one('rds10_sellers','select=id,name,phone,email,status&id=eq.'+encodeURIComponent(session.seller_id));
-    if(!seller||seller.status!=='ATIVO')return null;
-    await patch('rds10_seller_sessions','id=eq.'+encodeURIComponent(session.id),{last_seen_at:nowISO()}).catch(()=>{});
-    return {session,seller};
+    // Reuse the canonical session validator so tenant routes also enforce device authorization.
+    if(typeof rdsOpSession!=='function')return null;
+    const validated=await rdsOpSession(req).catch(()=>null);
+    if(!validated?.session?.id||!validated?.seller?.id)return null;
+    await patch('rds10_seller_sessions','id=eq.'+encodeURIComponent(validated.session.id),{last_seen_at:nowISO()}).catch(()=>{});
+    return {session:validated.session,seller:validated.seller};
   }
   async function requireTenant(req,res){
     const s=await tenantSession(req);
