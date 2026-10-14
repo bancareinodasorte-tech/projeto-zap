@@ -19,8 +19,8 @@ function replaceBetween(source,startText,endText,replacement){
 const logNew=[
 "async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){",
 "  try{",
-"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;",
-"    await insert('rds10_messages',{seller_id:sellerId||null,phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');",
+"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
+"    if(!sellerId)throw new Error('Vendedor não identificado; mensagem não será gravada sem escopo.');\n    await insert('rds10_messages',{seller_id:sellerId,phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');",
 "  }catch(e){ console.error('[RDS] logMessage:',e.message); }",
 "}"
 ].join('\n');
@@ -51,10 +51,10 @@ const saveNew=[
 "    const rows=await patch('rds10_contacts','id=eq.'+existing.id,patchData);",
 "    return {contact:rows?.[0]||{...existing,...patchData},merged:true};",
 "  }",
-"  const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;",
+"  const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n  if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
 "  const contactName=origin==='PEDIDO'?rdsAutoCustomerContactName(name):(name||('Cliente '+phone.slice(-4)));",
 "  const rows=await insert('rds10_contacts',{",
-"    seller_id:sellerId||null,",
+"    seller_id:sellerId,",
 "    name:contactName,phone,lid:data.lid||null,",
 "    group_name:cleanText(data.group_name)||'NOVOS',",
 "    city:cleanText(data.city)||null,tags:cleanText(data.tags)||null,",
@@ -70,15 +70,15 @@ server=replaceBetween(server,'function saveOrMergeContact(','// RDS CRM ISOLATIO
 const historyNeed="rows.push({\n      phone:identity.phone,";
 const hp=server.indexOf(historyNeed);
 if(hp<0)throw new Error('logHistoryMessages não localizado.');
-server=server.slice(0,hp)+"const historySellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    rows.push({\n      seller_id:historySellerId||null,\n      phone:identity.phone,"+server.slice(hp+historyNeed.length);
+server=server.slice(0,hp)+"const historySellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!historySellerId)throw new Error('Vendedor não identificado; histórico não será gravado sem escopo.');\n    rows.push({\n      seller_id:historySellerId,\n      phone:identity.phone,"+server.slice(hp+historyNeed.length);
 
 const crmNew=[
 "async function rdsEnsureInterestedContact(phone,name,lid){",
 "  try{",
 "    const p=normalizeBR(phone);",
 "    if(!validBRPhone(p))return;",
-"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;",
-"    const sellerFilter=sellerId?'&seller_id=eq.'+encodeURIComponent(sellerId):'';",
+"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
+"    const sellerFilter='&seller_id=eq.'+encodeURIComponent(sellerId);",
 "    const existing=await one('rds10_contacts','select=*&phone=eq.'+encodeURIComponent(p)+sellerFilter);",
 "    if(existing){",
 "      const patchData={validated:true,last_seen_at:nowISO(),updated_at:nowISO()};",
@@ -86,7 +86,7 @@ const crmNew=[
 "      await patch('rds10_contacts','id=eq.'+existing.id,patchData);",
 "      return;",
 "    }",
-"    const data={seller_id:sellerId||null,name:rdsAutoCustomerContactName(cleanText(name)),phone:p,group_name:'INTERESSADOS',status:'ATIVO',origin:'PEDIDO',whatsapp_validated:true,validated:true,last_seen_at:nowISO(),updated_at:nowISO()};",
+"    const data={seller_id:sellerId,name:rdsAutoCustomerContactName(cleanText(name)),phone:p,group_name:'INTERESSADOS',status:'ATIVO',origin:'PEDIDO',whatsapp_validated:true,validated:true,last_seen_at:nowISO(),updated_at:nowISO()};",
 "    if(lid)data.lid=String(lid);",
 "    await insert('rds10_contacts',data,'minimal');",
 "  }catch(e){console.error('[RDS] CRM interessado:',e.message);}",
