@@ -66,7 +66,7 @@ const block=String.raw`
    return '['+String(m?.type||'mensagem')+']';
  }
  function verifyMetaSignature(req){
-   if(!META_APP_SECRET)return true;
+   if(!META_APP_SECRET)return false;
    const header=String(req.headers['x-hub-signature-256']||'');
    if(!header.startsWith('sha256='))return false;
    const raw=Buffer.isBuffer(req.rawBody)?req.rawBody:Buffer.from(JSON.stringify(req.body||{}));
