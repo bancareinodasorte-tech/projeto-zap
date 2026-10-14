@@ -8,6 +8,8 @@ on:
       - 'runtime-rds-operator-auth-v2.mjs'
       - 'runtime-rds-admin-company-management-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - 'server.js'
       - '.github/workflows/rds-runtime-syntax.yml'
   workflow_dispatch:
 jobs:
@@ -28,3 +30,7 @@ jobs:
         run: node --check runtime-rds-admin-company-management-v1.mjs
       - name: Check tenant scope syntax
         run: node --check runtime-rds-tenant-scope-v1.mjs
+      - name: Check official worker syntax
+        run: node --check runtime-rds-official-issue-worker-v1.mjs
+      - name: Check server syntax
+        run: node --check server.js
