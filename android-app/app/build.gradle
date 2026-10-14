@@ -8,8 +8,8 @@ android {
         applicationId 'com.reinodasorte.canalvendas'
         minSdk 21
         targetSdk 35
-        versionCode 1103
-        versionName '11.3.0'
+        versionCode 1105
+        versionName '11.4.0'
     }
 
     buildTypes {
