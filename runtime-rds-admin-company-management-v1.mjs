@@ -29,12 +29,13 @@ app.post('/api/operator/admin/company/save',async(req,res)=>{
   if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))throw new Error('Identificador inválido. Use letras minúsculas e hífens.');
   if(!Number.isFinite(price)||price<=0||price>9999)throw new Error('Preço padrão inválido.');
   if(!Number.isFinite(sellerPct)||!Number.isFinite(companyPct)||sellerPct<0||companyPct<0||Math.abs(sellerPct+companyPct-100)>0.001)throw new Error('As comissões precisam somar exatamente 100%.');
-  const row={code,name,legal_name:cleanText(b.legalName)||null,slug,active:code==='RDS',timezone:cleanText(b.timezone)||'America/Fortaleza',default_unit_price:Number(price.toFixed(2)),seller_commission_pct:Number(sellerPct.toFixed(2)),company_revenue_pct:Number(companyPct.toFixed(2)),updated_at:nowISO()};
+  const row={code,name,legal_name:cleanText(b.legalName)||null,slug,active:true,timezone:cleanText(b.timezone)||'America/Fortaleza',default_unit_price:Number(price.toFixed(2)),seller_commission_pct:Number(sellerPct.toFixed(2)),company_revenue_pct:Number(companyPct.toFixed(2)),updated_at:nowISO()};
   let saved;
   if(id){
    const current=await one('rds10_companies','select=id,code&id=eq.'+encodeURIComponent(id)).catch(()=>null);
    if(!current)throw new Error('Empresa não encontrada.');
    if(String(current.code||'').toUpperCase()==='RDS'&&code!=='RDS')throw new Error('O código da empresa padrão RDS não pode ser alterado.');
+   row.active=Boolean(current.active);
    saved=(await patch('rds10_companies','id=eq.'+encodeURIComponent(id),row))[0];
   }else{
    saved=(await insert('rds10_companies',{...row,created_at:nowISO()}))[0];
@@ -59,7 +60,7 @@ app.post('/api/operator/admin/company/assign',async(req,res)=>{
    one('rds10_companies','select=id,name,code,active&id=eq.'+encodeURIComponent(companyId))
   ]);
   if(!seller||!company)throw new Error('Vendedor ou empresa não encontrado.');
-  if(active&&(!company.active||String(company.code||'').toUpperCase()!=='RDS'))throw new Error('Vínculo ativo bloqueado: somente a empresa RDS pode operar até concluir a validação multiempresa.');
+  if(active&&!company.active)throw new Error('Não é possível ativar vínculo em uma empresa inativa.');
   const existing=await one('rds10_seller_companies','select=seller_id,company_id&seller_id=eq.'+encodeURIComponent(sellerId)+'&company_id=eq.'+encodeURIComponent(companyId));
   let saved;
   if(existing){
