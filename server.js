@@ -729,7 +729,9 @@ async function handleInbound(m){
   const text = inbound.text;
   let order = identity.phone ? await activeOrder(identity.phone) : null;
   const menuText=cleanText(text);
-  if(["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings));
+  // Só desvia para o menu quando não há pedido ativo. Durante uma compra,
+  // mensagens comuns como OI/MENU não devem interromper a etapa atual.
+  if(!order && ["0","4","MENU","INICIO","OI","OLA"].includes(menuText)) return replyInbound(identity,routerMessage(settings));
   if(!order){
     if(menuText==="1") return beginOrder(identity,null,pushName);
     if(menuText==="3"){ const office=normalizeBR(settings.office_whatsapp || OFFICE_WA_DEFAULT); return replyInbound(identity,"🏢 *ATENDIMENTO*\n"+(office||"ATENDIMENTO")); }
