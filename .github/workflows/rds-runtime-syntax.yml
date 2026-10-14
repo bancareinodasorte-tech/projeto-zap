@@ -1,0 +1,21 @@
+name: RDS runtime syntax check
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-official-sales-auth-v3.mjs'
+      - 'runtime-rds-tenant-sales-v1.mjs'
+      - '.github/workflows/rds-runtime-syntax.yml'
+  workflow_dispatch:
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check official integration guard syntax
+        run: node --check runtime-rds-official-sales-auth-v3.mjs
+      - name: Check tenant session validation syntax
+        run: node --check runtime-rds-tenant-sales-v1.mjs
