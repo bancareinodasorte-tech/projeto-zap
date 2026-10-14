@@ -19,7 +19,7 @@ function replaceBetween(source,startText,endText,replacement){
 const logNew=[
 "async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){",
 "  try{",
-"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!sellerId)throw new Error('Vendedor não identificado; contato não será gravado sem escopo.');",
+"    const sellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;",
 "    if(!sellerId)throw new Error('Vendedor não identificado; mensagem não será gravada sem escopo.');\n    await insert('rds10_messages',{seller_id:sellerId,phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');",
 "  }catch(e){ console.error('[RDS] logMessage:',e.message); }",
 "}"
