@@ -33,11 +33,7 @@ async function rdsOfficialRequireOwnerV3(req,res){
     return null;
   }
   const configuredOwner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
-  let allowed=Boolean(configuredOwner&&String(session.seller.id)===configuredOwner);
-  if(!allowed&&RDS_OFFICIAL_EMAIL_V3){
-    const ownerSetting=await one('rds10_seller_settings','select=seller_id&official_email=eq.'+encodeURIComponent(RDS_OFFICIAL_EMAIL_V3)).catch(()=>null);
-    allowed=Boolean(ownerSetting?.seller_id&&String(ownerSetting.seller_id)===String(session.seller.id));
-  }
+  const allowed=Boolean(configuredOwner&&String(session.seller.id)===configuredOwner);
   if(!allowed){
     res.status(403).json({success:false,message:'A integração oficial da Reino da Sorte está reservada à conta proprietária.'});
     return null;
