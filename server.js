@@ -579,9 +579,9 @@ async function activeOrder(phone){
 }
 function rdsSalesChannelEnabled(){return String(process.env.RDS_SALES_CHANNEL_ENABLED||'false').trim().toLowerCase()==='true';}
 async function createOrder(phone, campaignCode=null){
+  if(!rdsSalesChannelEnabled())throw new Error('O canal de vendas está temporariamente pausado para validação. Nenhum novo pedido foi criado.');
   const existing = await activeOrder(phone);
   if(existing) return existing;
-  if(!rdsSalesChannelEnabled())throw new Error('O canal de vendas está temporariamente pausado para validação. Nenhum novo pedido foi criado.');
   const sellerId=await rdsWhatsappSellerId();
   if(!sellerId)throw new Error('Não foi possível identificar o vendedor responsável pelo WhatsApp. Configure um único vendedor ATIVO para este canal.');
   const sellerCompany=await one('rds10_seller_companies',`select=company_id,role,active&seller_id=eq.${encodeURIComponent(sellerId)}&active=eq.true&order=created_at.asc`).catch(()=>null);
