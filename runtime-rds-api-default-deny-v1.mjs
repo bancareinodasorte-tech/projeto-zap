@@ -20,6 +20,9 @@ app.use(async(req,res,next)=>{
   if((req.method==='GET'||req.method==='POST') && pathname==='/api/whatsapp/meta/webhook')return next();
   if(req.method==='GET' && pathname==='/api/mercadopago/oauth/callback')return next();
 
+  // O início OAuth valida a sessão do vendedor e grava state vinculado ao seller_id.
+  if(req.method==='GET' && pathname==='/api/mercadopago/oauth/start')return next();
+
   // As rotas do operador têm controles próprios de login, sessão e papel.
   if(pathname==='/api/operator' || pathname.startsWith('/api/operator/'))return next();
 
