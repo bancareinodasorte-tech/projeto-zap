@@ -105,9 +105,18 @@ async function authRead(id){
 }
 async function authWrite(id, value){
   const safe = JSON.parse(JSON.stringify(value, BufferJSON.replacer));
-  await sb('/rest/v1/zap_auth?on_conflict=id', { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({ id, value:safe, updated_at:nowISO() }) });
+  try{
+    await sb('/rest/v1/zap_auth?on_conflict=id', { method:'POST', headers:{Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({ id, value:safe, updated_at:nowISO() }) });
+  }catch(e){
+    // Uma falha temporária do Supabase não pode derrubar o servidor inteiro.
+    // O próximo evento de credenciais tentará persistir novamente; a falha fica visível nos logs.
+    console.warn('[RDS WA AUTH] falha temporária ao salvar sessão:',String(e?.message||e));
+  }
 }
-async function authDelete(id){ await del('zap_auth', `id=eq.${encodeURIComponent(id)}`); }
+async function authDelete(id){
+  try{await del('zap_auth', `id=eq.${encodeURIComponent(id)}`);}
+  catch(e){console.warn('[RDS WA AUTH] falha temporária ao remover chave:',String(e?.message||e));}
+}
 async function loadWaControl(){
   if(waControlLoaded) return waManualDisconnect;
   waControlLoaded=true;
