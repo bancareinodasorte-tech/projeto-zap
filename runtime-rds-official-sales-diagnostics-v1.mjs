@@ -25,6 +25,11 @@ function rdsOfficialDiagV1(){
 }
 app.get('/api/v1011/official-sales/diagnostics',async(req,res)=>{
   try{
+    if(typeof rdsOpSession!=='function')return res.status(503).json({error:'Autenticação multiusuário indisponível.'});
+    const session=await rdsOpSession(req).catch(()=>null);
+    const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+    if(!session?.seller?.id)return res.status(401).json({error:'Sessão do vendedor inválida.'});
+    if(!ownerId||String(session.seller.id)!==ownerId)return res.status(403).json({error:'Diagnóstico oficial reservado à conta proprietária.'});
     const d=rdsOfficialDiagV1();
     const row=await one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc,last_auth_at,last_error&id=eq.main');
     return res.json({...d,deviceRowPresent:Boolean(row),deviceIdStoredPresent:Boolean(String(row?.device_id||'').trim()),authorized:Boolean(row?.refresh_token_enc),lastAuthAt:row?.last_auth_at||null,lastError:row?.last_error||null});
