@@ -1134,7 +1134,7 @@ app.get('/api/diagnostic',async(req,res)=>{
     }catch(e){const msg=String(e?.message||e);await patch('rds10_orders','id=eq.'+encodeURIComponent(id),{official_issue_error:msg.slice(0,1800),payment_last_error:msg.slice(0,1800),updated_at:nowISO()}).catch(()=>{});console.error('[RDS AUTO] '+id+':',msg);}
     finally{locks.delete(id);}
   }
-  setInterval(async()=>{try{const rows=await list('rds10_orders','select=id&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=20');for(const row of rows)autoDeliver(row.id).catch(()=>{});}catch(e){console.error('[RDS AUTO SCAN]',e?.message||e);}},15000);
+  setInterval(async()=>{try{const ownerSellerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(!ownerSellerId){console.warn('[RDS AUTO SCAN] proprietário oficial não configurado; worker global suspenso.');return;}const rows=await list('rds10_orders','select=id&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(ownerSellerId)+'&order=updated_at.asc&limit=20');for(const row of rows)autoDeliver(row.id).catch(()=>{});}catch(e){console.error('[RDS AUTO SCAN]',e?.message||e);}},15000);
   console.log('[RDS] pós-pagamento automático oficial ativo');
 })();
 app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));
