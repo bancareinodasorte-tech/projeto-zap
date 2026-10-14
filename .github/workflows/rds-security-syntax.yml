@@ -1,0 +1,29 @@
+name: RDS Backend Security Syntax
+
+on:
+  push:
+    paths:
+      - 'runtime-rds-api-default-deny-v1.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - '.github/workflows/rds-security-syntax.yml'
+  pull_request:
+    paths:
+      - 'runtime-rds-api-default-deny-v1.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - '.github/workflows/rds-security-syntax.yml'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check security patch syntax
+        run: node --check runtime-rds-api-default-deny-v1.mjs
+      - name: Check boot script syntax
+        run: node --check prepare-pagbank-no-email.mjs
+      - name: Verify gate is loaded before server startup
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const s=fs.readFileSync('prepare-pagbank-no-email.mjs','utf8'); const a=s.indexOf("await import('./runtime-rds-api-default-deny-v1.mjs');"); const b=s.indexOf("await import('./server.js');"); if(a<0||b<0||a>b) process.exit(1);"
