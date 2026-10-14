@@ -70,7 +70,7 @@ server=replaceBetween(server,'function saveOrMergeContact(','// RDS CRM ISOLATIO
 const historyNeed="rows.push({\n      phone:identity.phone,";
 const hp=server.indexOf(historyNeed);
 if(hp<0)throw new Error('logHistoryMessages não localizado.');
-server=server.slice(0,hp)+"const historySellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    rows.push({\n      seller_id:historySellerId||null,\n      phone:identity.phone,"+server.slice(hp+historyNeed.length);
+server=server.slice(0,hp)+"const historySellerId=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;\n    if(!historySellerId)throw new Error('Vendedor não identificado; histórico não será gravado sem escopo.');\n    rows.push({\n      seller_id:historySellerId,\n      phone:identity.phone,"+server.slice(hp+historyNeed.length);
 
 const crmNew=[
 "async function rdsEnsureInterestedContact(phone,name,lid){",
