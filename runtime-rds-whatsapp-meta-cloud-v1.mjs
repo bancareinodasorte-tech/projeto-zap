@@ -217,18 +217,23 @@ const block=String.raw`
    try{
      if(!verifyMetaSignature(req))return res.sendStatus(403);
      if(req.body?.object!=='whatsapp_business_account')return res.sendStatus(404);
-     for(const entry of req.body.entry||[]){
-       for(const change of entry.changes||[]){
-         const value=change.value||{};
-         for(const message of value.messages||[]){
-           const profile=value.contacts?.find(c=>String(c.wa_id||'')===String(message.from||''))?.profile?.name||'';
-           await saveMetaInbound(message,profile);
+     const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+     if(!ownerId)return res.status(503).send('Conta proprietária não configurada.');
+     const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ownerId)+'&active=eq.true&order=updated_at.desc').catch(()=>null);
+     await rdsRequestScope.run({sellerId:ownerId,companyId:membership?.company_id||null},async()=>{
+       for(const entry of req.body.entry||[]){
+         for(const change of entry.changes||[]){
+           const value=change.value||{};
+           for(const message of value.messages||[]){
+             const profile=value.contacts?.find(c=>String(c.wa_id||'')===String(message.from||''))?.profile?.name||'';
+             await saveMetaInbound(message,profile);
+           }
+           for(const status of value.statuses||[])await saveMetaStatus(status);
          }
-         for(const status of value.statuses||[])await saveMetaStatus(status);
        }
-     }
+     });
      res.sendStatus(200);
-   }catch(e){console.error('[RDS WA META WEBHOOK]',e.message);res.sendStatus(200);}
+   }catch(e){console.error('[RDS WA META WEBHOOK]',e.message);res.sendStatus(500);}
  });
 })();
 `;
