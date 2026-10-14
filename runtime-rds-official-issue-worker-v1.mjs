@@ -102,6 +102,7 @@ else{
   }
  }
  async function issueOne(order){
+  if(typeof rdsSalesChannelEnabled==='function'&&!rdsSalesChannelEnabled())return;
   if(!order?.id||String(order.status||'')!=='PAGO_AGUARDANDO_BILHETES')return;
   let issue=String(order.official_issue_status||'');
   if((issue==='ERRO_RECONCILIAR'||issue==='CONCLUIDO')&&!order.official_sale_id)return;
@@ -188,6 +189,7 @@ else{
   }
  }
  async function cycle(){
+  if(typeof rdsSalesChannelEnabled==='function'&&!rdsSalesChannelEnabled())return;
   if(running)return;running=true;
   try{
    const sellerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
