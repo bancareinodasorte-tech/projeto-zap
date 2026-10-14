@@ -8,6 +8,9 @@ on:
       - 'runtime-rds-operator-auth-v2.mjs'
       - 'runtime-rds-admin-company-management-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - 'runtime-rds-official-sales-diagnostics-v1.mjs'
+      - 'runtime-rds-official-sales-final-v1.mjs'
       - 'runtime-rds-whatsapp-crm-tenant-fix-v1.mjs'
       - 'runtime-rds-whatsapp-meta-cloud-v1.mjs'
       - 'runtime-rds-whatsapp-panel-v1.mjs'
@@ -37,6 +40,12 @@ jobs:
         run: node --check runtime-rds-official-issue-worker-v1.mjs
       - name: Check server syntax
         run: node --check server.js
+      - name: Check legacy official sales routes
+        run: node --check runtime-rds-official-sales-final-v1.mjs
+      - name: Check official diagnostics access
+        run: node --check runtime-rds-official-sales-diagnostics-v1.mjs
+      - name: Check ticket PDF access isolation
+        run: node --check runtime-rds-official-ticket-chromium-v1.mjs
       - name: Check owner-only legacy WhatsApp panel
         run: node --check runtime-rds-whatsapp-panel-v1.mjs
       - name: Check owner-only Meta WhatsApp routes

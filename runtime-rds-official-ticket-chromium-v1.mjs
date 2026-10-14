@@ -16,6 +16,17 @@ server=server.slice(0,oldStart)+server.slice(oldEnd);
 const block=String.raw`
 // RDS OFFICIAL TICKET CHROMIUM V1
 (()=>{
+  async function rdsTicketSession(req,res){
+    if(typeof rdsOpRequire!=='function'){res.status(503).json({ok:false,error:'Autenticação multiusuário indisponível.'});return null;}
+    const session=await rdsOpRequire(req,res);
+    if(!session?.seller?.id)return null;
+    return session;
+  }
+  function rdsTicketOwner(req,res,session){
+    const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+    if(!ownerId||String(session?.seller?.id)!==ownerId){res.status(403).json({ok:false,error:'O envio de bilhetes pelo WhatsApp oficial pertence à conta proprietária.'});return false;}
+    return true;
+  }
   const {chromium}=require('playwright-core');
   const chromiumBinary=require('@sparticuz/chromium');
   const PDFDocument=require('pdfkit');
@@ -208,10 +219,11 @@ const block=String.raw`
 
   async function archive(order,pdf,sentAt=undefined){
     validateRdsTicketPdf(pdf);
-    const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-    const ex=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id));
+    const sid=String(order?.seller_id||'');
+    if(!sid)throw new Error('Pedido sem vendedor identificado; arquivo não será gravado.');
+    const ex=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(order.id)+'&seller_id=eq.'+encodeURIComponent(sid));
     const finalSentAt=sentAt===undefined?(ex?.sent_at||null):sentAt;
-    const row={order_id:order.id,seller_id:sid||order.seller_id||null,order_code:String(order.code||''),customer_name:order.customer_name||null,customer_phone:normalizeBR(order.phone||order.contact_phone||'')||null,official_sale_id:String(order.official_sale_id||'')||null,file_name:'bilhetes-'+order.code+'.pdf',mime_type:'application/pdf',pdf_base64:pdf.toString('base64'),sent_at:finalSentAt,updated_at:nowISO()};
+    const row={order_id:order.id,seller_id:sid,order_code:String(order.code||''),customer_name:order.customer_name||null,customer_phone:normalizeBR(order.phone||order.contact_phone||'')||null,official_sale_id:String(order.official_sale_id||'')||null,file_name:'bilhetes-'+order.code+'.pdf',mime_type:'application/pdf',pdf_base64:pdf.toString('base64'),sent_at:finalSentAt,updated_at:nowISO()};
     if(ex?.id)await patch('rds10_ticket_documents','id=eq.'+encodeURIComponent(ex.id),row);else await insert('rds10_ticket_documents',row);
   }
 
@@ -222,7 +234,8 @@ const block=String.raw`
     if(ticketMatch&&content?.document){
       try{
         const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-        const f=sid?'select=*&code=eq.'+encodeURIComponent(ticketMatch[1])+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&code=eq.'+encodeURIComponent(ticketMatch[1]);
+        if(!sid)throw new Error('Vendedor não identificado; envio de bilhete bloqueado.');
+        const f='select=*&code=eq.'+encodeURIComponent(ticketMatch[1])+'&seller_id=eq.'+encodeURIComponent(sid);
         const o=await one('rds10_orders',f);
         if(!o)throw new Error('Pedido do bilhete não encontrado; envio do anexo bloqueado.');
         const b=validateRdsTicketPdf(await renderPdf(o));
@@ -239,7 +252,8 @@ const block=String.raw`
 
   app.get('/api/rds/ticket-png/:id',async(req,res)=>{
     try{
-      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));
+      const session=await rdsTicketSession(req,res);if(!session)return;
+      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const b=await renderPng(o);
       res.setHeader('Content-Type','image/png');res.setHeader('Content-Disposition','inline; filename="bilhetes-'+o.code+'.png"');
@@ -249,12 +263,13 @@ const block=String.raw`
 
   app.get('/api/rds/ticket-pdf/:id',async(req,res)=>{
     try{
-      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id));
+      const session=await rdsTicketSession(req,res);if(!session)return;
+      const o=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const forceFresh=String(req.query.fresh||'')==='1';
       let b=null;
       if(!forceFresh){
-        const cached=await one('rds10_ticket_documents','select=pdf_base64&order_id=eq.'+encodeURIComponent(o.id));
+        const cached=await one('rds10_ticket_documents','select=pdf_base64&order_id=eq.'+encodeURIComponent(o.id)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));
         if(cached?.pdf_base64){
           try{b=Buffer.from(String(cached.pdf_base64),'base64');validateRdsTicketPdf(b);}catch{b=null;}
         }
@@ -268,15 +283,17 @@ const block=String.raw`
   app.post('/api/rds/ticket-pdf/:id/resend',async(req,res)=>{
     let confirmedMessageId=null;
     try{
-      const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null;
-      const f=sid?'select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid):'select=*&id=eq.'+encodeURIComponent(req.params.id);
+      const session=await rdsTicketSession(req,res);if(!session)return;
+      if(!rdsTicketOwner(req,res,session))return;
+      const sid=String(session.seller.id);
+      const f='select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid);
       const o=await one('rds10_orders',f);
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
       if(!phone)throw new Error('Telefone do cliente não informado.');
       const target=await ensureTargetJid(phone);
       if(!target?.jid)throw new Error('WhatsApp não localizado.');
-      const existing=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(o.id));
+      const existing=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(o.id)+'&seller_id=eq.'+encodeURIComponent(sid));
       const b=validateRdsTicketPdf(await renderPdf(o));
       await archive(o,b,existing?.sent_at||null);
       let s;
@@ -285,7 +302,7 @@ const block=String.raw`
       if(!s?.key?.id)return res.status(202).json({ok:false,ambiguous:true,error:'O WhatsApp não confirmou o resultado. Confira a conversa e o histórico antes de tentar novamente; não clique novamente agora.'});
       confirmedMessageId=s.key.id;
       await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:confirmedMessageId,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});
-      const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(o.id),{sent_at:nowISO(),updated_at:nowISO()});
+      const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(o.id)+'&seller_id=eq.'+encodeURIComponent(sid),{sent_at:nowISO(),updated_at:nowISO()});
       if(!archived?.length)return res.status(202).json({ok:false,ambiguous:false,sent:true,error:'O WhatsApp confirmou o envio, mas o histórico não confirmou a atualização. Não reenvie; confira o histórico.'});
       return res.json({ok:true,waMessageId:confirmedMessageId});
     }catch(e){
@@ -296,13 +313,14 @@ const block=String.raw`
 
   app.get('/api/rds/ticket-archive',async(req,res)=>{
     try{
-      const sid=typeof rdsWhatsappSellerId==='function'?await rdsWhatsappSellerId():null,q=String(req.query.search||'').trim();
-      let af=sid?'select=*&seller_id=eq.'+encodeURIComponent(sid):'select=*';
+      const session=await rdsTicketSession(req,res);if(!session)return;
+      const sid=String(session.seller.id),q=String(req.query.search||'').trim();
+      let af='select=*&seller_id=eq.'+encodeURIComponent(sid);
       if(q)af+='&or=(order_code.ilike.*'+encodeURIComponent(q)+'*,customer_name.ilike.*'+encodeURIComponent(q)+'*,customer_phone.ilike.*'+encodeURIComponent(q)+'*,official_sale_id.ilike.*'+encodeURIComponent(q)+'*)';
       af+='&order=created_at.desc&limit=200';
       const docs=await list('rds10_ticket_documents',af);
       const seen=new Set((docs||[]).map(x=>String(x.order_id||'')));
-      let of=sid?'select=*&seller_id=eq.'+encodeURIComponent(sid)+'&status=eq.CONCLUIDO&official_sale_id=not.is.null':'select=*&status=eq.CONCLUIDO&official_sale_id=not.is.null';
+      let of='select=*&seller_id=eq.'+encodeURIComponent(sid)+'&status=eq.CONCLUIDO&official_sale_id=not.is.null';
       if(q)of+='&or=(code.ilike.*'+encodeURIComponent(q)+'*,customer_name.ilike.*'+encodeURIComponent(q)+'*,phone.ilike.*'+encodeURIComponent(q)+'*,contact_phone.ilike.*'+encodeURIComponent(q)+'*,official_sale_id.ilike.*'+encodeURIComponent(q)+'*)';
       of+='&order=created_at.desc&limit=200';
       const orders=await list('rds10_orders',of);
