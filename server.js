@@ -414,10 +414,10 @@ async function startWhatsApp(force=false){
         const remote = String(m.key?.remoteJid || '');
         if(remote.endsWith('@g.us') || remote === 'status@broadcast' || remote.endsWith('@broadcast')) continue;
         lastInboundAt = Date.now();
-        await handleInbound(m).catch(async e => {
+        await rdsWithOfficialOwnerScope(()=>handleInbound(m).catch(async e => {
           console.error('INBOUND', e.message);
           try{ await addAlert('ERRO_ENTRADA', e.message, { remoteJid:remote }); }catch{}
-        });
+        })).catch(e=>console.error('[RDS WA] escopo proprietário:',e?.message||e));
       }
     });
     sock.ev.on('messages.update', updates => {
@@ -572,6 +572,20 @@ async function rdsWhatsappSellerId(){
   }
   return null;
 }
+async function rdsWithOfficialOwnerScope(fn){
+  const current=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;
+  if(current?.sellerId&&current?.companyId)return fn();
+  if(typeof rdsRequestScope==='undefined'||typeof rdsRequestScope.run!=='function')throw new Error('Escopo multiempresa indisponível.');
+  const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+  if(!ownerId)throw new Error('Conta proprietária oficial não configurada.');
+  const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ownerId)+'&active=eq.true&limit=1000');
+  const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];
+  if(ids.length!==1)throw new Error(ids.length?'Vínculo empresarial do proprietário ambíguo.':'Proprietário sem empresa ativa.');
+  const company=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(ids[0]));
+  if(!company)throw new Error('Empresa do proprietário inativa ou indisponível.');
+  return rdsRequestScope.run({sellerId:ownerId,companyId:ids[0]},fn);
+}
+
 async function activeOrder(phone){
   const sellerId=await rdsWhatsappSellerId();
   const sellerFilter=sellerId?`&seller_id=eq.${encodeURIComponent(sellerId)}`:'';
