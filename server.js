@@ -472,15 +472,16 @@ async function replyInbound(identity, text){
 
 // ---------------- Persistência operacional ----------------
 async function addAlert(kind, title, payload={}){
-  try{ await insert('rds10_alerts',{kind,title,payload,is_read:false,created_at:nowISO()},'minimal'); }catch{}
+  const write=()=>insert('rds10_alerts',{kind,title,payload,is_read:false,created_at:nowISO()},'minimal');
+  try{await rdsWithOfficialOwnerScope(write);}catch(e){console.error('[RDS] alert skipped:',e?.message||e);}
 }
 async function logEvent(kind, payload={}){
-  try{ await insert('rds10_events',{event_type:String(kind||'RDS_EVENT'),metadata:payload||{},kind,payload:payload||{},created_at:nowISO()},'minimal'); }catch(e){ console.error('[RDS] logEvent:',e.message); }
+  const write=()=>insert('rds10_events',{event_type:String(kind||'RDS_EVENT'),metadata:payload||{},kind,payload:payload||{},created_at:nowISO()},'minimal');
+  try{await rdsWithOfficialOwnerScope(write);}catch(e){console.error('[RDS] logEvent:',e?.message||e);}
 }
 async function logMessage({phone=null,lid=null,direction,type='text',body=null,status='RECEBIDA',waId=null,raw={}}){
-  try{
-    await insert('rds10_messages',{phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');
-  }catch{}
+  const write=()=>insert('rds10_messages',{phone,lid,direction,message_type:type,body,wa_message_id:waId,status,raw_payload:raw,created_at:nowISO()},'minimal');
+  try{await rdsWithOfficialOwnerScope(write);}catch(e){console.error('[RDS] logMessage skipped:',e?.message||e);}
 }
 async function getSettings(){
   let s = await one('rds10_settings','select=*&id=eq.1');
