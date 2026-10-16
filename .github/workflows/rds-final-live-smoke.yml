@@ -27,6 +27,10 @@ jobs:
             console.log(t.method,t.path,'=>',response.status);
             if(!t.expected.includes(response.status)) throw new Error('Unexpected status '+response.status+' for '+t.path+': '+body.slice(0,250));
           }
+          const home=await fetch(base+'/',{cache:'no-store',signal:AbortSignal.timeout(20000)});
+          const html=await home.text();
+          console.log('home page =>',home.status,'recovery script linked',html.includes('ui-rds-operator-recovery-v1.js?v=2'));
+          if(!home.ok||!html.includes('ui-rds-operator-recovery-v1.js?v=2')) throw new Error('Live home page does not load the recovery UI.');
           const ui=await fetch(base+'/ui-rds-operator-recovery-v1.js?v=2',{cache:'no-store',signal:AbortSignal.timeout(20000)});
           const js=await ui.text();
           console.log('password recovery UI =>',ui.status,'bytes',js.length);
