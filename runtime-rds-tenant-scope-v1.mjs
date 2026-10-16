@@ -9,6 +9,30 @@ const insertFn="async function insert(table, row, returning='representation'){";
 const helper = [
   "// RDS TENANT SCOPE V1",
   "const RDS_TENANT_TABLES=new Set(['rds10_groups','rds10_contacts','rds10_campaigns','rds10_campaign_steps','rds10_deliveries','rds10_messages','rds10_events','rds10_alerts','rds10_orders','rds10_whatsapp_chat_state','rds10_seller_settings','rds10_ticket_documents']);",
+  "async function rdsTenantPrepareInsertRow(table,row,sellerId,companyId){",
+  "  if(!RDS_TENANT_TABLES.has(table))return row;",
+  "  let activeCompanyPromise=null;",
+  "  const activeCheckCache=new Map(),membershipCheckCache=new Map();",
+  "  const onlyActiveCompany=async()=>{if(!activeCompanyPromise)activeCompanyPromise=(async()=>{const rows=await list('rds10_companies','select=id&active=eq.true&limit=2');const ids=[...new Set((rows||[]).map(c=>String(c.id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');return ids[0];})();return activeCompanyPromise;};",
+  "  const prepare=async(item)=>{",
+  "    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error('RDS_TENANT_ROW_INVALID');",
+  "    let out={...item};",
+  "    if(sellerId&&!out.seller_id)out.seller_id=sellerId;",
+  "    if(companyId&&!out.company_id)out.company_id=companyId;",
+  "    const rowSeller=String(out.seller_id||sellerId||'');",
+  "    if(sellerId&&rowSeller&&rowSeller!==String(sellerId))throw new Error('RDS_TENANT_SELLER_MISMATCH');",
+  "    if(companyId&&out.company_id&&String(out.company_id)!==String(companyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
+  "    if(!out.company_id){",
+  "      if(rowSeller){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');out.company_id=ids[0];}",
+  "      else out.company_id=await onlyActiveCompany();",
+  "    }",
+  "    const companyKey=String(out.company_id);let activeCheck=activeCheckCache.get(companyKey);if(!activeCheck){activeCheck=one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(companyKey));activeCheckCache.set(companyKey,activeCheck);}const active=await activeCheck;",
+  "    if(!active)throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
+  "    if(rowSeller){const membershipKey=rowSeller+'|'+String(out.company_id);let membershipCheck=membershipCheckCache.get(membershipKey);if(!membershipCheck){membershipCheck=one('rds10_seller_companies','select=seller_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&company_id=eq.'+encodeURIComponent(String(out.company_id))+'&active=eq.true');membershipCheckCache.set(membershipKey,membershipCheck);}const membership=await membershipCheck;if(!membership)throw new Error('RDS_TENANT_COMPANY_MISMATCH');}",
+  "    return out;",
+  "  };",
+  "  return Array.isArray(row)?Promise.all(row.map(prepare)):prepare(row);",
+  "}",
   "function rdsTenantScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.sellerId||null;}catch{return null}}",
   "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
@@ -19,12 +43,12 @@ const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não lo
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
 
 const oldInsert = "async function insert(table, row, returning='representation'){\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
-const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&row.seller_id==null)row={...row,seller_id:sellerId};\n  if(companyId&&RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null)row={...row,company_id:companyId};\n  if(RDS_TENANT_TABLES.has(table)&&row&&row.company_id==null){const rowSeller=String(row.seller_id||sellerId||'');let resolved=companyId;if(!resolved&&rowSeller){const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&order=updated_at.desc').catch(()=>null);resolved=membership?.company_id||null;}if(resolved)row={...row,company_id:resolved};}\n  return sb(\`/rest/v1/\${table}\`, { method:'POST', headers:{Prefer:\`return=\${returning}\`}, body:JSON.stringify(row) });\n}";
+const newInsert = "async function insert(table, row, returning='representation'){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  row=await rdsTenantPrepareInsertRow(table,row,sellerId,companyId);\n  return sb('/rest/v1/'+table, { method:'POST', headers:{Prefer:'return='+returning}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldInsert))throw new Error('função insert não localizada para substituição.');
 server=server.replace(oldInsert,newInsert);
 
 const oldPatch = "async function patch(table, filter, row){\n  return sb(\`/rest/v1/\${table}?\${filter}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
-const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope();\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,rdsTenantCompanyScope()):filter;\n  return sb(\`/rest/v1/\${table}?\${scoped}\`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
+const newPatch = "async function patch(table, filter, row){\n  const sellerId=rdsTenantScope(),companyId=rdsTenantCompanyScope();\n  if(sellerId&&RDS_TENANT_TABLES.has(table)&&row&&typeof row==='object'){\n    if(Object.prototype.hasOwnProperty.call(row,'seller_id')&&String(row.seller_id||'')!==String(sellerId))throw new Error('RDS_TENANT_SELLER_MISMATCH');\n    if(Object.prototype.hasOwnProperty.call(row,'company_id')&&String(row.company_id||'')!==String(companyId||''))throw new Error('RDS_TENANT_COMPANY_MISMATCH');\n  }\n  const scoped=sellerId&&RDS_TENANT_TABLES.has(table)?rdsTenantFilter(table,filter,sellerId,companyId):filter;\n  return sb('/rest/v1/'+table+'?'+scoped, { method:'PATCH', headers:{Prefer:'return=representation'}, body:JSON.stringify(row) });\n}";
 if(!server.includes(oldPatch))throw new Error('função patch não localizada para substituição.');
 server=server.replace(oldPatch,newPatch);
 
@@ -53,16 +77,25 @@ const jp=server.indexOf(jsonAnchor);if(jp<0)throw new Error('express.json não l
 const middleware = [
   "app.use(async(req,res,next)=>{",
   "  if(!String(req.path||'').startsWith('/api'))return next();",
-  "  try{",
-  "    if(typeof rdsOpSession==='function'){",
-  "      const s=await rdsOpSession(req).catch(()=>null);",
-  "      if(s?.seller?.id){",
-  "        const membership=await one('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&active=eq.true&order=updated_at.desc').catch(()=>null);",
-  "        return rdsRequestScope.run({sellerId:s.seller.id,companyId:membership?.company_id||null},()=>next());",
-  "      }",
-  "    }",
-  "  }catch{}",
-  "  return next();",
+  "  if(['/api/rds/unified/login','/api/rds/unified/context','/api/rds/unified/logout'].includes(String(req.path||'')))return next();",
+  "  const sellerToken=(typeof rdsOpBearer==='function'?rdsOpBearer(req):null)||(typeof rdsOpCookie==='function'?rdsOpCookie(req):null);",
+  "  if(!sellerToken)return next();",
+  "  let session=null;try{if(typeof rdsOpSession==='function')session=await rdsOpSession(req);}catch{}",
+  "  if(!session?.seller?.id){",
+  "    let admin=null;try{if((typeof rdsAdminBearer==='function'&&rdsAdminBearer(req))||(typeof rdsAdminCookie==='function'&&rdsAdminCookie(req)))admin=await rdsAdminSession(req);}catch{}",
+  "    if(admin?.admin?.id)return next();",
+  "    return res.status(401).json({success:false,code:'SELLER_SESSION_INVALID',error:'Sessão de vendedor inválida ou expirada. Entre novamente.'});",
+  "  }",
+  "  let memberships;try{memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(session.seller.id)+'&active=eq.true&limit=1000');}catch(e){return res.status(503).json({success:false,code:'COMPANY_MEMBERSHIP_UNAVAILABLE',error:'Não foi possível validar a empresa vinculada à conta. Tente novamente.'});}",
+  "  const companyIds=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];",
+  "  if(!companyIds.length)return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_REQUIRED',error:'Esta conta não possui vínculo ativo com uma empresa.'});",
+  "  const requested=String(req.headers['x-rds-company-id']||req.query?.company_id||req.body?.company_id||'').trim();",
+  "  if(requested&&!companyIds.includes(requested))return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_MISMATCH',error:'A empresa selecionada não está autorizada para esta conta.'});",
+  "  if(companyIds.length>1&&!requested)return res.status(409).json({success:false,code:'COMPANY_SELECTION_REQUIRED',error:'Selecione a empresa antes de continuar.'});",
+  "  const companyId=requested||companyIds[0];",
+  "  let company;try{company=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(companyId));}catch(e){return res.status(503).json({success:false,code:'COMPANY_STATUS_UNAVAILABLE',error:'Não foi possível validar o estado da empresa. Tente novamente.'});}",
+  "  if(!company)return res.status(403).json({success:false,code:'COMPANY_INACTIVE',error:'A empresa selecionada está inativa ou não existe.'});",
+  "  return rdsRequestScope.run({sellerId:session.seller.id,companyId},()=>next());",
   "});"
 ].join(String.fromCharCode(10));
 server=server.slice(0,jp+jsonAnchor.length)+'\n'+middleware+server.slice(jp+jsonAnchor.length);
