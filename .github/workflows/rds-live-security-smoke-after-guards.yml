@@ -1,0 +1,38 @@
+name: RDS live security smoke
+on:
+  push:
+    branches: ['test/rds-live-security-smoke-after-guards']
+    paths:
+      - '.github/workflows/rds-live-security-smoke-after-guards.yml'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify public routes fail closed
+        env:
+          RDS_BASE_URL: https://projeto-zap-4tyg.onrender.com
+        run: |
+          node <<'NODE'
+          console.log('Security smoke against current live production deployment');
+          const base = process.env.RDS_BASE_URL;
+          const checks = [
+            {path:'/api/v1011/official-sales/draw-info', method:'GET', expected:[401,403]},
+            {path:'/api/v1012/official-sales/issue', method:'POST', body:JSON.stringify({}), expected:[401,403]},
+            {path:'/api/rds/ticket-archive', method:'GET', expected:[401,403]},
+            {path:'/api/whatsapp/meta/webhook', method:'POST', body:JSON.stringify({object:'invalid'}), expected:[403]}
+          ];
+          for (const test of checks) {
+            const response = await fetch(base + test.path, {
+              method: test.method,
+              headers: test.body ? {'content-type':'application/json'} : {},
+              body: test.body,
+              signal: AbortSignal.timeout(20000)
+            });
+            const body = await response.text();
+            console.log(test.method, test.path, '=>', response.status);
+            if (!test.expected.includes(response.status)) {
+              throw new Error(`Unexpected status ${response.status} for ${test.path}: ${body.slice(0,300)}`);
+            }
+          }
+          NODE
