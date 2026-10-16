@@ -1,0 +1,81 @@
+name: RDS release guard syntax
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - '.github/workflows/rds-release-guards.yml'
+  push:
+    branches: [fix/release-audit-guards-v2]
+    paths:
+      - 'runtime-rds-official-issue-worker-v1.mjs'
+      - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - '.github/workflows/rds-release-guards.yml'
+  workflow_dispatch:
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check modified runtime modules
+        run: |
+          node --check runtime-rds-official-issue-worker-v1.mjs
+          node --check runtime-rds-tenant-scope-v1.mjs
+          node --check runtime-rds-official-ticket-chromium-v1.mjs
+      - name: Apply tenant installer and validate generated server syntax
+        run: |
+          node runtime-rds-tenant-scope-v1.mjs
+          node --check server.js
+      - name: Verify release safety invariants
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const worker = fs.readFileSync('runtime-rds-official-issue-worker-v1.mjs', 'utf8');
+          const ticket = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
+          const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
+          const checks = [
+            [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
+            [worker, "const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{}", 'nested official sale payload must be normalized for ticket rendering'],
+            [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
+            [worker, 'byId.set(did,{...item,...prior,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})})', 'inventory data must not override the official draw state'],
+            [worker, "if(issue==='ERRO_RECONCILIAR')return", 'ambiguous issuance must not retry automatically'],
+            [ticket, 'fileName.match(/bilhetes-', 'ticket PDF filename matcher must be present'],
+            [ticket, 'if(!b||!b.length)', 'empty PDFs must be rejected'],
+            [ticket, 'RDS_OFFICIAL_TICKETS_MISSING', 'PDF/PNG generation must fail when official ticket numbers are missing'],
+            [ticket, 'const sheetHeight=singleCard?400:20+(rows*420)', 'official ticket canvas must use the approved 2:1 aspect ratio'],
+            [ticket, 'grid-auto-rows:400px;', 'ticket sheets must preserve the official 2:1 ticket ratio'],
+            [ticket, 'booklets.some(b=>!Array.isArray(b?.tickets)||!b.tickets.length||b.tickets.some', 'every rendered booklet must contain ticket numbers'],
+            [ticket, "if(!s?.key?.id)", 'unconfirmed WhatsApp sends must not be treated as successful'],
+            [tenant, 'RDS_TENANT_COMPANY_REQUIRED', 'tenant writes without a verified company must fail'],
+            [tenant, 'RDS_TENANT_SELLER_MISMATCH', 'seller cannot insert or update records for another seller'],
+            [tenant, "hasOwnProperty.call(row,'seller_id')", 'seller ownership cannot be changed by a scoped seller'],
+            [tenant, "hasOwnProperty.call(row,'company_id')", 'company ownership cannot be changed by a scoped seller'],
+            [tenant, 'RDS_TENANT_COMPANY_AMBIGUOUS', 'ambiguous membership must fail'],
+            [tenant, 'COMPANY_SELECTION_REQUIRED', 'multi-company sellers must select a company'],
+            [tenant, 'COMPANY_MEMBERSHIP_UNAVAILABLE', 'membership lookup errors must fail closed'],
+            [tenant, 'COMPANY_INACTIVE', 'inactive companies must be rejected'],
+            [tenant, 'rdsTenantPrepareInsertRow', 'tenant inserts must use the row preparation guard'],
+            [tenant, 'Promise.all(row.map(prepare))', 'batch inserts must preserve array payloads'],
+            [tenant, 'onlyActiveCompany', 'background writes must resolve only a single active company'],
+            [tenant, '&active=eq.true&limit=1000', 'only active memberships may establish seller company scope']
+          ];
+          for (const [source, pattern, message] of checks) {
+            if (!source.includes(pattern)) { console.error('FAILED:', message); process.exitCode = 1; }
+          }
+          if (tenant.includes("one('rds10_companies','select=id&code=eq.RDS')")) { console.error('FAILED: default-company fallback remains'); process.exitCode = 1; }
+          if (tenant.includes('&active=eq.true&order=updated_at.desc')) { console.error('FAILED: arbitrary latest-membership selection remains'); process.exitCode = 1; }
+          if (worker.includes('https://invalid.local/rds-ticket.pdf')) { console.error('FAILED: PDF placeholder URL remains'); process.exitCode = 1; }
+          if (worker.includes("one('rds10_companies','select=id&code=eq.RDS')") || worker.includes("list('rds10_official_draws'")) { console.error('FAILED: local draw cache can bypass the official available list'); process.exitCode = 1; }
+          if (!worker.includes('d?.is_active===false')) { console.error('FAILED: inactive draw flag is not checked'); process.exitCode = 1; }
+          if (ticket.includes('RDS-559D8F') || worker.includes('RDS-559D8F')) { console.error('FAILED: obsolete order-code lock remains'); process.exitCode = 1; }
+          if (process.exitCode) process.exit(process.exitCode);
+          console.log('Release safety invariants present.');
+          NODE
