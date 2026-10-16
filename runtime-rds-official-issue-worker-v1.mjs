@@ -20,38 +20,33 @@ else{
  function saleInfo(sale){
   const saleId=firstValue(sale,['saleId','id','sale.id','data.saleId','data.id']);
   const pdfUrl=firstValue(sale,['pdfUrl','ticketUrl','downloadUrl','fileUrl','publicUrl','url','pdf.url','ticket.url','data.pdfUrl','data.ticketUrl','data.publicUrl','data.url','data.downloadUrl']);
-  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload:sale||{}};
+  const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{};
+  return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload};
  }
  async function selectedOfficialDraw(id){
-  const [availableResult,allResult]=await Promise.allSettled([
-   rdsFinalRequest('/draws/seller/available'),
-   rdsFinalRequest('/draws/seller/all')
-  ]);
+  const available=arr(await rdsFinalRequest('/draws/seller/available'));
   const byId=new Map();
-  for(const d of [...(availableResult.status==='fulfilled'?arr(availableResult.value):[]),...(allResult.status==='fulfilled'?arr(allResult.value):[])]){
+  for(const d of available){
    const did=drawIdOf(d);if(!did)continue;
-   byId.set(did,{...(byId.get(did)||{}),...d});
+   const status=String(d?.status||d?.drawStatus||d?.draw_status||'').toUpperCase();
+   if(d?.isDrawClosed===true||d?.is_draw_closed===true||d?.isSalesClosed===true||d?.is_sales_closed===true||d?.salesOpen===false||d?.sales_open===false||d?.active===false||d?.isActive===false||d?.is_active===false||/CLOSED|ENCERRADO|FECHADO|INATIVO/.test(status))continue;
+   byId.set(did,{...d,drawId:did});
   }
   try{
    const inventory=arr(await rdsFinalRequest('/seller/booklet-sales/available'));
    for(const item of inventory){
     const did=drawIdOf(item)||drawIdOf(item?.draw)||String(item?.draw?.drawId||'').trim();
     if(!did)continue;
-    const prior=byId.get(did)||{drawId:did};
+    const prior=byId.get(did);
+    // O inventário só complementa sorteios autorizados pelo endpoint oficial.
+    if(!prior)continue;
     const stock=item?.availableBooklets??item?.bookletsAvailable??item?.availableTickets??item?.remainingBooklets??item?.remainingTickets??item?.available??item?.count;
-    byId.set(did,{...prior,...item,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
+    // O inventário não pode substituir título, estado ou elegibilidade oficiais.
+    byId.set(did,{...item,...prior,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})});
    }
   }catch{}
-  let found=byId.get(String(id));
-  if(found)return found;
-  try{
-   const company=await one('rds10_companies','select=id&code=eq.RDS');
-   if(company?.id){
-    const rows=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,raw_data&company_id=eq.'+encodeURIComponent(company.id)+'&external_draw_id=eq.'+encodeURIComponent(String(id)));
-    const d=rows?.[0];if(d){const raw=d.raw_data&&typeof d.raw_data==='object'?d.raw_data:{};found={...raw,...d,drawId:String(d.external_draw_id),availableBooklets:d.available_booklets??raw.availableBooklets??raw.bookletsAvailable};}
-   }
-  }catch{}
-  return found||null;
+  // Sem confirmação no endpoint oficial de disponíveis, cache local não autoriza emissão.
+  return byId.get(String(id))||null;
  }
  async function alreadySent(order,info){
   try{
