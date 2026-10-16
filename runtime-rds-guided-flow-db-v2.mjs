@@ -145,8 +145,8 @@ async function rdsGuidedDbHandle(identity,inbound,m){
   }
   if(step==='EDIT_CPF'){
     const cpf=rdsGuidedDbCpf(text);
-    if(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*\n\nDigite novamente seu CPF com 11 dígitos.');
-    await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+    if(cpf&&(!/^\\d{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))))return replyInbound(identity,'❌ *CPF INVÁLIDO*\\n\\nDigite 11 dígitos válidos ou *PULAR* para continuar sem CPF.');
+    await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf||null,guided_step:'CONFIRMAR',updated_at:nowISO()});
     const fresh=await one('rds10_orders','select=*&id=eq.'+order.id);return replyInbound(identity,rdsGuidedDbConfirm(fresh||order));
   }
   if(step==='TODOS_QUANTIDADE'){

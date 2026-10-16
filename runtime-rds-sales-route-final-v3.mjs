@@ -331,8 +331,9 @@ const block=`
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
     if(step==='EDIT_CPF'){
-      const cpf=cleanCpf(t);if(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf)))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite novamente seu CPF com 11 dígitos.');
-      await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf,guided_step:'CONFIRMAR',updated_at:nowISO()});
+      const cpf=cleanCpf(t);
+      if(cpf&&(!/^[0-9]{11}$/.test(cpf)||(typeof validCPF==='function'&&!validCPF(cpf))))return replyInbound(identity,'❌ *CPF INVÁLIDO*'+NL+NL+'Digite 11 dígitos válidos ou *PULAR* para continuar sem CPF.');
+      await patch('rds10_orders','id=eq.'+order.id,{customer_tax_id:cpf||null,guided_step:'CONFIRMAR',updated_at:nowISO()});
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id));return replyInbound(identity,confirmText(fresh||order));
     }
     if(step==='TODOS_QUANTIDADE'){

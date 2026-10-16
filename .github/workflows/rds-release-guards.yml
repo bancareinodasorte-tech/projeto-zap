@@ -5,6 +5,7 @@ on:
     paths:
       - 'runtime-rds-official-issue-worker-v1.mjs'
       - 'runtime-rds-sales-route-final-v3.mjs'
+      - 'runtime-rds-guided-flow-db-v2.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
       - 'runtime-rds-official-ticket-chromium-v1.mjs'
       - 'server.js'
@@ -33,6 +34,7 @@ jobs:
         run: |
           node --check runtime-rds-official-issue-worker-v1.mjs
           node --check runtime-rds-sales-route-final-v3.mjs
+          node --check runtime-rds-guided-flow-db-v2.mjs
           node --check runtime-rds-tenant-scope-v1.mjs
           node --check runtime-rds-official-ticket-chromium-v1.mjs
           node --check server.js
@@ -46,6 +48,7 @@ jobs:
           import fs from 'node:fs';
           const worker = fs.readFileSync('runtime-rds-official-issue-worker-v1.mjs', 'utf8');
           const sales = fs.readFileSync('runtime-rds-sales-route-final-v3.mjs', 'utf8');
+          const guided = fs.readFileSync('runtime-rds-guided-flow-db-v2.mjs', 'utf8');
           const ticket = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
           const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
           const server = fs.readFileSync('server.js', 'utf8');
@@ -84,6 +87,8 @@ jobs:
           checks.push([sales, 'purchaseDrawOptions:options', 'draw options must be persisted for the pending purchase']);
           checks.push([sales, 'const current=draws.find(d=>String(d.drawId)===String(chosen.drawId))', 'selected draw must be revalidated against the current official availability']);
           checks.push([sales, '!rdsSalesChannelEnabled()', 'new WhatsApp purchases must respect the disabled sales channel']);
+          checks.push([sales, 'Digite 11 dígitos válidos ou *PULAR* para continuar sem CPF', 'legacy CPF edit must support PULAR']);
+          checks.push([guided, 'Digite 11 dígitos válidos ou *PULAR* para continuar sem CPF', 'guided legacy CPF edit must support PULAR']);
           checks.push([index, 'ui-rds-operator-recovery-v1.js?v=2', 'seller password recovery UI must be loaded']);
           checks.push([recovery, "'/api/operator/forgot-password'", 'recovery UI must call the password reset request endpoint']);
           checks.push([recovery, "'/api/operator/reset-password'", 'recovery UI must submit the one-time reset token']);
