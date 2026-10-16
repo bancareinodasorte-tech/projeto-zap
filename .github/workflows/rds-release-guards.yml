@@ -6,6 +6,7 @@ on:
       - 'runtime-rds-official-issue-worker-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
       - 'runtime-rds-official-ticket-chromium-v1.mjs'
+      - 'server.js'
       - '.github/workflows/rds-release-guards.yml'
   push:
     branches: [fix/release-audit-guards-v2]
@@ -30,6 +31,7 @@ jobs:
           node --check runtime-rds-official-issue-worker-v1.mjs
           node --check runtime-rds-tenant-scope-v1.mjs
           node --check runtime-rds-official-ticket-chromium-v1.mjs
+          node --check server.js
       - name: Apply tenant installer and validate generated server syntax
         run: |
           node runtime-rds-tenant-scope-v1.mjs
@@ -41,6 +43,7 @@ jobs:
           const worker = fs.readFileSync('runtime-rds-official-issue-worker-v1.mjs', 'utf8');
           const ticket = fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs', 'utf8');
           const tenant = fs.readFileSync('runtime-rds-tenant-scope-v1.mjs', 'utf8');
+          const server = fs.readFileSync('server.js', 'utf8');
           const checks = [
             [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
             [worker, "const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{}", 'nested official sale payload must be normalized for ticket rendering'],
@@ -67,6 +70,9 @@ jobs:
             [tenant, 'onlyActiveCompany', 'background writes must resolve only a single active company'],
             [tenant, '&active=eq.true&limit=1000', 'only active memberships may establish seller company scope']
           ];
+          checks.push([server, 'async function rdsWithOfficialOwnerScope(fn)', 'official WhatsApp writes must use a verified seller/company context']);
+          checks.push([server, 'rdsWithOfficialOwnerScope(()=>handleInbound(m)', 'global WhatsApp inbound flow must run in the owner tenant']);
+          checks.push([server, "const write=()=>insert('rds10_messages'", 'message persistence must use tenant context']);
           for (const [source, pattern, message] of checks) {
             if (!source.includes(pattern)) { console.error('FAILED:', message); process.exitCode = 1; }
           }
