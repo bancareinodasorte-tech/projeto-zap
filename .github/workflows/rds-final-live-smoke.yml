@@ -1,4 +1,4 @@
-name: RDS final live smoke
+name: RDS final live smoke after draw-selection release
 on:
   push:
     branches: ['test/rds-final-live-smoke']
