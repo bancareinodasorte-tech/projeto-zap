@@ -1,0 +1,39 @@
+name: RDS final live smoke
+on:
+  push:
+    branches: ['test/rds-final-live-smoke']
+    paths:
+      - '.github/workflows/rds-final-live-smoke.yml'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify live security and password recovery without sending email
+        env:
+          RDS_BASE_URL: https://projeto-zap-4tyg.onrender.com
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.RDS_BASE_URL;
+          const checks = [
+            {path:'/api/v1011/official-sales/draw-info', method:'GET', expected:[401,403]},
+            {path:'/api/v1012/official-sales/issue', method:'POST', body:{}, expected:[401,403]},
+            {path:'/api/rds/ticket-archive', method:'GET', expected:[401,403]},
+            {path:'/api/whatsapp/meta/webhook', method:'POST', body:{object:'invalid'}, expected:[403]}
+          ];
+          for (const t of checks) {
+            const response = await fetch(base+t.path, {method:t.method,headers:t.body?{'content-type':'application/json'}:{},body:t.body?JSON.stringify(t.body):undefined,signal:AbortSignal.timeout(20000)});
+            const body = await response.text();
+            console.log(t.method,t.path,'=>',response.status);
+            if(!t.expected.includes(response.status)) throw new Error('Unexpected status '+response.status+' for '+t.path+': '+body.slice(0,250));
+          }
+          const ui=await fetch(base+'/ui-rds-operator-recovery-v1.js?v=2',{cache:'no-store',signal:AbortSignal.timeout(20000)});
+          const js=await ui.text();
+          console.log('password recovery UI =>',ui.status,'bytes',js.length);
+          if(!ui.ok||!js.includes('/api/operator/forgot-password')||!js.includes('/api/operator/reset-password')) throw new Error('Password recovery UI is not served correctly.');
+          const reset=await fetch(base+'/api/operator/forgot-password',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'rds-final-smoke-nobody-20261016@invalid.example'}),signal:AbortSignal.timeout(20000)});
+          const data=await reset.json().catch(()=>({}));
+          console.log('unknown-email recovery response =>',reset.status,'success',data.success===true);
+          if(reset.status!==200||data.success!==true||!String(data.message||'').includes('Se o e-mail estiver cadastrado')) throw new Error('Recovery endpoint did not return the safe generic response.');
+          console.log('Smoke passed. No email was sent; unknown email has no matching seller.');
+          NODE
