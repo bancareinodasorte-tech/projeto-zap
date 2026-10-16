@@ -577,14 +577,14 @@ async function rdsWithOfficialOwnerScope(fn){
   const current=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;
   if(current?.sellerId&&current?.companyId)return fn();
   if(typeof rdsRequestScope==='undefined'||typeof rdsRequestScope.run!=='function')throw new Error('Escopo multiempresa indisponível.');
-  const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
-  if(!ownerId)throw new Error('Conta proprietária oficial não configurada.');
-  const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ownerId)+'&active=eq.true&limit=1000');
+  const sellerId=String(current?.sellerId||process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+  if(!sellerId)throw new Error('Conta proprietária oficial não configurada.');
+  const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sellerId)+'&active=eq.true&limit=1000');
   const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];
-  if(ids.length!==1)throw new Error(ids.length?'Vínculo empresarial do proprietário ambíguo.':'Proprietário sem empresa ativa.');
+  if(ids.length!==1)throw new Error(ids.length?'Vínculo empresarial ambíguo para o vendedor.':'Vendedor sem empresa ativa.');
   const company=await one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(ids[0]));
-  if(!company)throw new Error('Empresa do proprietário inativa ou indisponível.');
-  return rdsRequestScope.run({sellerId:ownerId,companyId:ids[0]},fn);
+  if(!company)throw new Error('Empresa do vendedor inativa ou indisponível.');
+  return rdsRequestScope.run({sellerId,companyId:ids[0]},fn);
 }
 
 async function activeOrder(phone){
