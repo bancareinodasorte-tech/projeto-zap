@@ -1,4 +1,4 @@
-name: RDS final live smoke after draw-selection release
+name: RDS final live smoke after V11.4.3 release
 on:
   push:
     branches: ['test/rds-final-live-smoke']
