@@ -33,6 +33,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'runtime-rds-official-sales-auth-v3.mjs'
       - 'runtime-rds-admin-recovery-v1.mjs'
       - 'runtime-rds-seller-recovery-v1.mjs'
       - 'runtime-rds-admin-auth-v5.mjs'
@@ -53,6 +54,12 @@ jobs:
           node-version: '20'
       - name: Check official integration guard syntax
         run: node --check runtime-rds-official-sales-auth-v3.mjs
+      - name: Check stale official draw cache protection
+        run: |
+          node -e "const fs=require('fs');const s=fs.readFileSync('runtime-rds-official-sales-auth-v3.mjs','utf8');for(const t of ['Date.now()-newest>6*60*60*1000','stale:true','As vendas deste catálogo ficam bloqueadas'])if(!s.includes(t))throw new Error('Missing stale official draw cache guard: '+t);console.log('Stale official draw cache guard OK')"
+      - name: Check official ticket visual template invariants
+        run: |
+          node -e "const fs=require('fs');const s=fs.readFileSync('runtime-rds-official-ticket-chromium-v1.mjs','utf8');for(const t of ['ticket-horizontal','ticket-blue','numbers-grid','repeat(5,1fr)','ticket-gray','qrbox','official-logo','PRAZO PARA O GANHADOR SE APRESENTAR'])if(!s.includes(t))throw new Error('Missing approved ticket layout element: '+t);console.log('Approved ticket layout invariants OK')"
       - name: Check tenant session validation syntax
         run: node --check runtime-rds-tenant-sales-v1.mjs
       - name: Check isolated registration syntax
