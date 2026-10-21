@@ -196,10 +196,11 @@ else{
    const rows=await list('rds10_orders','select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=200');
    for(const o of rows){
     const sid=String(o?.seller_id||'');if(!sid)continue;
-    const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(sid!==ownerId){const setting=await one('rds10_seller_settings','select=official_authorized&seller_id=eq.'+encodeURIComponent(sid)).catch(()=>null);if(setting?.official_authorized!==true)continue;}
+    const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
     let companyId=sid===ownerId?'':String(o?.company_id||'');
     if(!companyId){try{const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length===1)companyId=ids[0];}catch{}}
     if(!companyId){console.warn('[RDS AUTO] pedido sem empresa inequívoca; bloqueado '+String(o.code||o.id));continue;}
+    if(sid!==ownerId){if(typeof globalThis.rdsOfficialIsAuthorizedForSeller!=='function')continue;const authorized=await globalThis.rdsOfficialIsAuthorizedForSeller(sid,companyId).catch(()=>false);if(!authorized)continue;}
     try{await rdsRequestScope.run({sellerId:sid,companyId},()=>issueOne(o));}
     catch(e){console.error('[RDS AUTO] pedido '+String(o.code||o.id)+': '+String(e?.message||e));}
    }
