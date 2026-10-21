@@ -4,10 +4,10 @@ const path='server.js';
 let server=fs.readFileSync(path,'utf8');
 const oldSendText="async function sendTextPhone(phone, text){\n  const { phone:n, jid } = await ensureTargetJid(phone);";
 const newSendText="async function sendTextPhone(phone, text){\n  const scope=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;\n  const owner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();\n  if(scope?.sellerId&&String(scope.sellerId)!==owner){if(typeof globalThis.rdsWhatsappTenantSend!=='function')throw new Error('WhatsApp do vendedor indisponível.');return globalThis.rdsWhatsappTenantSend(scope.sellerId,phone,text);}\n  const { phone:n, jid } = await ensureTargetJid(phone);";
-if(server.includes(oldSendText))server=server.replace(oldSendText,newSendText);
+if(!server.includes(oldSendText))throw new Error('sendTextPhone não localizado; isolamento de WhatsApp não aplicado.');server=server.replace(oldSendText,newSendText);
 const oldReply="async function replyInbound(identity, text){\n  const body = cleanText(text);\n  if(!body) return;";
 const newReply="async function replyInbound(identity, text){\n  const body = cleanText(text);\n  if(!body) return;\n  const scope=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;\n  const owner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();\n  if(scope?.sellerId&&String(scope.sellerId)!==owner){if(typeof globalThis.rdsWhatsappTenantReply!=='function')throw new Error('Resposta WhatsApp do vendedor indisponível.');return globalThis.rdsWhatsappTenantReply(scope.sellerId,identity,body);}";
-if(server.includes(oldReply))server=server.replace(oldReply,newReply);
+if(!server.includes(oldReply))throw new Error('replyInbound não localizado; isolamento de respostas WhatsApp não aplicado.');server=server.replace(oldReply,newReply);
 const marker='// RDS WHATSAPP TENANT V1';
 if(server.includes(marker)){console.log('[RDS] WhatsApp por vendedor V1 já aplicado');process.exit(0);}
 const catchAll="app.get('*',(req,res)=>res.sendFile(__dirname + '/index.html'));";
