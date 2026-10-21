@@ -16,110 +16,34 @@ var RDS_OFFICIAL_API_V3='https://api.reinodasorte.com.br';
 var RDS_OFFICIAL_EMAIL_V3=String(process.env.RDS_OFFICIAL_EMAIL||'').trim();
 var RDS_OFFICIAL_PASSWORD_V3=String(process.env.RDS_OFFICIAL_PASSWORD||'').trim();
 var RDS_OFFICIAL_KEY_V3=String(process.env.RDS_OFFICIAL_AUTH_ENCRYPTION_KEY||'').trim();
-var rdsOfficialAccessV3='';
-var rdsOfficialDeviceStateV3='';
+var rdsOfficialAccessV3=new Map();
+var rdsOfficialDeviceStateV3=new Map();
+function rdsOfficialContextV3(sellerId,companyIdOverride){const scope=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();const sid=String(sellerId||scope?.sellerId||ownerId).trim();const companyId=String(companyIdOverride||(String(scope?.sellerId||'')===sid?scope?.companyId:'')||'').trim();const isOwner=Boolean(ownerId&&sid===ownerId);return {sellerId:sid,ownerId,isOwner,authId:isOwner?'main':(companyId?'company_'+companyId:sid),companyId};}
+async function rdsOfficialCredentialsV3(sellerId,override={},companyId){const ctx=rdsOfficialContextV3(sellerId,companyId);if(ctx.isOwner)return {email:RDS_OFFICIAL_EMAIL_V3,password:RDS_OFFICIAL_PASSWORD_V3,owner:true};const row=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId).catch(()=>null);return {email:String(override.email||row?.email||'').trim(),password:String(override.password||'').trim(),owner:false};}
 function rdsOfficialKeyV3(){if(!RDS_OFFICIAL_KEY_V3)throw new Error('Chave de proteção oficial não configurada.');var b=Buffer.from(RDS_OFFICIAL_KEY_V3,'base64');if(b.length!==32)throw new Error('Chave de proteção oficial inválida.');return b;}
 function rdsOfficialEncV3(v){var iv=crypto.randomBytes(12),c=crypto.createCipheriv('aes-256-gcm',rdsOfficialKeyV3(),iv);var d=Buffer.concat([c.update(String(v),'utf8'),c.final()]);return iv.toString('base64')+'.'+c.getAuthTag().toString('base64')+'.'+d.toString('base64');}
 function rdsOfficialDecV3(v){var parts=String(v||'').split('.'),i=parts[0],t=parts[1],d=parts[2];if(!i||!t||!d)throw new Error('Sessão oficial protegida inválida.');var c=crypto.createDecipheriv('aes-256-gcm',rdsOfficialKeyV3(),Buffer.from(i,'base64'));c.setAuthTag(Buffer.from(t,'base64'));return Buffer.concat([c.update(Buffer.from(d,'base64')),c.final()]).toString('utf8');}
-async function rdsOfficialRowV3(){return one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc,last_auth_at,last_error&id=eq.main');}
-async function rdsOfficialRequireOwnerV3(req,res){
-  if(typeof rdsOpSession!=='function'){
-    res.status(503).json({success:false,message:'Autenticação de vendedor indisponível.'});
-    return null;
-  }
-  const session=await rdsOpSession(req).catch(()=>null);
-  if(!session?.seller?.id){
-    res.status(401).json({success:false,message:'Sessão do vendedor inválida, expirada ou bloqueada.'});
-    return null;
-  }
-  const configuredOwner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
-  const allowed=Boolean(configuredOwner&&String(session.seller.id)===configuredOwner);
-  if(!allowed){
-    res.status(403).json({success:false,message:'A integração oficial da Reino da Sorte está reservada à conta proprietária.'});
-    return null;
-  }
-  return session;
-}
-async function rdsOfficialEnsureDeviceV3(){var row=await rdsOfficialRowV3();if(row?.device_id){rdsOfficialDeviceStateV3=String(row.device_id);return row;}var device='rds_server_'+crypto.randomBytes(12).toString('hex');await sb('/rest/v1/rds10_official_sales_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:'main',device_id:device,email:RDS_OFFICIAL_EMAIL_V3||null,updated_at:nowISO()})});rdsOfficialDeviceStateV3=device;return await rdsOfficialRowV3();}
-function rdsOfficialHeadersV3(token){return {Accept:'application/json','Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(rdsOfficialDeviceStateV3?{'x-device-id':rdsOfficialDeviceStateV3}:{})};}
-async function rdsOfficialLoginV3(){if(!RDS_OFFICIAL_EMAIL_V3||!RDS_OFFICIAL_PASSWORD_V3)throw new Error('Credenciais do vendedor oficial ainda não configuradas no Render.');var row=await rdsOfficialEnsureDeviceV3();var deviceId=String(row?.device_id||rdsOfficialDeviceStateV3||'').trim();if(!deviceId)throw new Error('Dispositivo oficial do servidor não identificado.');var r=await fetch(RDS_OFFICIAL_API_V3+'/auth/login',{method:'POST',headers:rdsOfficialHeadersV3(''),body:JSON.stringify({email:RDS_OFFICIAL_EMAIL_V3,password:RDS_OFFICIAL_PASSWORD_V3,deviceId})});var raw=await r.text(),d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'Login oficial recusado.');var x=d?.data||{};if(!x.accessToken||!x.refreshToken)throw new Error('Login oficial não retornou sessão.');rdsOfficialAccessV3=String(x.accessToken);await sb('/rest/v1/rds10_official_sales_auth?id=eq.main',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({email:RDS_OFFICIAL_EMAIL_V3,device_id,refresh_token_enc:rdsOfficialEncV3(x.refreshToken),last_auth_at:nowISO(),last_error:null,updated_at:nowISO()})});return rdsOfficialAccessV3;}
-async function rdsOfficialRequestV3(endpoint,opt){
-  opt=opt||{};
-  var row=await rdsOfficialEnsureDeviceV3();
-  var token=rdsOfficialAccessV3;
-  if(!token&&row?.refresh_token_enc){
-    try{
-      var refresh=rdsOfficialDecV3(row.refresh_token_enc);
-      var rr=await fetch(RDS_OFFICIAL_API_V3+'/auth/refresh',{
-        method:'POST',
-        headers:rdsOfficialHeadersV3(''),
-        body:JSON.stringify({refreshToken:refresh,deviceId:String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()})
-      });
-      var raw=await rr.text(),d={};
-      try{d=raw?JSON.parse(raw):{};}catch{}
-      if(rr.ok&&d?.data?.accessToken){
-        token=String(d.data.accessToken);
-        rdsOfficialAccessV3=token;
-        if(d?.data?.refreshToken){
-          await sb('/rest/v1/rds10_official_sales_auth?id=eq.main',{
-            method:'PATCH',
-            headers:{Prefer:'return=minimal'},
-            body:JSON.stringify({
-              refresh_token_enc:rdsOfficialEncV3(d.data.refreshToken),
-              last_auth_at:nowISO(),
-              last_error:null,
-              updated_at:nowISO()
-            })
-          });
-        }
-      }else{
-        try{
-          await sb('/rest/v1/rds10_official_sales_auth?id=eq.main',{
-            method:'PATCH',
-            headers:{Prefer:'return=minimal'},
-            body:JSON.stringify({
-              last_error:'REFRESH_REJECTED: '+String(rr.status)+' '+String(d?.message||d?.error||raw||'sem resposta').slice(0,500),
-              updated_at:nowISO()
-            })
-          });
-        }catch{}
-      }
-    }catch(refreshErr){
-      try{
-        await sb('/rest/v1/rds10_official_sales_auth?id=eq.main',{
-          method:'PATCH',
-          headers:{Prefer:'return=minimal'},
-          body:JSON.stringify({
-            last_error:'REFRESH_FAILED: '+String(refreshErr?.message||refreshErr).slice(0,500),
-            updated_at:nowISO()
-          })
-        });
-      }catch{}
-    }
-  }
-  if(!token)token=await rdsOfficialLoginV3();
-  var r=await fetch(RDS_OFFICIAL_API_V3+endpoint,{
-    ...opt,
-    headers:{...rdsOfficialHeadersV3(token),...(opt.headers||{})}
-  });
-  if(r.status===401){
-    token=await rdsOfficialLoginV3();
-    r=await fetch(RDS_OFFICIAL_API_V3+endpoint,{
-      ...opt,
-      headers:{...rdsOfficialHeadersV3(token),...(opt.headers||{})}
-    });
-  }
-  var raw2=await r.text(),d2={};
-  try{d2=raw2?JSON.parse(raw2):{};}catch{}
-  if(!r.ok||d2?.success===false)throw new Error(d2?.message||d2?.error||raw2||'API oficial recusou a operação.');
-  return d2?.data===undefined?d2:d2.data;
-}
-app.get('/api/v1011/official-sales/bootstrap',async(req,res)=>{try{if(!await rdsOfficialRequireOwnerV3(req,res))return;var row=await rdsOfficialEnsureDeviceV3();var deviceId=String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null;return res.json({configured:Boolean(RDS_OFFICIAL_EMAIL_V3&&RDS_OFFICIAL_PASSWORD_V3),emailConfigured:Boolean(RDS_OFFICIAL_EMAIL_V3),passwordConfigured:Boolean(RDS_OFFICIAL_PASSWORD_V3),deviceId,authorized:Boolean(row?.refresh_token_enc),lastAuthAt:row?.last_auth_at||null});}catch(e){return res.status(502).json({configured:false,emailConfigured:false,authorized:false,deviceId:null,message:String(e?.message||e)});}});
-app.post('/api/v1011/official-sales/authorize',async(req,res)=>{try{if(!await rdsOfficialRequireOwnerV3(req,res))return;if(!RDS_OFFICIAL_EMAIL_V3||!RDS_OFFICIAL_PASSWORD_V3)throw new Error('Credenciais do vendedor oficial ainda não configuradas no Render.');var row=await rdsOfficialEnsureDeviceV3();var deviceId=String(row?.device_id||rdsOfficialDeviceStateV3||'').trim();if(!deviceId)throw new Error('Dispositivo oficial do servidor não identificado.');var code=String(req.body?.authorizationCode||'').trim();if(!code)throw new Error('Código de autorização não informado.');var r=await fetch(RDS_OFFICIAL_API_V3+'/devices/authorize',{method:'POST',headers:rdsOfficialHeadersV3(''),body:JSON.stringify({authorizationCode:code,deviceId:deviceId,email:RDS_OFFICIAL_EMAIL_V3})}),raw=await r.text(),d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'Código de autorização recusado.');await rdsOfficialLoginV3();return res.json({success:true,deviceId,message:'Servidor autorizado e sessão oficial persistida com segurança.'});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
-app.get('/api/v1011/official-sales/status',async(req,res)=>{try{if(!await rdsOfficialRequireOwnerV3(req,res))return;var row=await rdsOfficialEnsureDeviceV3();var me=await rdsOfficialRequestV3('/auth/me');return res.json({configured:true,authenticated:true,seller:me||null,deviceId:String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null});}catch(e){var row=await rdsOfficialRowV3().catch(()=>null);return res.status(502).json({configured:Boolean(RDS_OFFICIAL_EMAIL_V3&&RDS_OFFICIAL_PASSWORD_V3),authenticated:false,authorized:Boolean(row?.refresh_token_enc),deviceId:String(row?.device_id||rdsOfficialDeviceStateV3||'').trim()||null,message:String(e?.message||e)});}});
+async function rdsOfficialRowV3(sellerId,companyId){const ctx=rdsOfficialContextV3(sellerId,companyId);return one('rds10_official_sales_auth','select=id,email,device_id,refresh_token_enc,last_auth_at,last_error,company_id&id=eq.'+encodeURIComponent(ctx.authId));}
+async function rdsOfficialRequireSellerV3(req,res){if(typeof rdsOpSession!=='function'){res.status(503).json({success:false,message:'Autenticação de vendedor indisponível.'});return null;}const session=await rdsOpSession(req).catch(()=>null);if(!session?.seller?.id){res.status(401).json({success:false,message:'Sessão do vendedor inválida, expirada ou bloqueada.'});return null;}return session;}
+async function rdsOfficialRequireOwnerV3(req,res){const session=await rdsOfficialRequireSellerV3(req,res);if(!session)return null;const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(!ownerId||String(session.seller.id)!==ownerId){res.status(403).json({success:false,message:'Esta função é reservada à conta proprietária.'});return null;}return session;}
+async function rdsOfficialEnsureDeviceV3(sellerId,emailOverride){let ctx=rdsOfficialContextV3(sellerId);if(!ctx.isOwner&&!ctx.companyId){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ctx.sellerId)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'Selecione a empresa antes de conectar o sistema oficial.':'Empresa do vendedor não identificada.');ctx=rdsOfficialContextV3(ctx.sellerId,ids[0]);}const credentials=await rdsOfficialCredentialsV3(ctx.sellerId,{email:emailOverride},ctx.companyId);let row=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId);if(row?.device_id){rdsOfficialDeviceStateV3.set(ctx.authId,String(row.device_id));return row;}let companyId=ctx.companyId;if(!companyId){if(ctx.isOwner){const company=await one('rds10_companies','select=id&code=eq.RDS');companyId=String(company?.id||'');}else{const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ctx.sellerId)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length===1)companyId=ids[0];}}if(!companyId)throw new Error('Empresa da conta oficial não identificada.');const device='rds_server_'+crypto.randomBytes(12).toString('hex');await sb('/rest/v1/rds10_official_sales_auth?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:ctx.authId,company_id:companyId,device_id:device,email:credentials.email||null,updated_at:nowISO()})});rdsOfficialDeviceStateV3.set(ctx.authId,device);row=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId);if(!ctx.isOwner&&credentials.email)await patch('rds10_seller_settings','seller_id=eq.'+encodeURIComponent(ctx.sellerId),{official_email:credentials.email,official_device_id:device,updated_at:nowISO()}).catch(()=>{});return row;}
+function rdsOfficialHeadersV3(token,sellerId){const ctx=rdsOfficialContextV3(sellerId);const deviceId=rdsOfficialDeviceStateV3.get(ctx.authId)||'';return {Accept:'application/json','Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(deviceId?{'x-device-id':deviceId}:{})};}
+async function rdsOfficialLoginV3(sellerId,override={}){const ctx=rdsOfficialContextV3(sellerId);const credentials=await rdsOfficialCredentialsV3(ctx.sellerId,override);if(!credentials.email||!credentials.password)throw new Error(ctx.isOwner?'Credenciais oficiais do proprietário não configuradas no Render.':'Informe seu e-mail, senha e código de autorização do sistema oficial para conectar esta conta.');const row=await rdsOfficialEnsureDeviceV3(ctx.sellerId,credentials.email);const deviceId=String(row?.device_id||rdsOfficialDeviceStateV3.get(ctx.authId)||'').trim();if(!deviceId)throw new Error('Dispositivo oficial do servidor não identificado.');const r=await fetch(RDS_OFFICIAL_API_V3+'/auth/login',{method:'POST',headers:rdsOfficialHeadersV3('',ctx.sellerId),body:JSON.stringify({email:credentials.email,password:credentials.password,deviceId})});const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'Login oficial recusado.');const x=d?.data||{};if(!x.accessToken||!x.refreshToken)throw new Error('Login oficial não retornou sessão.');rdsOfficialAccessV3.set(ctx.authId,String(x.accessToken));await sb('/rest/v1/rds10_official_sales_auth?id=eq.'+encodeURIComponent(ctx.authId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({email:credentials.email,device_id:deviceId,company_id:ctx.companyId||row.company_id,refresh_token_enc:rdsOfficialEncV3(x.refreshToken),last_auth_at:nowISO(),last_error:null,updated_at:nowISO()})});if(!ctx.isOwner)await patch('rds10_seller_settings','seller_id=eq.'+encodeURIComponent(ctx.sellerId),{official_email:credentials.email,official_authorized:true,official_device_id:deviceId,updated_at:nowISO()}).catch(()=>{});return String(x.accessToken);}
+async function rdsOfficialRefreshV3(sellerId,row){const ctx=rdsOfficialContextV3(sellerId);if(!row?.refresh_token_enc)throw new Error('A conta oficial ainda não foi autorizada. Conecte sua conta e autorize o dispositivo.');const refresh=rdsOfficialDecV3(row.refresh_token_enc);const rr=await fetch(RDS_OFFICIAL_API_V3+'/auth/refresh',{method:'POST',headers:rdsOfficialHeadersV3('',ctx.sellerId),body:JSON.stringify({refreshToken:refresh,deviceId:String(row.device_id||rdsOfficialDeviceStateV3.get(ctx.authId)||'').trim()})});const raw=await rr.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!rr.ok||!d?.data?.accessToken){const message=d?.message||d?.error||raw||'Refresh da sessão oficial recusado.';await sb('/rest/v1/rds10_official_sales_auth?id=eq.'+encodeURIComponent(ctx.authId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({last_error:'REFRESH_REJECTED: '+String(rr.status)+' '+String(message).slice(0,450),updated_at:nowISO()})}).catch(()=>{});if(!ctx.isOwner)await patch('rds10_seller_settings','seller_id=eq.'+encodeURIComponent(ctx.sellerId),{official_authorized:false,updated_at:nowISO()}).catch(()=>{});throw new Error('A sessão oficial expirou. Reconecte sua conta e autorize novamente.');}const token=String(d.data.accessToken);rdsOfficialAccessV3.set(ctx.authId,token);const patchData={last_auth_at:nowISO(),last_error:null,updated_at:nowISO()};if(d.data.refreshToken)patchData.refresh_token_enc=rdsOfficialEncV3(d.data.refreshToken);await sb('/rest/v1/rds10_official_sales_auth?id=eq.'+encodeURIComponent(ctx.authId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(patchData)});return token;}
+async function rdsOfficialRequestV3(endpoint,opt,sellerId){opt=opt||{};const ctx=rdsOfficialContextV3(sellerId);const row=await rdsOfficialEnsureDeviceV3(ctx.sellerId);let token=rdsOfficialAccessV3.get(ctx.authId)||'';if(!token){if(row?.refresh_token_enc){try{token=await rdsOfficialRefreshV3(ctx.sellerId,row);}catch(e){if(ctx.isOwner)token=await rdsOfficialLoginV3(ctx.sellerId);else throw e;}}else if(ctx.isOwner)token=await rdsOfficialLoginV3(ctx.sellerId);else throw new Error('Sua conta oficial ainda não está conectada. Abra Integração Oficial e conecte suas credenciais.');}let r=await fetch(RDS_OFFICIAL_API_V3+endpoint,{...opt,headers:{...rdsOfficialHeadersV3(token,ctx.sellerId),...(opt.headers||{})}});if(r.status===401){rdsOfficialAccessV3.delete(ctx.authId);const latest=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId);try{token=latest?.refresh_token_enc?await rdsOfficialRefreshV3(ctx.sellerId,latest):(ctx.isOwner?await rdsOfficialLoginV3(ctx.sellerId):'');}catch(e){if(ctx.isOwner)token=await rdsOfficialLoginV3(ctx.sellerId);else throw e;}if(!token)throw new Error('A sessão oficial expirou. Reconecte sua conta e autorize novamente.');r=await fetch(RDS_OFFICIAL_API_V3+endpoint,{...opt,headers:{...rdsOfficialHeadersV3(token,ctx.sellerId),...(opt.headers||{})}});}const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'API oficial recusou a operação.');return d?.data===undefined?d:d.data;}
+globalThis.rdsOfficialRequestV3=(endpoint,opt,sellerId)=>rdsOfficialRequestV3(endpoint,opt,sellerId);
+globalThis.rdsOfficialIsAuthorizedForSeller=async(sellerId,companyId)=>{const ctx=rdsOfficialContextV3(sellerId,companyId);const row=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId).catch(()=>null);return Boolean(row?.refresh_token_enc);};
+app.get('/api/v1011/official-sales/bootstrap',async(req,res)=>{try{const session=await rdsOfficialRequireSellerV3(req,res);if(!session)return;const ctx=rdsOfficialContextV3(session.seller.id);let row=await rdsOfficialRowV3(ctx.sellerId,ctx.companyId).catch(()=>null);if(!ctx.isOwner&&!row?.email&&!row?.refresh_token_enc)return res.json({success:true,owner:false,configured:false,emailConfigured:false,passwordConfigured:false,needsCredentials:true,email:null,deviceId:row?.device_id||null,authorized:false,lastAuthAt:row?.last_auth_at||null,lastError:row?.last_error||null});const credentials=await rdsOfficialCredentialsV3(ctx.sellerId,{},ctx.companyId);row=await rdsOfficialEnsureDeviceV3(ctx.sellerId,credentials.email);return res.json({success:true,owner:ctx.isOwner,configured:Boolean(credentials.email&&(ctx.isOwner?credentials.password:row?.refresh_token_enc)),emailConfigured:Boolean(credentials.email),passwordConfigured:ctx.isOwner?Boolean(credentials.password):false,needsCredentials:Boolean(!ctx.isOwner&&!row?.refresh_token_enc),email:credentials.email||null,deviceId:String(row?.device_id||'')||null,authorized:Boolean(row?.refresh_token_enc),lastAuthAt:row?.last_auth_at||null,lastError:row?.last_error||null});}catch(e){return res.status(502).json({success:false,configured:false,emailConfigured:false,authorized:false,message:String(e?.message||e)});}});
+app.post('/api/v1011/official-sales/authorize',async(req,res)=>{try{const session=await rdsOfficialRequireSellerV3(req,res);if(!session)return;const ctx=rdsOfficialContextV3(session.seller.id);const email=ctx.isOwner?RDS_OFFICIAL_EMAIL_V3:String(req.body?.email||'').trim();const password=ctx.isOwner?RDS_OFFICIAL_PASSWORD_V3:String(req.body?.password||'');const code=String(req.body?.authorizationCode||'').trim();if(!email||!password)throw new Error('Informe o e-mail e a senha da sua conta oficial.');if(!code)throw new Error('Código de autorização não informado.');const row=await rdsOfficialEnsureDeviceV3(ctx.sellerId,email);const deviceId=String(row?.device_id||rdsOfficialDeviceStateV3.get(ctx.authId)||'').trim();if(!deviceId)throw new Error('Dispositivo oficial do servidor não identificado.');const r=await fetch(RDS_OFFICIAL_API_V3+'/devices/authorize',{method:'POST',headers:rdsOfficialHeadersV3('',ctx.sellerId),body:JSON.stringify({authorizationCode:code,deviceId,email})});const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch{}if(!r.ok||d?.success===false)throw new Error(d?.message||d?.error||raw||'Código de autorização recusado.');await rdsOfficialLoginV3(ctx.sellerId,{email,password});return res.json({success:true,deviceId,message:'Conta oficial conectada e sessão protegida no servidor.'});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
+app.get('/api/v1011/official-sales/status',async(req,res)=>{try{const session=await rdsOfficialRequireSellerV3(req,res);if(!session)return;const ctx=rdsOfficialContextV3(session.seller.id);const me=await rdsOfficialRequestV3('/auth/me',{},ctx.sellerId);const row=await rdsOfficialRowV3(ctx.sellerId);return res.json({success:true,configured:true,authenticated:true,owner:ctx.isOwner,seller:me,deviceId:row?.device_id||null,lastAuthAt:row?.last_auth_at||null});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
+app.get('/api/v1011/official-sales/auto-status',async(req,res)=>{try{const session=await rdsOfficialRequireSellerV3(req,res);if(!session)return;const pending=await list('rds10_orders','select=id,code,status,official_sale_id,official_issue_status,official_issue_error,updated_at&seller_id=eq.'+encodeURIComponent(session.seller.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.desc&limit=100');return res.json({success:true,pending:(pending||[]),count:(pending||[]).length});}catch(e){return res.status(500).json({success:false,error:String(e?.message||e)});}});
 async function rdsOfficialCompanyIdV3(){
-  const c=await one('rds10_companies','select=id&code=eq.RDS');
-  return c?.id||null;
+  const ctx=rdsOfficialContextV3();
+  if(ctx.companyId)return ctx.companyId;
+  if(ctx.isOwner){const c=await one('rds10_companies','select=id&code=eq.RDS');return c?.id||null;}
+  const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(ctx.sellerId)+'&active=eq.true&limit=1000');
+  const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];
+  return ids.length===1?ids[0]:null;
 }
 function rdsOfficialDrawMapV3(x,companyId){
   const externalDrawId=String(x?.drawId??x?.id??x?.sorteioId??'').trim();
@@ -204,23 +128,16 @@ async function rdsOfficialSyncDrawsV3(){
 }
 app.post('/api/v1011/official-sales/sync-draws',async(req,res)=>{
   try{
-    if(!await rdsOfficialRequireOwnerV3(req,res))return;
+    if(!await rdsOfficialRequireSellerV3(req,res))return;
     const draws=await rdsOfficialSyncDrawsV3();
     return res.json({success:true,count:draws.length,data:draws});
   }catch(e){
-    const message=String(e?.message||e);
-    if(claimedOrderId){
-      const unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized|unauthori[sz]ed|\\b401\\b/i.test(message);
-      const nextStatus=unauthorized?'AGUARDANDO_AUTORIZACAO':saleRequestStarted?'ERRO_RECONCILIAR':'ERRO';
-      await patch('rds10_orders','id=eq.'+encodeURIComponent(claimedOrderId)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:nextStatus,official_issue_error:message,updated_at:nowISO()}).catch(()=>{});
-      if(saleRequestStarted&&!unauthorized)await addAlert('EMISSAO_OFICIAL_RESULTADO_AMBIGUO','Confirme a venda no sistema oficial antes de tentar novamente',{orderId:claimedOrderId,error:message,warning:'Reemissão bloqueada para evitar duplicidade.'}).catch(()=>{});
-    }
-    return res.status(502).json({success:false,message});
+    return res.status(502).json({success:false,message:String(e?.message||e)});
   }
 });
 app.get('/api/v1011/official-sales/draws',async(req,res)=>{
   try{
-    if(!await rdsOfficialRequireOwnerV3(req,res))return;
+    if(!await rdsOfficialRequireSellerV3(req,res))return;
     const draws=await rdsOfficialSyncDrawsV3();
     return res.json({success:true,data:draws,source:'official-api:/draws/seller/all'});
   }catch(e){
@@ -232,13 +149,13 @@ app.get('/api/v1011/official-sales/draws',async(req,res)=>{
     return res.status(502).json({success:false,message:String(e?.message||e)});
   }
 });
-app.get('/api/v1011/official-sales/draw-info',async(req,res)=>{try{if(!await rdsOfficialRequireOwnerV3(req,res))return;return res.json({success:true,data:await rdsOfficialRequestV3('/seller/draw-info')});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
+app.get('/api/v1011/official-sales/draw-info',async(req,res)=>{try{if(!await rdsOfficialRequireSellerV3(req,res))return;return res.json({success:true,data:await rdsOfficialRequestV3('/seller/draw-info')});}catch(e){return res.status(502).json({success:false,message:String(e?.message||e)});}});
 function rdsOfficialAvailableBooklets(draw){const raw=draw?.availableBooklets ?? draw?.bookletsAvailable ?? draw?.availableTickets ?? draw?.remainingBooklets ?? draw?.remainingTickets ?? draw?.totalBooklets;return raw===null||raw===undefined||raw===''?null:Number(raw);}
 app.post('/api/v1011/official-sales/issue',async(req,res)=>{
   let claimedOrderId=null,saleRequestStarted=false;
   try{
     if(typeof rdsOpSession!=='function')throw new Error('Autenticação de vendedor indisponível.');
-    var session=await rdsOfficialRequireOwnerV3(req,res);if(!session)return;
+    var session=await rdsOfficialRequireSellerV3(req,res);if(!session)return;
     if(typeof rdsSalesChannelEnabled==='function'&&!rdsSalesChannelEnabled())return res.status(503).json({success:false,message:'O canal de vendas está temporariamente pausado para validação.'});
     var b=req.body||{},orderId=String(b.orderId||'').trim();if(!orderId)throw new Error('Pedido do vendedor não informado.');
     var order=await one('rds10_orders','select=id,seller_id,campaign_id,customer_name,phone,contact_phone,quantity,payment_method,status,official_draw_id,official_draw_title,official_draw_at,official_sale_id,official_issue_status,official_ticket_payload,official_ticket_url&id=eq.'+encodeURIComponent(orderId)+'&seller_id=eq.'+encodeURIComponent(session.seller.id));

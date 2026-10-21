@@ -8,6 +8,11 @@ on:
       - 'runtime-rds-operator-auth-v2.mjs'
       - 'runtime-rds-admin-company-management-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - 'ui-rds-ticket-archive-v2.js'
+      - 'ui-rds-official-sales-final-v2.js'
+      - 'ui-rds-official-sales-v4.js'
+      - 'runtime-rds-final-rules.mjs'
       - 'runtime-rds-payment-reminders-v1.mjs'
       - 'runtime-rds-mercadopago-order-routes-v1.mjs'
       - 'runtime-rds-whatsapp-tenant-v1.mjs'
@@ -39,8 +44,28 @@ jobs:
         run: node --check runtime-rds-admin-company-management-v1.mjs
       - name: Check tenant scope syntax
         run: node --check runtime-rds-tenant-scope-v1.mjs
+      - name: Check tenant-aware bot rules syntax
+        run: node --check runtime-rds-final-rules.mjs
       - name: Check payment reminders syntax
         run: node --check runtime-rds-payment-reminders-v1.mjs
+      - name: Check official ticket PDF runtime syntax
+        run: node --check runtime-rds-official-ticket-chromium-v1.mjs
+      - name: Check official issue worker syntax
+        run: node --check runtime-rds-official-issue-worker-v1.mjs
+      - name: Check official sales settings UI syntax
+        run: node --check ui-rds-official-sales-v4.js
+      - name: Check official sales orders UI syntax
+        run: node --check ui-rds-official-sales-final-v2.js
+      - name: Check ticket archive UI syntax
+        run: node --check ui-rds-ticket-archive-v2.js
+      - name: Install runtime dependencies for startup-pipeline validation
+        run: yarn install --ignore-scripts --non-interactive
+      - name: Apply complete Render startup pipeline and validate generated server
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('prepare-validation.mjs',fs.readFileSync('prepare-pagbank-no-email.mjs','utf8').replace(\"await import('./server.js');\",''))"
+          node prepare-validation.mjs
+          node --check server.js
+          rm -f prepare-validation.mjs
       - name: Check Mercado Pago order routes syntax
         run: node --check runtime-rds-mercadopago-order-routes-v1.mjs
       - name: Check WhatsApp tenant sender syntax

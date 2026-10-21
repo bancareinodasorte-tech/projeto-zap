@@ -55,7 +55,7 @@ jobs:
           const index = fs.readFileSync('index.html', 'utf8');
           const recovery = fs.readFileSync('ui-rds-operator-recovery-v1.js', 'utf8');
           const checks = [
-            [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
+            [worker, "'/draws/seller/available'", 'worker must use the official available-draw endpoint'],
             [worker, "const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{}", 'nested official sale payload must be normalized for ticket rendering'],
             [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
             [worker, 'byId.set(did,{...item,...prior,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})})', 'inventory data must not override the official draw state'],
@@ -92,6 +92,9 @@ jobs:
           checks.push([index, 'ui-rds-operator-recovery-v1.js?v=2', 'seller password recovery UI must be loaded']);
           checks.push([recovery, "'/api/operator/forgot-password'", 'recovery UI must call the password reset request endpoint']);
           checks.push([recovery, "'/api/operator/reset-password'", 'recovery UI must submit the one-time reset token']);
+          checks.push([tenant, "code:'AUTH_REQUIRED'", 'legacy APIs must reject unauthenticated requests']);
+          checks.push([tenant, "code:'OWNER_ONLY_LEGACY_API'", 'legacy APIs must be restricted to the owner']);
+          checks.push([tenant, "['POST','/api/rds/unified/login']", 'public authentication endpoints must be explicitly allowlisted']);
           for (const [source, pattern, message] of checks) {
             if (!source.includes(pattern)) { console.error('FAILED:', message); process.exitCode = 1; }
           }

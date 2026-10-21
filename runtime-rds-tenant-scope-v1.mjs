@@ -37,7 +37,7 @@ const helper = [
   "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
   "function rdsHasCompanyFilter(q){return /(?:^|&)company_id=/.test(String(q||''));}",
-  "function rdsTenantFilter(table,q,sellerId,companyId){let out=String(q||'');if(sellerId&&RDS_TENANT_TABLES.has(table))out=out?out+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);if(companyId&&RDS_TENANT_TABLES.has(table))out=out?out+'&company_id=eq.'+encodeURIComponent(companyId):'company_id=eq.'+encodeURIComponent(companyId);return out;}"
+  "function rdsTenantFilter(table,q,sellerId,companyId){let out=String(q||'');if(sellerId&&RDS_TENANT_TABLES.has(table))out=out?out+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();const ownerLegacyScope=Boolean(ownerId&&sellerId&&String(sellerId)===ownerId);if(companyId&&RDS_TENANT_TABLES.has(table)&&!ownerLegacyScope)out=out?out+'&company_id=eq.'+encodeURIComponent(companyId):'company_id=eq.'+encodeURIComponent(companyId);return out;}"
 ].join('\n');
 const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não localizada.');
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
@@ -77,15 +77,17 @@ const jp=server.indexOf(jsonAnchor);if(jp<0)throw new Error('express.json não l
 const middleware = [
   "app.use(async(req,res,next)=>{",
   "  if(!String(req.path||'').startsWith('/api'))return next();",
-  "  if(['/api/rds/unified/login','/api/rds/unified/context','/api/rds/unified/logout'].includes(String(req.path||'')))return next();",
+  "  const publicRoute=([['POST','/api/rds/unified/login'],['GET','/api/rds/unified/context'],['POST','/api/rds/unified/logout'],['POST','/api/operator/login'],['POST','/api/operator/register'],['POST','/api/operator/forgot-password'],['POST','/api/operator/reset-password'],['POST','/api/operator/admin/login'],['POST','/api/operator/admin/forgot-password'],['POST','/api/operator/admin/reset-password'],['GET','/api/operator/health'],['GET','/api/mercadopago/oauth/callback'],['POST','/api/mercadopago/webhook'],['GET','/api/whatsapp/meta/webhook'],['POST','/api/whatsapp/meta/webhook']].some(([method,path])=>String(req.method||'').toUpperCase()===method&&String(req.path||'')===path));",
+  "  if(publicRoute)return next();",
   "  const sellerToken=(typeof rdsOpBearer==='function'?rdsOpBearer(req):null)||(typeof rdsOpCookie==='function'?rdsOpCookie(req):null);",
-  "  if(!sellerToken)return next();",
+  "  if(!sellerToken){let admin=null;try{if((typeof rdsAdminBearer==='function'&&rdsAdminBearer(req))||(typeof rdsAdminCookie==='function'&&rdsAdminCookie(req)))admin=await rdsAdminSession(req);}catch{}if(admin?.admin?.id)return next();return res.status(401).json({success:false,code:'AUTH_REQUIRED',error:'Autenticação necessária. Entre na sua conta para continuar.'});}",
   "  let session=null;try{if(typeof rdsOpSession==='function')session=await rdsOpSession(req);}catch{}",
   "  if(!session?.seller?.id){",
   "    let admin=null;try{if((typeof rdsAdminBearer==='function'&&rdsAdminBearer(req))||(typeof rdsAdminCookie==='function'&&rdsAdminCookie(req)))admin=await rdsAdminSession(req);}catch{}",
   "    if(admin?.admin?.id)return next();",
   "    return res.status(401).json({success:false,code:'SELLER_SESSION_INVALID',error:'Sessão de vendedor inválida ou expirada. Entre novamente.'});",
   "  }",
+  "  if(!String(req.path||'').startsWith('/api/operator/')&&!String(req.path||'').startsWith('/api/v1011/official-sales/')&&!String(req.path||'').startsWith('/api/rds/ticket-')&&!String(req.path||'').startsWith('/api/mercadopago/oauth/start')){const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(!ownerId||String(session.seller.id)!==ownerId)return res.status(403).json({success:false,code:'OWNER_ONLY_LEGACY_API',error:'Esta função pertence à conta proprietária. Use as funções da sua própria conta.'});}",
   "  let memberships;try{memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(session.seller.id)+'&active=eq.true&limit=1000');}catch(e){return res.status(503).json({success:false,code:'COMPANY_MEMBERSHIP_UNAVAILABLE',error:'Não foi possível validar a empresa vinculada à conta. Tente novamente.'});}",
   "  const companyIds=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];",
   "  if(!companyIds.length)return res.status(403).json({success:false,code:'COMPANY_MEMBERSHIP_REQUIRED',error:'Esta conta não possui vínculo ativo com uma empresa.'});",
