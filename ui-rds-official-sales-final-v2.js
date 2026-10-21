@@ -145,7 +145,7 @@
     const target=app.querySelector('#rdsOfficialIntegrationV2,.rds-issuer-card');
     if(target)target.after(holder);else app.prepend(holder);
     try{
-      const d=await json('/api/v1012/official-sales/auto-status');
+      const d=await json('/api/v1011/official-sales/auto-status');
       const pending=Array.isArray(d.pending)?d.pending:[];
       holder.innerHTML='<span class="eyebrow">PÓS-PAGAMENTO</span><h2>Emissão automática</h2><p class="mut">Pagamento confirmado → emissão oficial → envio ao WhatsApp → conclusão.</p>'+
         (pending.length?pending.map(o=>'<div class="priority"><div><strong>'+esc(o.code)+'</strong><small>'+esc(o.official_issue_status||'AGUARDANDO EMISSÃO')+'</small></div><span class="badge warn">'+esc(o.official_issue_error||'Na fila')+'</span></div>').join(''):'<div class="status ok">🟢 Nenhum pedido aguardando emissão.</div>');
@@ -161,8 +161,7 @@
       if(o.status!=='PAGO_AGUARDANDO_BILHETES')throw new Error('O pedido precisa estar em PAGO_AGUARDANDO_BILHETES.');
       const r=await json('/api/v1011/official-sales/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id})});
       const saleId=String(r.data?.saleId||r.data?.id||r.data?.data?.saleId||'');
-      await json('/api/operator/orders/'+encodeURIComponent(id)+'/tickets-sent',{method:'POST'});
-      alert('🟢 Emissão oficial concluída'+(saleId?' — venda '+saleId:'')+'.');
+      alert('🟢 Venda oficial registrada'+(saleId?' — venda '+saleId:'')+'. O envio do PDF e a conclusão serão confirmados pelo processamento automático.');
       if(typeof window.rdsRenderCurrentPage==='function')await window.rdsRenderCurrentPage();
     }catch(e){alert(e.message||'Falha na emissão oficial.');throw e;}
   };
