@@ -37,7 +37,7 @@ const helper = [
   "function rdsTenantCompanyScope(){try{const s=typeof rdsRequestScope==='object'?rdsRequestScope.getStore?.():null;return s?.companyId||null;}catch{return null}}",
   "function rdsHasSellerFilter(q){return /(?:^|&)seller_id=/.test(String(q||''));}",
   "function rdsHasCompanyFilter(q){return /(?:^|&)company_id=/.test(String(q||''));}",
-  "function rdsTenantFilter(table,q,sellerId,companyId){let out=String(q||'');if(sellerId&&RDS_TENANT_TABLES.has(table))out=out?out+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);if(companyId&&RDS_TENANT_TABLES.has(table))out=out?out+'&company_id=eq.'+encodeURIComponent(companyId):'company_id=eq.'+encodeURIComponent(companyId);return out;}"
+  "function rdsTenantFilter(table,q,sellerId,companyId){let out=String(q||'');if(sellerId&&RDS_TENANT_TABLES.has(table))out=out?out+'&seller_id=eq.'+encodeURIComponent(sellerId):'seller_id=eq.'+encodeURIComponent(sellerId);const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();const ownerLegacyScope=Boolean(ownerId&&sellerId&&String(sellerId)===ownerId);if(companyId&&RDS_TENANT_TABLES.has(table)&&!ownerLegacyScope)out=out?out+'&company_id=eq.'+encodeURIComponent(companyId):'company_id=eq.'+encodeURIComponent(companyId);return out;}"
 ].join('\n');
 const p=server.indexOf(insertFn);if(p<0)throw new Error('função insert não localizada.');
 server=server.slice(0,p)+helper+'\n'+server.slice(p);
