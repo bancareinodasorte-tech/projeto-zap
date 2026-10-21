@@ -231,7 +231,7 @@ const block=String.raw`
     let companyId=String(order?.company_id||'');if(!companyId){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error('Empresa do vendedor não identificada para o PDF.');companyId=ids[0];}
     return rdsRequestScope.run({sellerId:sid,companyId},async()=>{
       const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id)+'&seller_id=eq.'+encodeURIComponent(sid));if(!fresh)throw new Error('Pedido não encontrado no escopo do vendedor.');
-      const pdf=validateRdsTicketPdf(await renderPdf(fresh));await archive(fresh,pdf,null);
+      const pdf=validateRdsTicketPdf(await renderPdf(fresh));const existingDoc=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(fresh.id)+'&seller_id=eq.'+encodeURIComponent(sid));await archive(fresh,pdf,existingDoc?.sent_at||null);
       if(typeof globalThis.rdsWhatsappTenantSendDocument!=='function')throw new Error('Envio de PDF pelo WhatsApp do vendedor indisponível.');
       let sent;try{sent=await globalThis.rdsWhatsappTenantSendDocument(sid,fresh.phone||fresh.contact_phone,pdf,'bilhetes-'+fresh.code+'.pdf');}catch(e){if(e&&typeof e==='object')e.code=e.code||'WHATSAPP_SEND_AMBIGUOUS';throw e;}
       if(!sent?.key?.id){const e=new Error('WhatsApp não confirmou o envio do PDF. Conferir antes de reenviar.');e.code='WHATSAPP_SEND_AMBIGUOUS';throw e;}
