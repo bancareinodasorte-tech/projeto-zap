@@ -45,6 +45,8 @@ jobs:
         run: node --check runtime-rds-final-rules.mjs
       - name: Check payment reminders syntax
         run: node --check runtime-rds-payment-reminders-v1.mjs
+      - name: Install runtime dependencies for startup-pipeline validation
+        run: yarn install --ignore-scripts --non-interactive
       - name: Apply complete Render startup pipeline and validate generated server
         run: |
           node prepare-pagbank-no-email.mjs
