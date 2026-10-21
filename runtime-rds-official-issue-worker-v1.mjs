@@ -24,7 +24,7 @@ else{
   return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload};
  }
  async function selectedOfficialDraw(id){
-  const available=arr(await rdsOfficialRequestV3('/draws/seller/available'));
+  const available=arr(await globalThis.rdsOfficialRequestV3('/draws/seller/available'));
   const byId=new Map();
   for(const d of available){
    const did=drawIdOf(d);if(!did)continue;
@@ -33,7 +33,7 @@ else{
    byId.set(did,{...d,drawId:did});
   }
   try{
-   const inventory=arr(await rdsOfficialRequestV3('/seller/booklet-sales/available'));
+   const inventory=arr(await globalThis.rdsOfficialRequestV3('/seller/booklet-sales/available'));
    for(const item of inventory){
     const did=drawIdOf(item)||drawIdOf(item?.draw)||String(item?.draw?.drawId||'').trim();
     if(!did)continue;
@@ -122,7 +122,7 @@ else{
   if(issue==='AGUARDANDO_AUTORIZACAO'&&Number.isFinite(age)&&age<15)return;
   if(issue==='AGUARDANDO_AUTORIZACAO'){
    try{
-    await rdsOfficialRequestV3('/auth/me');
+    await globalThis.rdsOfficialRequestV3('/auth/me');
     const reset=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.AGUARDANDO_AUTORIZACAO',{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
     if(!reset?.length)return;
     issue='';order.official_issue_status=null;order.updated_at=nowISO();
@@ -146,7 +146,7 @@ else{
   }
   let saleRequestStarted=false;
   try{
-   const officialAuth=await rdsOfficialRequestV3('/auth/me');
+   const officialAuth=await globalThis.rdsOfficialRequestV3('/auth/me');
    if(officialAuth?.authenticated===false||officialAuth?.authorized===false||officialAuth?.success===false)throw new Error('Dispositivo oficial não está autorizado.');
    const draw=await selectedOfficialDraw(requestedDrawId);
    if(!draw){
@@ -171,7 +171,7 @@ else{
    if(customerName.length<2||!customerPhone)throw new Error('Nome ou telefone do cliente inválido.');
    const paymentMethod=/^(pix|pix_mercado_pago|pix_mercadopago)$/i.test(String(order.payment_method||''))?'pix':String(order.payment_method||'pix').toLowerCase();
    saleRequestStarted=true;
-   const sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
+   const sale=await globalThis.rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
    const info=saleInfo(sale);
    if(!info.saleId)throw new Error('Sistema oficial não retornou o identificador da venda.');
    const updated={...order,official_sale_id:info.saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,updated_at:nowISO()};
