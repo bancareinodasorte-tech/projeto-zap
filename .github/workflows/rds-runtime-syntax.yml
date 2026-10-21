@@ -27,6 +27,15 @@ on:
       - 'runtime-rds-official-issue-worker-v1.mjs'
       - 'server.js'
       - '.github/workflows/rds-runtime-syntax.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'runtime-rds-admin-recovery-v1.mjs'
+      - 'runtime-rds-seller-recovery-v1.mjs'
+      - 'runtime-rds-admin-auth-v5.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - 'server.js'
+      - '.github/workflows/rds-runtime-syntax.yml'
   workflow_dispatch:
 jobs:
   syntax:
