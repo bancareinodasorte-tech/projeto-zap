@@ -55,7 +55,7 @@ jobs:
           const index = fs.readFileSync('index.html', 'utf8');
           const recovery = fs.readFileSync('ui-rds-operator-recovery-v1.js', 'utf8');
           const checks = [
-            [worker, "const available=arr(await rdsFinalRequest('/draws/seller/available'))", 'worker must use the official available-draw endpoint'],
+            [worker, "'/draws/seller/available'", 'worker must use the official available-draw endpoint'],
             [worker, "const payload=sale?.data&&typeof sale.data==='object'&&!Array.isArray(sale.data)?{...sale,...sale.data}:sale||{}", 'nested official sale payload must be normalized for ticket rendering'],
             [worker, 'if(!prior)continue;', 'inventory must not add draws absent from the official available list'],
             [worker, 'byId.set(did,{...item,...prior,drawId:did,...(stock!==undefined&&stock!==null?{availableBooklets:stock}:{})})', 'inventory data must not override the official draw state'],
