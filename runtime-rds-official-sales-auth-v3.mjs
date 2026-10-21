@@ -144,7 +144,7 @@ app.get('/api/v1011/official-sales/draws',async(req,res)=>{
     try{
       const companyId=await rdsOfficialCompanyIdV3();
       const cached=await list('rds10_official_draws','select=external_draw_id,title,status,active,draw_at,price_per_ticket,available_booklets,public_url,raw_data,synced_at&company_id=eq.'+encodeURIComponent(companyId||'')+'&order=active.desc,draw_at.asc.nullslast');
-      if(cached.length){// Legacy variable name retained for the release guard; Math.min checks the oldest active-row sync, so one fresh row cannot mask stale rows. const newest=Math.min(...cached.map(x=>Date.parse(x.synced_at||'')||0));if(!newest||Date.now()-newest>6*60*60*1000)return res.status(503).json({success:false,stale:true,message:'O catálogo oficial de sorteios está desatualizado e a API oficial não respondeu. As vendas deste catálogo ficam bloqueadas até sincronizar novamente.'});return res.json({success:true,data:cached,source:'cache',stale:false});}
+      if(cached.length){/* Legacy variable name retained for the release guard; Math.min checks the oldest active-row sync, so one fresh row cannot mask stale rows. */ const newest=Math.min(...cached.map(x=>Date.parse(x.synced_at||'')||0));if(!newest||Date.now()-newest>6*60*60*1000)return res.status(503).json({success:false,stale:true,message:'O catálogo oficial de sorteios está desatualizado e a API oficial não respondeu. As vendas deste catálogo ficam bloqueadas até sincronizar novamente.'});return res.json({success:true,data:cached,source:'cache',stale:false});}
     }catch{}
     return res.status(502).json({success:false,message:String(e?.message||e)});
   }
