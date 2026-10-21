@@ -1,6 +1,6 @@
 # CHECKLIST DE FECHAMENTO — CANAL DE VENDAS RDS
 
-> **Atualização de 21/10/2026:** os itens de versão V11.1 abaixo foram substituídos pelo fechamento V11.4.5. O código multiusuário e o filtro de arquivamento operacional passaram por validação automática de sintaxe e o backend foi publicado. A versão V11.4.5 está sendo preparada; ainda depende do build, validação final sem cobrança/emissão real e teste físico do APK. Não criar novos pedidos nem pagamentos para homologação. Os pedidos históricos RDS-559D8F, RDS-CDE9C0 e RDS-E7FE06 devem permanecer preservados.
+> **Atualização de 21/10/2026:** os itens de versão V11.1 abaixo foram substituídos pelo fechamento V11.4.5. O código multiusuário e o filtro de arquivamento operacional passaram por validação automática de sintaxe e o backend foi publicado. A versão V11.4.5 foi gerada e a estrutura do APK foi validada; faltam validação final sem cobrança/emissão real e teste físico do APK. Não criar novos pedidos nem pagamentos para homologação. Os pedidos históricos RDS-559D8F, RDS-CDE9C0 e RDS-E7FE06 devem permanecer preservados.
 
 ## BLOCO 1 — Base e estabilidade
 - [x] Render inicia sem SyntaxError.
@@ -76,7 +76,7 @@
 - [x] WebView configurada para o Canal de Vendas RDS.
 - [x] Builds anteriores V11.4.4 validados pelo GitHub Actions.
 - [x] WebView reforçada para Android 15 e navegação segura.
-- [ ] Build final V11.4.5 e validação da estrutura do APK.
+- [x] Build final V11.4.5 concluído no GitHub Actions; estrutura do APK validada.
 - [ ] Instalar APK V11.4.5 em aparelho.
 - [ ] Testar abertura, navegação, login e comunicação com Render.
 - [ ] Fechar versão final para distribuição após teste no aparelho.
