@@ -20,7 +20,7 @@ async function beginOrder(identity,campaignCode=null){
 }
 function looksLikeForm(text){return /quantidade\s*[:\-]/i.test(text)&&/nome\s*[:\-]/i.test(text)&&/cpf\s*[:\-]/i.test(text);}
 function rdsMainMenu(settings){
-  const bot=normalizeBR(connectedNumber||'');
+  const scope=(typeof rdsRequestScope!=='undefined'&&typeof rdsRequestScope.getStore==='function')?rdsRequestScope.getStore():null;const owner=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();const bot=normalizeBR(scope?.sellerId&&String(scope.sellerId)!==owner?(globalThis.rdsWhatsappTenantNumber?.(scope.sellerId)||''):(connectedNumber||''));
   const buy=bot?'https://wa.me/'+bot+'?text='+encodeURIComponent('COMPRAR'):'';
   return '🍀 *CANAL DE VENDAS RDS*\n\n1️⃣ *COMPRAR BILHETES*'+(buy?'\n👉 '+buy:'')+'\n2️⃣ *CONSULTAR PEDIDO*\n3️⃣ *ALTERAR PEDIDO*\n4️⃣ *CANCELAR PEDIDO*\n5️⃣ *ATENDIMENTO*\n6️⃣ *OUTRAS OPÇÕES*\n\nEscolha uma opção pelo número.';
 }
