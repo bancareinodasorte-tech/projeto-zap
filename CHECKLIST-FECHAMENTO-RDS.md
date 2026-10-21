@@ -5,6 +5,9 @@
 
 > **Atualização técnica adicional de 21/10/2026:** a recuperação administrativa por e-mail foi incluída explicitamente no pipeline de inicialização do Render; a redefinição de senha administrativa agora invalida as sessões administrativas existentes. A validação de sintaxe foi ampliada para incluir esse módulo e executar nos pushes relevantes da branch principal. **Continuam pendentes** a confirmação da variável secreta `RDS_RESEND_API_KEY`, a validação de um remetente de e-mail verificado, testes reais de recuperação de vendedor/administrador, homologação de duas contas isoladas, confirmação do emissor oficial e teste físico do APK. Não declarar fechamento definitivo antes desses itens.
 
+
+> **Estado verificado após correções de 21/10/2026:** GitHub Actions passou com sucesso no pipeline de inicialização completo, incluindo invariantes de recuperação e livro financeiro. O deploy Render do commit de validação anterior está live; o deploy com a proteção de catálogo oficial desatualizado está em andamento. O preflight de produção reportou `recovery_email_key=false`, `admin_sender=false` e `seller_sender=false`: a recuperação por e-mail está implementada, mas não pode ser homologada até configurar uma chave Resend e remetente verificado. O catálogo de sorteios agora falha fechado se a API oficial falhar e o cache tiver mais de 6 horas. O histórico RDS-559D8F permanece concluído, com 20 números em uma caderneta e PDF arquivado; não reemitir nem reenviar automaticamente. Os três pedidos históricos ainda compartilham `official_sale_id=10052`; manter a ambiguidade e não corrigir IDs sem comprovação oficial.
+
 ## BLOCO 1 — Base e estabilidade
 - [x] Render inicia sem SyntaxError.
 - [x] Serviço `projeto-zap` Live.
@@ -39,7 +42,7 @@
 - [x] Reconciliação automática como fallback.
 - [x] Teste sandbox com aprovação automática concluído.
 - [x] Pagamento confirmado automaticamente e refletido no painel.
-- [ ] Repetir somente o teste PIX real após disponibilidade de produção do provedor.
+- [x] Não repetir o teste PIX real: a regra atual proíbe nova cobrança; usar somente RDS-559D8F para reconciliação, sem gerar novo pedido ou pagamento.
 
 ## BLOCO 4 — Operação pós-pagamento
 - [x] Pedido pago fica protegido contra alteração/cancelamento.
@@ -50,7 +53,7 @@
 - [x] Fluxo de envio/fechamento dos bilhetes revisado e validado em teste.
 - [x] Alertas visuais para pagamento confirmado aguardando emissão.
 - [x] Rota operacional `Emitir bilhetes` adicionada às áreas de Pagamentos e Compras.
-- [ ] Vincular o destino real do sistema externo de emissão de bilhetes.
+- [x] Destino da API oficial configurado (`https://api.reinodasorte.com.br`); diagnóstico de produção indica credenciais/dispositivo/autorização presentes. A chamada real e a entrega continuam separadas como homologação pendente.
 - [ ] Validar emissão real e entrega do bilhete após o vínculo do emissor.
 
 ## BLOCO 5 — Painel / layout
@@ -104,7 +107,7 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [ ] Validar cadastro/edição de empresa e vínculo de vendedor com uma operação controlada que não altere a empresa padrão.
 - [ ] Validar acesso administrativo, bloqueio/desbloqueio, revogação de dispositivo e limite de dois dispositivos.
 - [ ] Validar isolamento multiempresa em pedidos, pagamentos, clientes, campanhas e emissão oficial.
-- [ ] Definir e implementar, se aprovado no fechamento financeiro, registro auditável de comissões pagas, estornos e comprovantes de repasse. A tela atual mostra comissão calculada e não presume pagamento.
+- [x] Livro auditável de repasses e estornos implementado; migração aditiva aplicada; RPCs restritas a `service_role`; tela de histórico/formulário adicionada. Nenhum repasse ou estorno real foi criado. A disponibilidade em produção depende do deploy e da homologação visual.
 
 ## BLOCO 8 — CONTA, PAGAMENTOS E CONEXÕES
 
@@ -126,12 +129,12 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 
 - [x] Tornar o e-mail obrigatório no formulário e na API de novos cadastros de vendedor, mesmo quando o telefone for usado como identificador de login; validar formato, normalizar minúsculas e exigir senha mínima de 8 caracteres.
 - [x] Validar formato e normalizar e-mail (remover espaços e padronizar minúsculas); impedir cadastro sem e-mail e rejeitar duplicidade.
-- [ ] Confirmar o e-mail cadastrado como destino de recuperação; não permitir que o usuário informe um endereço arbitrário para redefinir senha.
+- [x] Recuperação vinculada ao e-mail já cadastrado da conta; o destino não é aceito livremente do formulário. A validação ponta a ponta ainda depende de configurar o provedor.
 - [x] Integrada a solicitação de recuperação do vendedor à tela de login unificado e ao formulário de redefinição atual; formulário de cadastro exige e-mail.
 - [x] Tela administrativa atual já oferece “Esqueci a senha”; redefinição usa a rota administrativa e retorna ao login administrativo. **Pendente validar que o e-mail configurado corresponde à conta administrativa de produção.**
 - [ ] Ativar e validar envio de e-mail no provedor de e-mail do servidor, sem expor chaves/API secrets.
 - [x] Rotas existentes usam token aleatório com hash armazenado, validade de 30 minutos, resposta genérica e invalidam sessões de vendedor/administrador após redefinição; nova solicitação do vendedor invalida links anteriores. A validação de ponta a ponta ainda está pendente.
-- [ ] Garantir política de senha segura e que a redefinição invalide sessões antigas conforme o fluxo de autenticação.
+- [x] Política mínima de senha e tokens de uso único com validade foram implementados; o reset administrativo invalida sessões administrativas e o reset de vendedor invalida sessões de vendedor. Teste de ponta a ponta continua pendente.
 - [x] Confirmado o mecanismo de boot: `prepare-pagbank-no-email.mjs` importa as rotas de recuperação do vendedor e o login administrativo atual já declara as rotas administrativas. Ajustes feitos para cadastro obrigatório e atualização do formulário atual.
 - [ ] Testar recuperação de vendedor e administrador usando contas/e-mails controlados, cobrindo e-mail válido, e-mail não cadastrado, token expirado, token já utilizado e senha inválida; não criar pedidos nem pagamentos para esses testes.
 - [ ] Confirmar a recuperação por e-mail em navegador e APK antes de autorizar a distribuição final.
