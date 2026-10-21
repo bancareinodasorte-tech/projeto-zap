@@ -180,7 +180,7 @@ else{
    await logEvent('BILHETES_EMITIDOS_AUTOMATICAMENTE',{order:order.code,order_id:order.id,sale_id:info.saleId,provider:'REINO_DA_SORTE',draw_id:requestedDrawId});
    await deliverExisting(updated);
   }catch(e){
-   const err=String(e?.message||e),unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized/i.test(err);
+   const err=String(e?.message||e),unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized|ainda não está conectada|não está conectada|reconecte sua conta|credenciais/i.test(err);
    const nextStatus=unauthorized?'AGUARDANDO_AUTORIZACAO':saleRequestStarted?'ERRO_RECONCILIAR':'ERRO';
    await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:nextStatus,official_issue_error:err,updated_at:nowISO()}).catch(()=>{});
    if(unauthorized)await addAlert('EMISSAO_OFICIAL_AGUARDANDO_AUTORIZACAO','Autorização do dispositivo oficial necessária — '+order.code,{order:order.code,error:err});
@@ -196,6 +196,7 @@ else{
    const rows=await list('rds10_orders','select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=200');
    for(const o of rows){
     const sid=String(o?.seller_id||'');if(!sid)continue;
+    const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(sid!==ownerId){const setting=await one('rds10_seller_settings','select=official_authorized&seller_id=eq.'+encodeURIComponent(sid)).catch(()=>null);if(setting?.official_authorized!==true)continue;}
     let companyId=String(o?.company_id||'');
     if(!companyId){try{const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length===1)companyId=ids[0];}catch{}}
     if(!companyId){console.warn('[RDS AUTO] pedido sem empresa inequívoca; bloqueado '+String(o.code||o.id));continue;}
