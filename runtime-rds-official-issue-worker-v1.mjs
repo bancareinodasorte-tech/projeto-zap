@@ -197,7 +197,7 @@ else{
    for(const o of rows){
     const sid=String(o?.seller_id||'');if(!sid)continue;
     const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();if(sid!==ownerId){const setting=await one('rds10_seller_settings','select=official_authorized&seller_id=eq.'+encodeURIComponent(sid)).catch(()=>null);if(setting?.official_authorized!==true)continue;}
-    let companyId=String(o?.company_id||'');
+    let companyId=sid===ownerId?'':String(o?.company_id||'');
     if(!companyId){try{const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length===1)companyId=ids[0];}catch{}}
     if(!companyId){console.warn('[RDS AUTO] pedido sem empresa inequívoca; bloqueado '+String(o.code||o.id));continue;}
     try{await rdsRequestScope.run({sellerId:sid,companyId},()=>issueOne(o));}
