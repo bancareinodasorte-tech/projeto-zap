@@ -226,6 +226,19 @@ const block=String.raw`
     if(ex?.id)await patch('rds10_ticket_documents','id=eq.'+encodeURIComponent(ex.id),row);else await insert('rds10_ticket_documents',row);
   }
 
+  globalThis.rdsSendOfficialTicketForSeller=async(sellerId,order)=>{
+    const sid=String(sellerId||order?.seller_id||'');if(!sid||sid!==String(order?.seller_id||''))throw new Error('Vendedor do PDF não corresponde ao pedido.');
+    let companyId=String(order?.company_id||'');if(!companyId){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error('Empresa do vendedor não identificada para o PDF.');companyId=ids[0];}
+    return rdsRequestScope.run({sellerId:sid,companyId},async()=>{
+      const fresh=await one('rds10_orders','select=*&id=eq.'+encodeURIComponent(order.id)+'&seller_id=eq.'+encodeURIComponent(sid));if(!fresh)throw new Error('Pedido não encontrado no escopo do vendedor.');
+      const pdf=validateRdsTicketPdf(await renderPdf(fresh));await archive(fresh,pdf,null);
+      if(typeof globalThis.rdsWhatsappTenantSendDocument!=='function')throw new Error('Envio de PDF pelo WhatsApp do vendedor indisponível.');
+      let sent;try{sent=await globalThis.rdsWhatsappTenantSendDocument(sid,fresh.phone||fresh.contact_phone,pdf,'bilhetes-'+fresh.code+'.pdf');}catch(e){if(e&&typeof e==='object')e.code=e.code||'WHATSAPP_SEND_AMBIGUOUS';throw e;}
+      if(!sent?.key?.id){const e=new Error('WhatsApp não confirmou o envio do PDF. Conferir antes de reenviar.');e.code='WHATSAPP_SEND_AMBIGUOUS';throw e;}
+      const marked=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(fresh.id)+'&seller_id=eq.'+encodeURIComponent(sid),{sent_at:nowISO(),updated_at:nowISO()});if(!marked?.length){const e=new Error('PDF enviado, mas o histórico não confirmou o arquivo. Não reenviar automaticamente.');e.code='ARCHIVE_FAILED_AFTER_SEND';throw e;}
+      return sent;
+    });
+  };
   const rawSend=sendToJid;
   sendToJid=async(jid,content)=>{
     const fileName=String(content?.fileName||content?.filename||'');
