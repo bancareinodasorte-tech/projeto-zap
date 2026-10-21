@@ -296,24 +296,23 @@ const block=String.raw`
     let confirmedMessageId=null;
     try{
       const session=await rdsTicketSession(req,res);if(!session)return;
-      if(!rdsTicketOwner(req,res,session))return;
       const sid=String(session.seller.id);
+      const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
       const f='select=*&id=eq.'+encodeURIComponent(req.params.id)+'&seller_id=eq.'+encodeURIComponent(sid);
       const o=await one('rds10_orders',f);
       if(!o)return res.status(404).json({ok:false,error:'Pedido não encontrado.'});
       const phone=normalizeBR(o.phone||o.contact_phone||o.official_ticket_payload?.customerPhone||'');
       if(!phone)throw new Error('Telefone do cliente não informado.');
-      const target=await ensureTargetJid(phone);
-      if(!target?.jid)throw new Error('WhatsApp não localizado.');
+      let target=null;if(sid===ownerId){target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp não localizado.');}else if(typeof globalThis.rdsWhatsappTenantSendDocument!=='function')throw new Error('WhatsApp próprio do vendedor indisponível.');
       const existing=await one('rds10_ticket_documents','select=id,sent_at&order_id=eq.'+encodeURIComponent(o.id)+'&seller_id=eq.'+encodeURIComponent(sid));
       const b=validateRdsTicketPdf(await renderPdf(o));
       await archive(o,b,existing?.sent_at||null);
       let s;
-      try{s=await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'});}
+      try{s=sid===ownerId?await rawSend(target.jid,{document:{stream:RDS_Readable.from(b)},mimetype:'application/pdf',fileName:'bilhetes-'+o.code+'.pdf'}):await globalThis.rdsWhatsappTenantSendDocument(sid,phone,b,'bilhetes-'+o.code+'.pdf');}
       catch(e){return res.status(202).json({ok:false,ambiguous:true,error:'O resultado do envio é incerto. Confira a conversa e o histórico antes de tentar novamente; não clique novamente agora.'});}
       if(!s?.key?.id)return res.status(202).json({ok:false,ambiguous:true,error:'O WhatsApp não confirmou o resultado. Confira a conversa e o histórico antes de tentar novamente; não clique novamente agora.'});
       confirmedMessageId=s.key.id;
-      await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:confirmedMessageId,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});
+      if(sid===ownerId)await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+o.code+' — Reenvio manual',status:'ENVIADA',waId:confirmedMessageId,raw:{manualResend:true,order:o.code,saleId:o.official_sale_id||null}});
       const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(o.id)+'&seller_id=eq.'+encodeURIComponent(sid),{sent_at:nowISO(),updated_at:nowISO()});
       if(!archived?.length)return res.status(202).json({ok:false,ambiguous:false,sent:true,error:'O WhatsApp confirmou o envio, mas o histórico não confirmou a atualização. Não reenvie; confira o histórico.'});
       return res.json({ok:true,waMessageId:confirmedMessageId});
