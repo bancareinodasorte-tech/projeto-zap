@@ -80,6 +80,25 @@ jobs:
           node -e "const fs=require('fs');fs.writeFileSync('prepare-validation.mjs',fs.readFileSync('prepare-pagbank-no-email.mjs','utf8').replace(\"await import('./server.js');\",''))"
           node prepare-validation.mjs
           node --check server.js
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const server=fs.readFileSync('server.js','utf8');
+          const admin=fs.readFileSync('runtime-rds-admin-recovery-v1.mjs','utf8');
+          const seller=fs.readFileSync('runtime-rds-seller-recovery-v1.mjs','utf8');
+          const checks=[
+            [server,"app.post('/api/operator/admin/forgot-password'","admin recovery route must be part of Render startup"],
+            [server,"app.post('/api/operator/forgot-password'","seller recovery route must be part of Render startup"],
+            [admin,"RDS_ADMIN_FROM","admin recovery must use configured sender"],
+            [admin,"rds10_admin_sessions","admin password reset must revoke existing sessions"],
+            [admin,"informe um remetente verificado","admin recovery must fail closed without a configured sender"],
+            [seller,"informe um remetente verificado","seller recovery must fail closed without a configured sender"],
+            [seller,"rds10_seller_sessions","seller password reset must revoke existing sessions"],
+            [seller,"rds10_seller_reset_tokens","seller recovery must use one-time reset tokens"]
+          ];
+          for(const [source,needle,message] of checks)if(!source.includes(needle))throw new Error(message);
+          if(admin.includes("onboarding@resend.dev")||seller.includes("onboarding@resend.dev"))throw new Error('Recovery must not use the unverified default sender');
+          console.log('Password recovery release invariants OK');
+          NODE
           rm -f prepare-validation.mjs
       - name: Check Mercado Pago order routes syntax
         run: node --check runtime-rds-mercadopago-order-routes-v1.mjs
