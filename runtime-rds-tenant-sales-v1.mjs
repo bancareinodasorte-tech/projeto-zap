@@ -72,7 +72,7 @@ ${marker}
   app.get('/api/operator/orders',async(req,res)=>{
     try{
       const s=await requireTenant(req,res);if(!s)return;
-      const rows=await list('rds10_orders','select='+tenantOrderSelect()+'&seller_id=eq.'+encodeURIComponent(s.seller.id)+'&order=updated_at.desc&limit=200');
+      const history=String(req.query?.history||'')==='1';const activeFilter=history?'':'&status=not.in.(CONCLUIDO,CANCELADO)';const rows=await list('rds10_orders','select='+tenantOrderSelect()+'&seller_id=eq.'+encodeURIComponent(s.seller.id)+activeFilter+'&order=updated_at.desc&limit=200');
       return res.json({success:true,orders:rows});
     }catch(e){return res.status(500).json({success:false,error:String(e?.message||e)});}
   });
