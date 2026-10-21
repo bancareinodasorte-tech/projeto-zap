@@ -11,7 +11,7 @@ if(server.includes(marker)){
   if(pos<0)throw new Error('catch-all não localizado para recuperação de vendedor.');
   const block=String.raw`
 ${marker}
-const RDS_SELLER_EMAIL_FROM=String(process.env.RDS_SELLER_EMAIL_FROM||process.env.RDS_ADMIN_EMAIL_FROM||'onboarding@resend.dev').trim();
+const RDS_SELLER_EMAIL_FROM=String(process.env.RDS_SELLER_EMAIL_FROM||process.env.RDS_ADMIN_EMAIL_FROM||'').trim();
 const RDS_PUBLIC_BASE_URL_SELLER=String(process.env.RDS_PUBLIC_BASE_URL||'https://projeto-zap-4tyg.onrender.com').replace(/\/+$/,'');
 function rdsSellerResetPublicMessage(){return 'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.';}
 app.post('/api/operator/forgot-password',async(req,res)=>{
@@ -24,6 +24,7 @@ app.post('/api/operator/forgot-password',async(req,res)=>{
     if(!seller||!seller.email)return res.json({success:true,message:rdsSellerResetPublicMessage()});
     const key=String(process.env.RDS_RESEND_API_KEY||'').trim();
     if(!key)throw new Error('Recuperação por e-mail ainda não configurada no servidor.');
+    if(!RDS_SELLER_EMAIL_FROM)throw new Error('Recuperação por e-mail não configurada: informe um remetente verificado em RDS_SELLER_EMAIL_FROM.');
     await patch('rds10_seller_reset_tokens','seller_id=eq.'+encodeURIComponent(seller.id)+'&used_at=is.null',{used_at:nowISO()}).catch(()=>{});
     const token=crypto.randomBytes(32).toString('base64url');
     await insert('rds10_seller_reset_tokens',{seller_id:seller.id,token_hash:rdsAdminHash(token),expires_at:new Date(Date.now()+1800000).toISOString(),created_at:nowISO()});
