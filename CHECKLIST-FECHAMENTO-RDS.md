@@ -2,6 +2,9 @@
 
 > **Atualização de 21/10/2026:** os itens de versão V11.1 abaixo foram substituídos pelo fechamento V11.4.5. O código multiusuário e o filtro de arquivamento operacional passaram por validação automática de sintaxe e o backend foi publicado. A versão V11.4.5 foi gerada e a estrutura do APK foi validada; faltam validação final sem cobrança/emissão real e teste físico do APK. Não criar novos pedidos nem pagamentos para homologação. Os pedidos históricos RDS-559D8F, RDS-CDE9C0 e RDS-E7FE06 devem permanecer preservados.
 
+
+> **Atualização técnica adicional de 21/10/2026:** a recuperação administrativa por e-mail foi incluída explicitamente no pipeline de inicialização do Render; a redefinição de senha administrativa agora invalida as sessões administrativas existentes. A validação de sintaxe foi ampliada para incluir esse módulo e executar nos pushes relevantes da branch principal. **Continuam pendentes** a confirmação da variável secreta `RDS_RESEND_API_KEY`, a validação de um remetente de e-mail verificado, testes reais de recuperação de vendedor/administrador, homologação de duas contas isoladas, confirmação do emissor oficial e teste físico do APK. Não declarar fechamento definitivo antes desses itens.
+
 ## BLOCO 1 — Base e estabilidade
 - [x] Render inicia sem SyntaxError.
 - [x] Serviço `projeto-zap` Live.
