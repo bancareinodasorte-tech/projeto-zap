@@ -20,16 +20,17 @@ app.get('/api/rds/commission-payouts',async(req,res)=>{
   if(from)q+='&period_month=gte.'+encodeURIComponent(from);
   if(to)q+='&period_month=lte.'+encodeURIComponent(to);
   if(sellerId)q+='&seller_id=eq.'+encodeURIComponent(sellerId);
-  const [payouts,sellers,memberships,companies]=await Promise.all([
+  const [payouts,sellers,memberships,companies,reversals]=await Promise.all([
    list('rds10_commission_payouts',q),
    list('rds10_sellers','select=id,name,status&order=name.asc'),
    list('rds10_seller_companies','select=seller_id,company_id,active&active=eq.true'),
-   list('rds10_companies','select=id,name,active&active=eq.true')
+   list('rds10_companies','select=id,name,active&active=eq.true'),
+   list('rds10_commission_payout_reversals','select=id,payout_id,company_id,seller_id,period_month,amount,reversed_at,reason,reference,receipt_url,reversed_by,created_at&order=reversed_at.desc&limit=1000')
   ]);
   const sm=new Map(sellers.map(s=>[s.id,s]));
   const cm=new Map(companies.map(c=>[c.id,c.name]));
   const payoutSellers=memberships.map(m=>{const s=sm.get(m.seller_id),companyName=cm.get(m.company_id);if(!s||s.status!=='ATIVO'||!companyName)return null;return {id:s.id,name:s.name+' — '+companyName,status:s.status,company_id:m.company_id};}).filter(Boolean);
-  return res.json({success:true,payouts:payouts.map(p=>({...p,seller_name:sm.get(p.seller_id)?.name||'Vendedor',company_id:p.company_id})),sellers:payoutSellers});
+  return res.json({success:true,payouts:payouts.map(p=>{const items=reversals.filter(r=>String(r.payout_id)===String(p.id));const reversed=items.reduce((sum,r)=>sum+Number(r.amount||0),0);return {...p,seller_name:sm.get(p.seller_id)?.name||'Vendedor',company_id:p.company_id,reversals:items,reversed_amount:reversed,net_amount:Math.max(0,Number(p.amount||0)-reversed)};}),sellers:payoutSellers});
  }catch(e){console.error('[RDS COMMISSION PAYOUTS]',e?.message||e);return res.status(503).json({success:false,error:String(e?.message||'Livro de repasses indisponível. Aplicar a migração SQL do livro financeiro.')});}
 });
 app.post('/api/rds/commission-payouts',async(req,res)=>{
@@ -55,6 +56,22 @@ app.post('/api/rds/commission-payouts',async(req,res)=>{
   const result=await sb('/rest/v1/rpc/rds10_register_commission_payout',{method:'POST',body:JSON.stringify({p_company_id:companyId,p_seller_id:sellerId,p_period_month:month,p_amount:amount,p_payment_method:method,p_reference:reference||null,p_receipt_url:receipt||null,p_notes:notes||null,p_idempotency_key:idempotencyKey,p_created_by:auth.admin.id})});
   return res.status(201).json({success:true,result});
  }catch(e){console.error('[RDS COMMISSION PAYOUT CREATE]',e?.message||e);return res.status(400).json({success:false,error:String(e?.message||'Não foi possível registrar o repasse.')});}
+});
+app.post('/api/rds/commission-payouts/reverse',async(req,res)=>{
+ try{
+  if(typeof rdsUnifiedContext!=='function')return res.status(503).json({success:false,error:'Acesso administrativo indisponível.'});
+  const auth=await rdsUnifiedContext(req);
+  if(!auth?.authenticated)return res.status(401).json({success:false,error:'Entre na conta administrativa para continuar.'});
+  if(auth.role!=='ADMINISTRADOR')return res.status(403).json({success:false,error:'Somente administradores podem registrar estornos.'});
+  const b=req.body||{},payoutId=String(b.payout_id||''),amount=Number(b.amount),reason=String(b.reason||'').trim().slice(0,1000),reference=String(b.reference||'').trim().slice(0,180),receipt=String(b.receipt_url||'').trim().slice(0,1000);
+  if(!/^[0-9a-f-]{36}$/i.test(payoutId))return res.status(400).json({success:false,error:'Repasse inválido.'});
+  if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100)return res.status(400).json({success:false,error:'Informe um valor positivo com até duas casas decimais.'});
+  if(reason.length<5)return res.status(400).json({success:false,error:'Informe o motivo do estorno (mínimo de 5 caracteres).'});
+  if(receipt&&!/^https:\/\//i.test(receipt))return res.status(400).json({success:false,error:'O comprovante deve ser um link HTTPS válido.'});
+  const idempotencyKey=crypto.randomUUID();
+  const result=await sb('/rest/v1/rpc/rds10_reverse_commission_payout',{method:'POST',body:JSON.stringify({p_payout_id:payoutId,p_amount:amount,p_reason:reason,p_reference:reference||null,p_receipt_url:receipt||null,p_idempotency_key:idempotencyKey,p_reversed_by:auth.admin.id})});
+  return res.status(201).json({success:true,result});
+ }catch(e){console.error('[RDS COMMISSION PAYOUT REVERSE]',e?.message||e);return res.status(400).json({success:false,error:String(e?.message||'Não foi possível registrar o estorno.')});}
 });
 `;
  server=server.slice(0,pos)+block+'\n'+server.slice(pos);
