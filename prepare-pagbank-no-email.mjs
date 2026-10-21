@@ -94,4 +94,5 @@ await import('./runtime-rds-official-issue-worker-v1.mjs');
 // API legada de Pagamentos Safe removida do boot: o núcleo de pedidos já está ativo e o Mercado Pago é o provedor oficial.
 // UX PIX V7 problemática desativada no boot; o núcleo Mercado Pago permanece ativo.
 // Inicializa o servidor oficial diretamente. O runner PagBank legado não participa mais do boot.
+console.log('[RDS PREFLIGHT] recovery_email_key='+Boolean(String(process.env.RDS_RESEND_API_KEY||'').trim())+' admin_sender='+Boolean(String(process.env.RDS_ADMIN_RECOVERY_EMAIL_FROM||process.env.RDS_ADMIN_EMAIL_FROM||'').trim())+' seller_sender='+Boolean(String(process.env.RDS_SELLER_EMAIL_FROM||process.env.RDS_ADMIN_EMAIL_FROM||'').trim())+' owner_scope='+Boolean(String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim())+' mp_client='+Boolean(String(process.env.MERCADOPAGO_CLIENT_ID||'').trim())+' mp_secret='+Boolean(String(process.env.MERCADOPAGO_CLIENT_SECRET||'').trim()));
 await import('./server.js');
