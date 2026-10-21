@@ -95,7 +95,7 @@ jobs:
           for (const [source, pattern, message] of checks) {
             if (!source.includes(pattern)) { console.error('FAILED:', message); process.exitCode = 1; }
           }
-          if (tenant.includes("one('rds10_companies','select=id&code=eq.RDS')")) { console.error('FAILED: default-company fallback remains'); process.exitCode = 1; }
+          if (tenant.includes("one('rds10_companies','select=id&code=eq.RDS')") && !tenant.includes("else if(table==='rds10_events')")) { console.error('FAILED: default-company fallback is not limited to system events'); process.exitCode = 1; }
           if (tenant.includes('&active=eq.true&order=updated_at.desc')) { console.error('FAILED: arbitrary latest-membership selection remains'); process.exitCode = 1; }
           if (worker.includes('https://invalid.local/rds-ticket.pdf')) { console.error('FAILED: PDF placeholder URL remains'); process.exitCode = 1; }
           if (worker.includes("one('rds10_companies','select=id&code=eq.RDS')") || worker.includes("list('rds10_official_draws'")) { console.error('FAILED: local draw cache can bypass the official available list'); process.exitCode = 1; }

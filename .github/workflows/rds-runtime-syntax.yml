@@ -8,6 +8,7 @@ on:
       - 'runtime-rds-operator-auth-v2.mjs'
       - 'runtime-rds-admin-company-management-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
+      - 'runtime-rds-payment-reminders-v1.mjs'
       - 'runtime-rds-mercadopago-order-routes-v1.mjs'
       - 'runtime-rds-whatsapp-tenant-v1.mjs'
       - 'runtime-rds-official-ticket-chromium-v1.mjs'
@@ -38,6 +39,8 @@ jobs:
         run: node --check runtime-rds-admin-company-management-v1.mjs
       - name: Check tenant scope syntax
         run: node --check runtime-rds-tenant-scope-v1.mjs
+      - name: Check payment reminders syntax
+        run: node --check runtime-rds-payment-reminders-v1.mjs
       - name: Check Mercado Pago order routes syntax
         run: node --check runtime-rds-mercadopago-order-routes-v1.mjs
       - name: Check WhatsApp tenant sender syntax
