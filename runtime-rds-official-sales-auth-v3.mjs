@@ -208,14 +208,7 @@ app.post('/api/v1011/official-sales/sync-draws',async(req,res)=>{
     const draws=await rdsOfficialSyncDrawsV3();
     return res.json({success:true,count:draws.length,data:draws});
   }catch(e){
-    const message=String(e?.message||e);
-    if(claimedOrderId){
-      const unauthorized=/dispositivo não está autorizado|dispositivo nao esta autorizado|device.*not.*authoriz|not authorized|unauthori[sz]ed|\\b401\\b/i.test(message);
-      const nextStatus=unauthorized?'AGUARDANDO_AUTORIZACAO':saleRequestStarted?'ERRO_RECONCILIAR':'ERRO';
-      await patch('rds10_orders','id=eq.'+encodeURIComponent(claimedOrderId)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.EMITINDO',{official_issue_status:nextStatus,official_issue_error:message,updated_at:nowISO()}).catch(()=>{});
-      if(saleRequestStarted&&!unauthorized)await addAlert('EMISSAO_OFICIAL_RESULTADO_AMBIGUO','Confirme a venda no sistema oficial antes de tentar novamente',{orderId:claimedOrderId,error:message,warning:'Reemissão bloqueada para evitar duplicidade.'}).catch(()=>{});
-    }
-    return res.status(502).json({success:false,message});
+    return res.status(502).json({success:false,message:String(e?.message||e)});
   }
 });
 app.get('/api/v1011/official-sales/draws',async(req,res)=>{
