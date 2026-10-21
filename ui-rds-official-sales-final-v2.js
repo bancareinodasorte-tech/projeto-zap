@@ -18,7 +18,7 @@
   async function loadOfficial(){
     const b=await json('/api/v1011/official-sales/bootstrap');
     let status=null,draw=null,draws=[],statusError=null,drawError=null;
-    if(b?.emailConfigured){
+    if(b?.authorized){
       try{status=await json('/api/v1011/official-sales/status');}catch(e){statusError=e;}
     }
     if(status?.authenticated||b?.authorized){
@@ -30,26 +30,31 @@
     return {bootstrap:b||{},status,draw,draws,statusError,drawError};
   }
 
-  function authModal(){
+  function authModal(bootstrap={}){
     document.querySelector('.rds-official-auth-modal')?.remove();
+    const owner=bootstrap.owner!==false;
     const m=document.createElement('div');
     m.className='modal rds-official-auth-modal';
-    m.innerHTML='<div><div class="row" style="justify-content:flex-end"><button class="btn" type="button" id="rdsOfficialAuthClose">✕</button></div><span class="eyebrow">AUTORIZAÇÃO DO SERVIDOR</span><h2>Autorizar dispositivo</h2><p>Digite o código gerado pelo administrador do sistema oficial do REINO DA SORTE.</p><input id="rdsOfficialAuthCode" class="input-field" autocomplete="off" placeholder="Código de autorização"><div class="row" style="margin-top:12px"><button class="btn primary" type="button" id="rdsOfficialAuthSubmit">Autorizar</button></div><p id="rdsOfficialAuthMsg" class="mut"></p></div>';
+    m.innerHTML='<div><div class="row" style="justify-content:flex-end"><button class="btn" type="button" id="rdsOfficialAuthClose">✕</button></div><span class="eyebrow">AUTORIZAÇÃO DO SERVIDOR</span><h2>'+(owner?'Autorizar dispositivo':'Conectar sua conta oficial')+'</h2><p>'+(owner?'Digite o código gerado pelo administrador do sistema oficial do REINO DA SORTE.':'Informe suas próprias credenciais do sistema oficial REINO DA SORTE e o código de autorização deste dispositivo. Elas não serão gravadas em texto puro.')+'</p>'+(owner?'':'<label class="input-label">E-mail da conta oficial</label><input id="rdsOfficialEmail" class="input-field" type="email" autocomplete="username" placeholder="seu e-mail oficial"><label class="input-label" style="display:block;margin-top:10px">Senha da conta oficial</label><input id="rdsOfficialPassword" class="input-field" type="password" autocomplete="current-password" placeholder="Senha da sua conta oficial">')+'<label class="input-label" style="display:block;margin-top:10px">Código de autorização</label><input id="rdsOfficialAuthCode" class="input-field" autocomplete="off" placeholder="Código gerado pelo sistema oficial"><div class="row" style="margin-top:12px"><button class="btn primary" type="button" id="rdsOfficialAuthSubmit">Conectar e autorizar</button></div><p id="rdsOfficialAuthMsg" class="mut"></p></div>';
     document.body.appendChild(m);
     document.getElementById('rdsOfficialAuthClose')?.addEventListener('click',()=>m.remove());
     document.getElementById('rdsOfficialAuthSubmit')?.addEventListener('click',async()=>{
       const code=String(document.getElementById('rdsOfficialAuthCode')?.value||'').trim();
+      const email=String(document.getElementById('rdsOfficialEmail')?.value||'').trim();
+      const password=String(document.getElementById('rdsOfficialPassword')?.value||'');
       const msg=document.getElementById('rdsOfficialAuthMsg');
+      if(!owner&&(!email||!password)){msg.textContent='Informe o e-mail e a senha da sua conta oficial.';return;}
       if(!code){msg.textContent='Digite o código de autorização.';return;}
-      msg.textContent='Autorizando dispositivo...';
+      msg.textContent='Conectando e autorizando dispositivo...';
       try{
-        await json('/api/v1011/official-sales/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({authorizationCode:code})});
+        const body={authorizationCode:code};if(!owner){body.email=email;body.password=password;}
+        await json('/api/v1011/official-sales/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         m.remove();
-        alert('🟢 Dispositivo oficial autorizado com sucesso.');
+        alert('🟢 Conta oficial conectada com sucesso.');
         await renderOfficialCard(true);
-      }catch(e){msg.textContent=e.message||'Código inválido ou expirado.';}
+      }catch(e){msg.textContent=e.message||'Não foi possível conectar esta conta.';}
     });
-    document.getElementById('rdsOfficialAuthCode')?.focus();
+    (document.getElementById(owner?'rdsOfficialAuthCode':'rdsOfficialEmail'))?.focus();
   }
 
   async function renderOfficialCard(force=false){
@@ -80,17 +85,21 @@
       let stateHtml='';
       if(authorized){
         stateHtml='<div class="status ok">🟢 Sistema oficial autorizado</div>';
+      }else if(b.owner===false){
+        stateHtml='<div class="status bad">🟠 Sua conta oficial ainda não está conectada</div><p class="mut" style="margin-top:8px">Conecte suas próprias credenciais. Nenhuma integração da conta proprietária será compartilhada.</p>';
       }else if(b.emailConfigured){
         stateHtml='<div class="status bad">🔴 Sistema oficial não autorizado</div><p class="mut" style="margin-top:8px">O dispositivo do servidor precisa estar autorizado para a emissão automática.</p>';
       }else{
-        stateHtml='<div class="status bad">🔴 Credenciais oficiais não configuradas</div>';
+        stateHtml='<div class="status bad">🔴 Credenciais oficiais do proprietário não configuradas</div>';
       }
 
       const action=authorized
         ? '<button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button>'
-        : (b.emailConfigured
-          ? '<div class="row"><button class="btn primary" type="button" id="rdsOfficialAuthorizeV2">Autorizar este dispositivo</button><button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button></div>'
-          : '<button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button>');
+        : (b.owner===false
+          ? '<div class="row"><button class="btn primary" type="button" id="rdsOfficialConnectOwnV2">Conectar minha conta</button><button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button></div>'
+          : (b.emailConfigured
+            ? '<div class="row"><button class="btn primary" type="button" id="rdsOfficialAuthorizeV2">Autorizar este dispositivo</button><button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button></div>'
+            : '<button class="btn" type="button" id="rdsOfficialRefreshV2">Atualizar integração</button>'));
 
       card.innerHTML='<span class="eyebrow">INTEGRAÇÃO OFICIAL</span><h2>REINO DA SORTE</h2>'+
         '<p class="mut">Emissão automática dos bilhetes depois da confirmação do pagamento.</p>'+
@@ -105,7 +114,8 @@
         (d.drawError?'<p class="mut" style="margin-top:8px">'+esc(d.drawError.message||d.drawError)+'</p>':'')+
         '<p class="mut" style="margin-top:8px">Dispositivo: '+esc(b.deviceId||'—')+'</p>';
 
-      document.getElementById('rdsOfficialAuthorizeV2')?.addEventListener('click',authModal);
+      document.getElementById('rdsOfficialAuthorizeV2')?.addEventListener('click',()=>authModal(b));
+      document.getElementById('rdsOfficialConnectOwnV2')?.addEventListener('click',()=>authModal(b));
       card.querySelector('#rdsOfficialRefreshV2')?.addEventListener('click',()=>renderOfficialCard(true));
       if(isNewCard && !card.isConnected) app.prepend(card);
 
