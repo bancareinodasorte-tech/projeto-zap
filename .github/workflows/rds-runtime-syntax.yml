@@ -62,8 +62,10 @@ jobs:
         run: yarn install --ignore-scripts --non-interactive
       - name: Apply complete Render startup pipeline and validate generated server
         run: |
-          node prepare-pagbank-no-email.mjs
+          node -e "const fs=require('fs');fs.writeFileSync('prepare-validation.mjs',fs.readFileSync('prepare-pagbank-no-email.mjs','utf8').replace(\"await import('./server.js');\",''))"
+          node prepare-validation.mjs
           node --check server.js
+          rm -f prepare-validation.mjs
       - name: Check Mercado Pago order routes syntax
         run: node --check runtime-rds-mercadopago-order-routes-v1.mjs
       - name: Check WhatsApp tenant sender syntax
