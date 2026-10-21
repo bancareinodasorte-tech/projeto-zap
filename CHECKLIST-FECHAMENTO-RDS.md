@@ -1,5 +1,7 @@
 # CHECKLIST DE FECHAMENTO — CANAL DE VENDAS RDS
 
+> **Atualização de 21/10/2026:** os itens de versão V11.1 abaixo foram substituídos pelo fechamento V11.4.5. O código multiusuário e o filtro de arquivamento operacional passaram por validação automática de sintaxe e o backend foi publicado. A versão V11.4.5 está sendo preparada; ainda depende do build, validação final sem cobrança/emissão real e teste físico do APK. Não criar novos pedidos nem pagamentos para homologação. Os pedidos históricos RDS-559D8F, RDS-CDE9C0 e RDS-E7FE06 devem permanecer preservados.
+
 ## BLOCO 1 — Base e estabilidade
 - [x] Render inicia sem SyntaxError.
 - [x] Serviço `projeto-zap` Live.
@@ -72,12 +74,11 @@
 ## BLOCO 6 — APK
 - [x] Workflow Android existente.
 - [x] WebView configurada para o Canal de Vendas RDS.
-- [x] Build final V11.1 validado pelo GitHub Actions.
-- [x] APK final V11.1 gerado e estrutura validada.
+- [x] Builds anteriores V11.4.4 validados pelo GitHub Actions.
 - [x] WebView reforçada para Android 15 e navegação segura.
-- [ ] Instalar APK V11.1 em aparelho.
-- [ ] Testar abertura e navegação.
-- [ ] Testar comunicação com Render.
+- [ ] Build final V11.4.5 e validação da estrutura do APK.
+- [ ] Instalar APK V11.4.5 em aparelho.
+- [ ] Testar abertura, navegação, login e comunicação com Render.
 - [ ] Fechar versão final para distribuição após teste no aparelho.
 
 ## REGRA DE FECHAMENTO
@@ -141,4 +142,23 @@ Cada função operacional deve ter uma área principal responsável. O WhatsApp 
 - [ ] Validar sessão persistente, sair e entrar novamente, no navegador e no APK.
 - [ ] Revisão visual completa em celular e PC.
 - [ ] Validar Mercado Pago → pagamento aprovado → emissão oficial → PDF arquivado → envio WhatsApp, sem novo pagamento; preservar RDS-559D8F.
-- [ ] Somente após as etapas anteriores, gerar/instalar e aprovar o APK final de distribuição.
+- [ ] Somente após as etapas anteriores, instalar e aprovar o APK V11.4.5 final de distribuição.
+
+
+## BLOCO 11 — ISOLAMENTO MULTIUSUÁRIO E RESET OPERACIONAL SEGURO (21/10/2026)
+
+- [x] Bloqueio de APIs legadas sem autenticação e restrição das funções proprietárias à conta proprietária.
+- [x] Sessões de vendas reutilizam o validador central, incluindo autorização do dispositivo.
+- [x] Cadastro de novos usuários cria empresa própria e conexões pendentes; não herda a integração da conta proprietária.
+- [x] Integração oficial, Mercado Pago e WhatsApp encaminhados por vendedor/empresa conforme o contexto autenticado.
+- [x] Envio de PIX pelo WhatsApp usa a conexão do vendedor dono do pedido.
+- [x] Lembretes PIX e eventos de sistema protegidos contra envios/atribuições globais indevidos.
+- [x] Coluna operacional de arquivamento criada de forma aditiva para pedidos, contatos, mensagens e PDFs.
+- [x] Registros antigos da conta proprietária arquivados da operação visível sem apagar o histórico financeiro.
+- [x] Preservados os pedidos históricos RDS-559D8F, RDS-CDE9C0 e RDS-E7FE06.
+- [x] Verificação automática de sintaxe do pipeline Render e do filtro de arquivamento aprovada.
+- [x] Deploy do filtro de arquivamento concluído no Render.
+- [ ] Confirmar visualmente no navegador/aparelho que os registros arquivados não aparecem nas áreas operacionais.
+- [ ] Homologar recuperação de senha por e-mail para vendedor e administrador.
+- [ ] Homologar isolamento de duas contas de teste, incluindo conexões independentes, sem criar pagamento nem emissão real.
+- [ ] Homologar fluxo real do pedido já existente RDS-559D8F sem novo pagamento ou emissão duplicada.
