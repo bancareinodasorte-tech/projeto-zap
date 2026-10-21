@@ -40,8 +40,7 @@ app.post('/api/operator/orders/:id/pix/send',async(req,res)=>{
     if(!order.phone)throw new Error('Pedido sem WhatsApp do cliente.');
     const result=await rdsMercadoPagoCreatePix(order);
     const text='💳 *PAGAMENTO PIX*\n\nPedido: *'+order.code+'*\nValor: *R$ '+money(order.total_amount)+'*\n\nCopie e cole o código PIX abaixo para pagar:\n\n'+result.qr.text+'\n\nApós o pagamento, aguarde a confirmação automática do RDS.';
-    if(typeof globalThis.rdsWhatsappTenantSend!=='function')throw new Error('Envio WhatsApp por vendedor indisponível.');
-    const sent=await globalThis.rdsWhatsappTenantSend(session.seller.id,order.phone,text);
+    const sent=await sendTextPhone(order.phone,text);
     return res.json({success:true,sent:true,messageId:sent?.id||null,reused:Boolean(result.reused),qr:result.qr});
   }catch(e){return res.status(400).json({success:false,error:String(e?.message||e)});}
 });
