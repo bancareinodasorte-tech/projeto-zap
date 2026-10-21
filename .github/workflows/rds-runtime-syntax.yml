@@ -55,6 +55,8 @@ jobs:
         run: node --check runtime-rds-admin-company-management-v1.mjs
       - name: Check administrative password recovery syntax
         run: node --check runtime-rds-admin-recovery-v1.mjs
+      - name: Check seller password recovery syntax
+        run: node --check runtime-rds-seller-recovery-v1.mjs
       - name: Check tenant scope syntax
         run: node --check runtime-rds-tenant-scope-v1.mjs
       - name: Check tenant-aware bot rules syntax
