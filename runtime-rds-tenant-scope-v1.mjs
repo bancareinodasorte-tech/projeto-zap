@@ -24,7 +24,7 @@ const helper = [
   "    if(companyId&&out.company_id&&String(out.company_id)!==String(companyId))throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
   "    if(!out.company_id){",
   "      if(rowSeller){const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(rowSeller)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(m=>String(m.company_id||'')).filter(Boolean))];if(ids.length!==1)throw new Error(ids.length?'RDS_TENANT_COMPANY_AMBIGUOUS':'RDS_TENANT_COMPANY_REQUIRED');out.company_id=ids[0];}",
-  "      else out.company_id=await onlyActiveCompany();",
+  "      else if(table==='rds10_events'){const systemCompany=await one('rds10_companies','select=id&code=eq.RDS');if(!systemCompany?.id)throw new Error('RDS_TENANT_SYSTEM_COMPANY_REQUIRED');out.company_id=String(systemCompany.id);}else out.company_id=await onlyActiveCompany();",
   "    }",
   "    const companyKey=String(out.company_id);let activeCheck=activeCheckCache.get(companyKey);if(!activeCheck){activeCheck=one('rds10_companies','select=id&active=eq.true&id=eq.'+encodeURIComponent(companyKey));activeCheckCache.set(companyKey,activeCheck);}const active=await activeCheck;",
   "    if(!active)throw new Error('RDS_TENANT_COMPANY_MISMATCH');",
