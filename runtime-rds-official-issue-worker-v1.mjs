@@ -24,7 +24,7 @@ else{
   return {saleId:saleId?String(saleId):null,pdfUrl:pdfUrl?String(pdfUrl):null,payload};
  }
  async function selectedOfficialDraw(id){
-  const available=arr(await rdsFinalRequest('/draws/seller/available'));
+  const available=arr(await rdsOfficialRequestV3('/draws/seller/available'));
   const byId=new Map();
   for(const d of available){
    const did=drawIdOf(d);if(!did)continue;
@@ -33,7 +33,7 @@ else{
    byId.set(did,{...d,drawId:did});
   }
   try{
-   const inventory=arr(await rdsFinalRequest('/seller/booklet-sales/available'));
+   const inventory=arr(await rdsOfficialRequestV3('/seller/booklet-sales/available'));
    for(const item of inventory){
     const did=drawIdOf(item)||drawIdOf(item?.draw)||String(item?.draw?.drawId||'').trim();
     if(!did)continue;
@@ -56,13 +56,19 @@ else{
  }
  async function sendProof(order,info){
   const phone=normalizeBR(order.phone||order.contact_phone||'');if(!phone)throw new Error('Telefone do cliente não informado.');
+  const ownerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
+  if(String(order.seller_id||'')!==ownerId){
+   if(typeof globalThis.rdsSendOfficialTicketForSeller!=='function')throw new Error('Envio de PDF oficial pela conta do vendedor indisponível.');
+   const result=await globalThis.rdsSendOfficialTicketForSeller(String(order.seller_id),order,info);
+   if(!result?.key?.id){const error=new Error('WhatsApp não confirmou o envio do PDF. Conferir antes de reenviar.');error.code='WHATSAPP_SEND_AMBIGUOUS';throw error;}
+   return result;
+  }
   const target=await ensureTargetJid(phone);if(!target?.jid)throw new Error('WhatsApp do cliente não retornou um JID válido.');
-  // O wrapper Chromium substitui este documento pela arte oficial renderizada a partir do pedido.
   let result;
   try{result=await sendToJid(target.jid,{document:info.pdfUrl?{url:info.pdfUrl}:{},mimetype:'application/pdf',fileName:'bilhetes-'+order.code+'.pdf'});}
   catch(e){if(e&&typeof e==='object')e.code=e.code||'WHATSAPP_SEND_AMBIGUOUS';throw e;}
   if(!result?.key?.id){const error=new Error('WhatsApp não confirmou o resultado do envio; conferir manualmente antes de reenviar.');error.code='WHATSAPP_SEND_AMBIGUOUS';throw error;}
-  const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id),{sent_at:nowISO(),updated_at:nowISO()});
+  const archived=await patch('rds10_ticket_documents','order_id=eq.'+encodeURIComponent(order.id)+'&seller_id=eq.'+encodeURIComponent(order.seller_id),{sent_at:nowISO(),updated_at:nowISO()});
   if(!archived?.length){const error=new Error('O WhatsApp aceitou o PDF, mas o arquivo não pôde ser confirmado no histórico. Não reenviar automaticamente.');error.code='ARCHIVE_FAILED_AFTER_SEND';throw error;}
   await logMessage({phone,direction:'OUT',type:'document',body:'PDF DOS BILHETES — Pedido: '+order.code+' — Venda oficial: '+String(info.saleId||order.official_sale_id||''),status:'ENVIADA',waId:result.key.id,raw:{automatic:true,order:order.code,saleId:info.saleId||order.official_sale_id||null}});
   return result;
@@ -116,7 +122,7 @@ else{
   if(issue==='AGUARDANDO_AUTORIZACAO'&&Number.isFinite(age)&&age<15)return;
   if(issue==='AGUARDANDO_AUTORIZACAO'){
    try{
-    await rdsFinalRequest('/auth/me');
+    await rdsOfficialRequestV3('/auth/me');
     const reset=await patch('rds10_orders','id=eq.'+encodeURIComponent(order.id)+'&status=eq.PAGO_AGUARDANDO_BILHETES&official_issue_status=eq.AGUARDANDO_AUTORIZACAO',{official_issue_status:null,official_issue_error:null,updated_at:nowISO()});
     if(!reset?.length)return;
     issue='';order.official_issue_status=null;order.updated_at=nowISO();
@@ -140,7 +146,7 @@ else{
   }
   let saleRequestStarted=false;
   try{
-   const officialAuth=await rdsFinalRequest('/auth/me');
+   const officialAuth=await rdsOfficialRequestV3('/auth/me');
    if(officialAuth?.authenticated===false||officialAuth?.authorized===false||officialAuth?.success===false)throw new Error('Dispositivo oficial não está autorizado.');
    const draw=await selectedOfficialDraw(requestedDrawId);
    if(!draw){
@@ -165,7 +171,7 @@ else{
    if(customerName.length<2||!customerPhone)throw new Error('Nome ou telefone do cliente inválido.');
    const paymentMethod=/^(pix|pix_mercado_pago|pix_mercadopago)$/i.test(String(order.payment_method||''))?'pix':String(order.payment_method||'pix').toLowerCase();
    saleRequestStarted=true;
-   const sale=await rdsFinalRequest('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
+   const sale=await rdsOfficialRequestV3('/seller/booklet-sales-v2',{method:'POST',body:JSON.stringify({drawId:requestedDrawId,customerName,customerPhone,quantityBooklets:quantity,lotNumber:1,paymentMethod})});
    const info=saleInfo(sale);
    if(!info.saleId)throw new Error('Sistema oficial não retornou o identificador da venda.');
    const updated={...order,official_sale_id:info.saleId,official_issue_status:'CONCLUIDO',official_issue_at:nowISO(),official_ticket_url:info.pdfUrl||null,official_ticket_payload:info.payload,updated_at:nowISO()};
@@ -187,11 +193,15 @@ else{
   if(typeof rdsSalesChannelEnabled==='function'&&!rdsSalesChannelEnabled())return;
   if(running)return;running=true;
   try{
-   const sellerId=String(process.env.RDS_OFFICIAL_OWNER_SELLER_ID||'').trim();
-   if(!sellerId){console.warn('[RDS AUTO] proprietário oficial não configurado; emissão automática suspensa por segurança.');return;}
-   const filter='select=*&status=eq.PAGO_AGUARDANDO_BILHETES&seller_id=eq.'+encodeURIComponent(sellerId)+'&order=updated_at.asc&limit=50';
-   const rows=await list('rds10_orders',filter);
-   for(const o of rows){try{await issueOne(o);}catch(e){console.error('[RDS AUTO] pedido '+String(o.code||o.id)+': '+String(e?.message||e));}}
+   const rows=await list('rds10_orders','select=*&status=eq.PAGO_AGUARDANDO_BILHETES&order=updated_at.asc&limit=200');
+   for(const o of rows){
+    const sid=String(o?.seller_id||'');if(!sid)continue;
+    let companyId=String(o?.company_id||'');
+    if(!companyId){try{const memberships=await list('rds10_seller_companies','select=company_id&seller_id=eq.'+encodeURIComponent(sid)+'&active=eq.true&limit=1000');const ids=[...new Set((memberships||[]).map(x=>String(x.company_id||'')).filter(Boolean))];if(ids.length===1)companyId=ids[0];}catch{}}
+    if(!companyId){console.warn('[RDS AUTO] pedido sem empresa inequívoca; bloqueado '+String(o.code||o.id));continue;}
+    try{await rdsRequestScope.run({sellerId:sid,companyId},()=>issueOne(o));}
+    catch(e){console.error('[RDS AUTO] pedido '+String(o.code||o.id)+': '+String(e?.message||e));}
+   }
   }catch(e){console.error('[RDS AUTO] ciclo:',e?.message||e);}
   finally{running=false;}
  }
