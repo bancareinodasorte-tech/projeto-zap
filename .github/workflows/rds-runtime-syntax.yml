@@ -10,6 +10,9 @@ on:
       - 'runtime-rds-admin-recovery-v1.mjs'
       - 'runtime-rds-tenant-scope-v1.mjs'
       - 'MIGRATION-OWNER-OPERATIONAL-RESET-2026-10.sql'
+      - 'MIGRACAO-RDS-LIVRO-REPASSES-ESTORNOS-V1.sql'
+      - 'ui-rds-commission-payouts-v1.js'
+      - 'runtime-rds-commission-payouts-v1.mjs'
       - 'prepare-pagbank-no-email.mjs'
       - 'ui-rds-ticket-archive-v2.js'
       - 'ui-rds-official-sales-final-v2.js'
@@ -57,6 +60,10 @@ jobs:
         run: node --check runtime-rds-admin-recovery-v1.mjs
       - name: Check seller password recovery syntax
         run: node --check runtime-rds-seller-recovery-v1.mjs
+      - name: Check commission payout ledger syntax
+        run: node --check runtime-rds-commission-payouts-v1.mjs
+      - name: Check commission payout UI syntax
+        run: node --check ui-rds-commission-payouts-v1.js
       - name: Check tenant scope syntax
         run: node --check runtime-rds-tenant-scope-v1.mjs
       - name: Check tenant-aware bot rules syntax
@@ -121,6 +128,16 @@ jobs:
       - name: Check CRM tenant isolation
         run: node --check runtime-rds-whatsapp-crm-tenant-fix-v1.mjs
 
+      - name: Check commission payout reversal audit guards
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const runtime=fs.readFileSync('runtime-rds-commission-payouts-v1.mjs','utf8');
+          const ui=fs.readFileSync('ui-rds-commission-payouts-v1.js','utf8');
+          const sql=fs.readFileSync('MIGRACAO-RDS-LIVRO-REPASSES-ESTORNOS-V1.sql','utf8');
+          for(const [s,n] of [[runtime,"/api/rds/commission-payouts/reverse"],[runtime,"rds10_reverse_commission_payout"],[runtime,"reversals"],[ui,"rdsPayoutReverseForm"],[ui,"/api/rds/commission-payouts/reverse"],[sql,"rds10_commission_payout_reversals"],[sql,"revoke all on function public.rds10_reverse_commission_payout"],[sql,"r.reversed_amount"]])if(!s.includes(n))throw new Error('Missing payout reversal guard: '+n);
+          console.log('Commission payout reversal audit guards OK');
+          NODE
       - name: Check operational archive filter and migration
         run: |
           node -e "const fs=require('fs');const s=fs.readFileSync('runtime-rds-tenant-scope-v1.mjs','utf8');const m=fs.readFileSync('MIGRATION-OWNER-OPERATIONAL-RESET-2026-10.sql','utf8');for(const t of ['rds10_orders','rds10_contacts','rds10_messages','rds10_ticket_documents','operational_archived_at=is.null'])if(!s.includes(t))throw new Error('Missing archive filter: '+t);for(const t of ['rds10_orders','rds10_contacts','rds10_messages','rds10_ticket_documents','ADD COLUMN IF NOT EXISTS operational_archived_at'])if(!m.includes(t))throw new Error('Missing migration: '+t);console.log('Operational archive guard OK')"
