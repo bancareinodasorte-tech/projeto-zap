@@ -12,6 +12,8 @@ on:
       - 'runtime-rds-final-rules.mjs'
       - 'runtime-rds-mercadopago-order-routes-v1.mjs'
       - 'runtime-rds-whatsapp-tenant-v1.mjs'
+      - 'prepare-pagbank-no-email.mjs'
+      - 'server.js'
       - 'runtime-rds-official-ticket-chromium-v1.mjs'
       - 'runtime-rds-official-sales-diagnostics-v1.mjs'
       - 'runtime-rds-official-sales-final-v1.mjs'
@@ -42,6 +44,10 @@ jobs:
         run: node --check runtime-rds-tenant-scope-v1.mjs
       - name: Check payment reminders syntax
         run: node --check runtime-rds-payment-reminders-v1.mjs
+      - name: Apply complete Render startup pipeline and validate generated server
+        run: |
+          node prepare-pagbank-no-email.mjs
+          node --check server.js
       - name: Check multiuser WhatsApp inbound syntax
         run: node --check runtime-rds-whatsapp-tenant-v1.mjs
       - name: Check tenant-aware bot rules syntax
